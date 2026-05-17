@@ -2,22 +2,22 @@
 
 ## Context
 
-- Task type:
-- Mode:
-- Task slug:
-- Source request:
-- Related tickets or docs:
+- Task type: feature | bug | unclear
+- Mode: plan-only | implement
+- Task slug: lowercase-ascii-task-slug
+- Source request: краткое описание исходного запроса
+- Related tickets or docs: ссылки, номера задач или `absent`
 
 Опишите исходный запрос, цель работы и ограничения. Пользовательские формулировки и выводы пишите на русском языке; технические идентификаторы оставляйте в исходном виде.
 
 ## Project Intelligence
 
-- Analytics:
-- Repomix:
-- Graphify:
-- External context:
+- Analytics: present: <path or summary> | absent: <fallback used>
+- Repomix: present: <path or summary> | absent: <fallback used>
+- Graphify: present: <path or summary> | absent: <fallback used>
+- External context: present: <link or summary> | absent: <fallback used>
 
-Зафиксируйте доступные источники понимания проекта. Если `Analytics`, `Repomix` или `Graphify` отсутствуют, укажите fallback: прямой просмотр репозитория и ручная карта влияния.
+Зафиксируйте доступные источники понимания проекта. Если `Analytics`, `Repomix` или `Graphify` отсутствуют, укажите `absent: <fallback used>`, например `absent: direct repository inspection and manual impact mapping`.
 
 ## Scope
 
