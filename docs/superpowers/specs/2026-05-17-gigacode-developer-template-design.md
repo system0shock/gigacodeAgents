@@ -174,11 +174,41 @@ If Repomix output exists in the repository, the workflow uses it as a compact re
 
 Repomix is supporting context, not a substitute for inspecting the current files that will be modified. Before editing a file, the workflow must read the live file from the working tree.
 
+If Repomix output is absent and the `repomix` command is unavailable or not allowed, the workflow falls back to direct repository inspection:
+
+1. List repository files with fast local search such as `rg --files`.
+2. Read project entry points, build files, package manifests, tests, and docs directly.
+3. Use targeted search for feature names, bug symptoms, APIs, events, commands, and error messages.
+4. Record in `context.md` that Repomix was unavailable and direct inspection was used.
+
+Absence of Repomix must not block plan-only mode or implement mode. It only reduces the amount of precomputed repository context available to the workflow.
+
 ### Graphify
 
 If Graphify output exists or the Graphify skill is available, the workflow uses it to understand repository structure, clusters, dependencies, and likely impact areas.
 
 Graphify output is a navigation aid. Claims about current behavior still need confirmation from live code, tests, docs, or user-provided evidence.
+
+If Graphify output and the Graphify skill are unavailable, the workflow falls back to manual impact mapping:
+
+1. Identify entry points from routes, controllers, handlers, commands, jobs, tests, and package manifests.
+2. Trace imports, call sites, configuration references, data models, and integration boundaries with repository search.
+3. Build a small text map in `context.md` or `plan.md` that lists impacted modules, upstream callers, downstream dependencies, and unknown areas.
+4. Record that Graphify was unavailable and manual mapping was used.
+
+Absence of Graphify must not block plan-only mode or implement mode. It only means dependency and cluster analysis is derived from local inspection instead of a generated graph.
+
+### Fallback Policy
+
+The developer flow must be resilient when optional project-intelligence tools are missing.
+
+Required behavior:
+
+- If analytics are absent, continue with code, tests, local docs, and user-provided context.
+- If Repomix is absent, use direct repository inspection.
+- If Graphify is absent, use manual impact mapping.
+- If both Repomix and Graphify are absent, perform a conservative code-map pass before planning and widen the verification strategy where risk is unclear.
+- If optional context is unavailable, record the limitation in `context.md` and avoid unsupported claims.
 
 ### External Context
 
@@ -254,7 +284,11 @@ Agents should use conservative permission defaults. Context, mapping, planning, 
 
 The `coder` agent may edit source files only in implement mode and only after branch safety passes. It must not commit, push, rewrite history, edit protected deployment settings, or overwrite unrelated user changes.
 
-Each subagent file should stay below 10,000 characters. If instructions approach that limit, move reusable details into `rules/`.
+Each subagent file and each subagent role description must stay below 10,000 characters. This is a hard v1 constraint, not a guideline.
+
+If an agent needs more detail, move reusable material into `rules/`, `docs/templates/`, or command-level workflow text. The agent file should keep only role, trigger conditions, inputs, outputs, constraints, and handoff expectations.
+
+Smoke checks must fail if any `.gigacode/agents/*.md` file exceeds 10,000 characters.
 
 ## Enterprise Git Safety
 
@@ -374,7 +408,8 @@ It should:
 - require feature acceptance criteria for feature work when implement mode is requested;
 - require symptom, expected behavior, actual behavior, or reproduction evidence for bug work when implement mode is requested;
 - require safe branch confirmation before implement mode edits;
-- remind the workflow to inspect analytics, Repomix, and Graphify when available.
+- remind the workflow to inspect analytics, Repomix, and Graphify when available;
+- remind the workflow to use documented fallbacks when Repomix or Graphify are unavailable.
 
 ### `validate_development_output.py`
 
@@ -444,7 +479,7 @@ The checks verify:
 - expected files exist;
 - `.gigacode/settings.json` is valid JSON;
 - command and agent files have frontmatter;
-- subagent files stay below 10,000 characters;
+- each subagent file stays below 10,000 characters;
 - hook scripts execute with sample JSON;
 - `git_guard.py` blocks protected branch commit scenarios in dry-run samples;
 - Markdown templates exist and do not contain unresolved placeholders.
@@ -462,6 +497,7 @@ The README must explain:
 - how to run smoke checks;
 - expected Markdown outputs under `docs/development/<task-slug>/`;
 - how analytics, Repomix, and Graphify are used when available;
+- how the workflow falls back when Repomix or Graphify are unavailable;
 - MCP responsibility and limitations;
 - enterprise git safety rules;
 - why the template does not auto-commit or auto-push by default;
@@ -487,9 +523,10 @@ The v1 is successful when:
 - `/develop-feature` and `/fix-bug` are available as explicit project commands.
 - Both commands support plan-only and implement modes.
 - The workflow inspects analytics, Repomix, and Graphify when available.
+- The workflow has explicit fallbacks for missing analytics, Repomix, and Graphify.
 - Developer artifacts are Markdown files under `docs/development/<task-slug>/`.
 - Git guardrails block protected branches, destructive history operations, direct protected-branch commits, and dangerous pushes.
 - The template does not auto-commit or auto-push by default.
 - Hook scripts can be smoke-tested without enterprise credentials.
 - README explains safe enterprise operation clearly enough for a real team repository.
-- Project subagent files stay below 10,000 characters unless a future design explicitly justifies a larger file.
+- Every project subagent file and role description stays below 10,000 characters.
