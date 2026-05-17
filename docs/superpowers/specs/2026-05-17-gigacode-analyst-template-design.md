@@ -81,7 +81,7 @@ The workflow has this sequence:
 
 1. Intake and preflight: validate the feature name, external context status, target directory, rules, and branch guidance.
 2. Context collection: use Jira/Confluence only if Atlassian MCP is already installed and available.
-3. Code mapping: identify entry points, relevant files, integrations, dependencies, and unclear areas.
+3. Code mapping: optionally use `repomix` and `graphify` if installed, then identify entry points, relevant files, integrations, dependencies, and unclear areas. If either tool is unavailable, continue with normal code search and record the limitation.
 4. Human scope confirmation: stop before drafting and ask the analyst to confirm the scope.
 5. Documentation drafting: create the feature documentation files from confirmed facts.
 6. Evidence and gap review: separate confirmed facts from assumptions and open questions.
@@ -147,6 +147,7 @@ Hook wiring belongs in `.gigacode/settings.json` using the same hook event and c
 
 - Hook definitions for preflight and validation.
 - Permission rules that protect secrets and destructive shell operations.
+- Optional permission rules for `repomix` and `graphify`.
 - UI defaults suitable for analysts, such as citations and line numbers enabled.
 - Optional MCP allowlist guidance if project names are known later.
 

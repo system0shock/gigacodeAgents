@@ -11,6 +11,8 @@
       "Bash(git status*)",
       "Bash(git branch*)",
       "Bash(git diff*)",
+      "Bash(repomix*)",
+      "Bash(graphify*)",
       "Bash(python .gigacode/hooks/*)",
       "Edit(docs/features/**)"
     ],

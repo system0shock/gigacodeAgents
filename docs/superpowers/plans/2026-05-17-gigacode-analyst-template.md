@@ -12,7 +12,7 @@
 
 ## File Structure
 
-- Create `modules/analytics/.gigacode/settings.json`: project settings, hook wiring, safe permissions, UI defaults.
+- Create `modules/analytics/.gigacode/settings.json`: project settings, hook wiring, safe permissions, optional `repomix`/`graphify` permissions, UI defaults.
 - Create `modules/analytics/.gigacode/skills/reverse-analysis/SKILL.md`: one workflow skill for reverse analysis.
 - Create `modules/analytics/.gigacode/agents/*.md`: five focused subagents, each below 10,000 characters.
 - Create `modules/analytics/.gigacode/hooks/preflight_check.py`: validates reverse-analysis prompt input from hook JSON.
@@ -346,7 +346,7 @@ approvalMode: plan
 Required role bodies:
 
 - `intake-scope`: clarify feature name, included scope, excluded scope, Jira/Confluence status, target output path, and unanswered questions.
-- `code-mapping`: read repository structure, identify entry points, relevant files, call chains, integrations, events, queues, APIs, data stores, and uncertain paths.
+- `code-mapping`: optionally use `repomix` and `graphify` when available, read repository structure, identify entry points, relevant files, call chains, integrations, events, queues, APIs, data stores, and uncertain paths.
 - `documentation`: after scope confirmation, write AsciiDoc files under `docs/features/<feature-name>/` using only confirmed facts and labeled assumptions.
 - `evidence-gap`: inspect generated AsciiDoc for unsupported claims, contradictions, and missing evidence labels.
 - `review`: check final structure, terminology, AsciiDoc consistency, and rule compliance without adding new facts.
