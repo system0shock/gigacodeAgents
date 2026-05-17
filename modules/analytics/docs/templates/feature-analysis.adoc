@@ -1,41 +1,43 @@
-= Feature Reverse Analysis Template
+= Шаблон обратного анализа функции
 :toc:
 :sectnums:
 
-== Scope
+NOTE: Итоговые документы аналитика должны быть написаны на русском языке.
 
-Feature name::
-  <feature name>
+== Область анализа
 
-Included::
-  <confirmed included scope>
+Название функции::
+  <название функции>
 
-Excluded::
-  <confirmed excluded scope>
+Входит в анализ::
+  <подтвержденная область анализа>
 
-Sources::
-  * Code: <files or modules>
-  * Jira: <ticket or "not used">
-  * Confluence: <page or "not used">
-  * User input: <prompt or clarification>
+Не входит в анализ::
+  <подтвержденные исключения>
 
-== Evidence Rules
+Источники::
+  * Код: <файлы или модули>
+  * Jira: <тикет или "не использовалась">
+  * Confluence: <страница или "не использовался">
+  * Ввод пользователя: <запрос или уточнение>
 
-Every factual statement must be backed by at least one source. Unsupported statements belong in assumptions or open questions.
+== Правила доказуемости
 
-== Required Output Files
+Каждое фактическое утверждение должно опираться минимум на один источник. Неподтвержденные утверждения нужно переносить в предположения или открытые вопросы.
+
+== Обязательные выходные файлы
 
 `overview.adoc`::
-  Business and technical overview of the feature.
+  Бизнес- и технический обзор функции.
 
 `flow.adoc`::
-  Main execution flow, branches, and failure paths.
+  Основной сценарий, ветвления и ошибочные пути.
 
 `integrations.adoc`::
-  External APIs, queues, events, services, and dependencies.
+  Внешние API, очереди, события, сервисы и зависимости.
 
 `data.adoc`::
-  Data structures, storage, identifiers, and ownership.
+  Структуры данных, хранилища, идентификаторы и владение данными.
 
 `questions.adoc`::
-  Open questions, contradictions, assumptions, and follow-up decisions.
+  Открытые вопросы, противоречия, предположения и решения для уточнения.

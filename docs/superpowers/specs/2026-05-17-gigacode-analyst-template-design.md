@@ -6,7 +6,7 @@ Create a Git-ready project template for analysts who use the GigaCode CLI, a for
 
 The first version is a self-contained analytics module. Analysts clone the repository, open `modules/analytics/`, run `gigacode`, and use the included project-level skills, agents, hooks, commands, and rules. Future modules can be added next to it, such as `modules/development/` and `modules/nt/`.
 
-Final analyst-facing documentation produced by the workflow must be written in AsciiDoc.
+Final analyst-facing documentation produced by the workflow must be written in Russian-language AsciiDoc.
 
 ## Source Requirements
 
@@ -113,7 +113,7 @@ docs/features/<feature-name>/
   questions.adoc
 ```
 
-All generated feature files must be valid AsciiDoc. Markdown headings, tables, and fenced code blocks should be avoided in generated analyst artifacts unless they are inside literal examples where Markdown syntax is being discussed.
+All generated feature files must be valid Russian-language AsciiDoc. Markdown headings, tables, and fenced code blocks should be avoided in generated analyst artifacts unless they are inside literal examples where Markdown syntax is being discussed.
 
 ## Agent Design
 
@@ -182,6 +182,7 @@ The README must explain:
 - How to invoke `/reverse-analysis`.
 - Expected inputs and outputs.
 - That generated analyst deliverables are AsciiDoc files under `docs/features/<feature-name>/`.
+- That generated analyst deliverables must be written in Russian.
 - MCP responsibility and limitations.
 - How to adapt the template for a real team repository.
 

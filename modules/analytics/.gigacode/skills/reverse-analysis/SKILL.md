@@ -17,6 +17,7 @@ Use this skill when the analyst asks to investigate, document, explain, or rever
 6. Ask the analyst to confirm scope before creating final feature files.
 7. Do not present unsupported claims as facts.
 8. Write final analyst deliverables in AsciiDoc.
+9. Write all final analyst deliverables in Russian.
 
 ## Required Output Files
 

@@ -4,7 +4,7 @@
 
 **Goal:** Build a Git-ready GigaCode project template for analysts performing reverse analysis of one business feature at a time.
 
-**Architecture:** The repository contains a self-contained analytics module at `modules/analytics/`. GigaCode discovers project settings, skills, agents, commands, and hooks under `modules/analytics/.gigacode/` when analysts run it from that module, while analyst outputs are AsciiDoc files under `modules/analytics/docs/features/<feature-name>/`.
+**Architecture:** The repository contains a self-contained analytics module at `modules/analytics/`. GigaCode discovers project settings, skills, agents, commands, and hooks under `modules/analytics/.gigacode/` when analysts run it from that module, while analyst outputs are Russian-language AsciiDoc files under `modules/analytics/docs/features/<feature-name>/`.
 
 **Tech Stack:** GigaCode/Qwen Code-compatible JSON settings, Markdown skill/agent/command files with YAML frontmatter, Python 3 hook scripts, PowerShell and POSIX shell smoke checks, AsciiDoc templates.
 

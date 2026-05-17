@@ -19,6 +19,7 @@ REQUIRED_FILES = (
 
 PLACEHOLDER_RE = re.compile(r"\b(TODO|TBD|FIXME)\b", re.IGNORECASE)
 OUTPUT_PATH_RE = re.compile(r"docs/features/([A-Za-z0-9][A-Za-z0-9_.-]*)/?")
+CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
 
 
 def emit(decision: str, reason: str, stop_reason: str | None = None) -> int:
@@ -66,7 +67,7 @@ def validate_file(path: Path) -> list[str]:
     issues: list[str] = []
     text = path.read_text(encoding="utf-8")
 
-    if not text.lstrip().startswith("="):
+    if not text.lstrip("\ufeff\r\n\t ").startswith("="):
         issues.append(f"{path}: missing AsciiDoc document title")
     if PLACEHOLDER_RE.search(text):
         issues.append(f"{path}: contains TODO/TBD/FIXME marker")
@@ -74,6 +75,8 @@ def validate_file(path: Path) -> list[str]:
         issues.append(f"{path}: contains Markdown fenced code block")
     if re.search(r"^#{1,6}\s", text, re.MULTILINE):
         issues.append(f"{path}: contains Markdown heading")
+    if not CYRILLIC_RE.search(text):
+        issues.append(f"{path}: must be written in Russian")
 
     return issues
 

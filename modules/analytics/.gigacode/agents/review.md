@@ -15,6 +15,7 @@ Decide whether the generated feature documentation is structurally complete and 
 
 - All required `.adoc` files exist.
 - Files use AsciiDoc syntax instead of Markdown syntax.
+- Files are written in Russian.
 - Scope is one business feature.
 - Facts, assumptions, contradictions, and open questions are separated.
 - Jira/Confluence absence is stated when those sources were not used.

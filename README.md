@@ -1,9 +1,9 @@
-# GigaCode Agent Templates
+# Шаблоны агентов GigaCode
 
-This repository stores GigaCode project modules. Each module is self-contained and can be opened as a project root for `gigacode`.
+Репозиторий хранит проектные модули GigaCode. Каждый модуль самодостаточен и может открываться как корень проекта для `gigacode`.
 
-## Modules
+## Модули
 
-- `modules/analytics` - reverse analysis workflow for analysts.
+- `modules/analytics` - контур reverse-analysis для аналитиков.
 
-Future modules can be added next to it, for example `modules/development` and `modules/nt`.
+Позже рядом можно добавить другие модули, например `modules/development` и `modules/nt`.

@@ -1,30 +1,31 @@
-# Reverse Analysis Rules
+# Правила reverse-analysis
 
-Reverse analysis is performed for one business feature at a time.
+Обратный анализ выполняется для одной бизнес-функции за раз.
 
-## Source Priority
+## Приоритет источников
 
-1. Code is the source of current implementation truth.
-2. Jira is requirements context and may be stale.
-3. Confluence is architecture context and may be stale.
-4. User input is accepted scope context and must be labeled.
+1. Код является источником истины о текущей реализации.
+2. Jira дает контекст требований и может быть устаревшей.
+3. Confluence дает архитектурный контекст и может быть устаревшим.
+4. Ввод пользователя принимается как контекст области анализа и должен быть явно помечен.
 
-## Workflow Invariants
+## Инварианты процесса
 
-- Map code before drafting documentation.
-- Ask before inventing missing context.
-- Put unsupported statements in assumptions or questions.
-- Use AsciiDoc for final analyst deliverables.
-- Save feature outputs under `docs/features/<feature-name>/`.
-- Stop for analyst confirmation after code mapping and before final writing.
+- Сначала составлять карту кода, затем писать документацию.
+- Спрашивать пользователя, а не додумывать недостающий контекст.
+- Переносить неподтвержденные утверждения в предположения или вопросы.
+- Использовать AsciiDoc для итоговых документов аналитика.
+- Писать итоговые документы аналитика на русском языке.
+- Сохранять результаты по функции в `docs/features/<feature-name>/`.
+- Останавливаться для подтверждения области анализа после code mapping и до финального написания.
 
-## Evidence Labels
+## Метки доказуемости
 
-Use clear labels in generated AsciiDoc:
+Используйте понятные метки в сгенерированном AsciiDoc:
 
-- `Source: code`
-- `Source: jira`
-- `Source: confluence`
-- `Source: user`
-- `Status: assumption`
-- `Status: open question`
+- `Источник: код`
+- `Источник: jira`
+- `Источник: confluence`
+- `Источник: пользователь`
+- `Статус: предположение`
+- `Статус: открытый вопрос`

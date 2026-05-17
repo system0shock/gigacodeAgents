@@ -1,29 +1,29 @@
-# GigaCode Analytics Module
+# Модуль аналитики GigaCode
 
-This module provides a GigaCode project configuration for analysts who need to reverse-analyze one business feature and produce evidence-backed documentation.
+Модуль содержит проектную конфигурацию GigaCode для аналитиков, которым нужно провести обратный анализ одной бизнес-функции и подготовить документацию с явными источниками.
 
-The workflow is based on GigaCode project configuration semantics and the `.gigacode/` directory.
+Рабочий контур использует проектную конфигурацию GigaCode и каталог `.gigacode/`.
 
-## What It Contains
+## Состав модуля
 
-- `.gigacode/settings.json` - project settings, permissions, and hook wiring.
-- `.gigacode/skills/reverse-analysis/SKILL.md` - workflow rules for reverse analysis.
-- `.gigacode/agents/` - five focused subagents for intake, code mapping, documentation, evidence review, and final review.
-- `.gigacode/hooks/` - preflight and output validation hooks.
-- `.gigacode/commands/reverse-analysis.md` - project slash command.
-- `docs/templates/feature-analysis.adoc` - AsciiDoc output contract.
-- `rules/` - shared rules for reverse analysis and branch names.
+- `.gigacode/settings.json` - настройки проекта, разрешения и подключение hooks.
+- `.gigacode/skills/reverse-analysis/SKILL.md` - правила рабочего процесса reverse-analysis.
+- `.gigacode/agents/` - пять специализированных субагентов: intake, mapping, documentation, evidence review и final review.
+- `.gigacode/hooks/` - hooks для предварительной проверки и валидации результата.
+- `.gigacode/commands/reverse-analysis.md` - проектная slash-команда.
+- `docs/templates/feature-analysis.adoc` - шаблон результата в AsciiDoc.
+- `rules/` - общие правила анализа и именования веток.
 
-## Prerequisites
+## Требования
 
-- GigaCode CLI installed as `gigacode`.
+- GigaCode CLI, доступный как команда `gigacode`.
 - Git.
-- Python 3 available as `python`.
-- Optional: Atlassian MCP configured by your team if Jira or Confluence access is needed.
+- Python 3, доступный как команда `python`.
+- Опционально: Atlassian MCP, настроенный вашей командой, если нужен доступ к Jira или Confluence.
 
-This repository does not install MCP servers or store credentials.
+Этот репозиторий не устанавливает MCP-серверы и не хранит учетные данные.
 
-## Windows Quick Start
+## Быстрый старт на Windows
 
 ```powershell
 git clone <repo-url>
@@ -32,13 +32,13 @@ cd <repo>\modules\analytics
 gigacode
 ```
 
-Then run inside GigaCode:
+Затем выполните внутри GigaCode:
 
 ```text
 /reverse-analysis feature "Card Blocking" jira ABC-123
 ```
 
-## Linux Quick Start
+## Быстрый старт на Linux
 
 ```bash
 git clone <repo-url>
@@ -47,31 +47,31 @@ bash scripts/smoke-check.sh
 gigacode
 ```
 
-Then run inside GigaCode:
+Затем выполните внутри GigaCode:
 
 ```text
 /reverse-analysis feature "Card Blocking" jira ABC-123
 ```
 
-## Code-Only Analysis
+## Анализ только по коду
 
-If Jira and Confluence are unavailable, say that explicitly:
+Если Jira и Confluence недоступны, укажите это явно:
 
 ```text
 /reverse-analysis feature "Card Blocking" code-only, no Jira, no Confluence
 ```
 
-The generated files must state that external context was not used.
+Сгенерированные файлы должны явно указать, что внешний контекст не использовался.
 
-## Expected Output
+## Ожидаемый результат
 
-GigaCode should create AsciiDoc files under:
+GigaCode должен создать AsciiDoc-файлы в каталоге:
 
 ```text
 docs/features/<feature-name>/
 ```
 
-Required files:
+Обязательные файлы:
 
 - `overview.adoc`
 - `flow.adoc`
@@ -79,20 +79,22 @@ Required files:
 - `data.adoc`
 - `questions.adoc`
 
-## Workflow
+Все итоговые документы аналитика должны быть написаны на русском языке.
 
-1. Intake validates the feature name and source context.
-2. Code mapping identifies entry points, files, flows, integrations, and gaps.
-3. The analyst confirms scope.
-4. Documentation is written as AsciiDoc.
-5. Evidence and gap review checks unsupported claims.
-6. Final review checks structure and terminology.
-7. Hooks validate the request and output.
+## Рабочий процесс
 
-## Subagent Size Rule
+1. Intake проверяет название функции и доступность источников.
+2. Code mapping определяет точки входа, файлы, потоки, интеграции и пробелы.
+3. Аналитик подтверждает область анализа.
+4. Документация составляется в AsciiDoc на русском языке.
+5. Evidence and gap review проверяет неподтвержденные утверждения.
+6. Final review проверяет структуру и терминологию.
+7. Hooks валидируют запрос и результат.
 
-Each subagent file should stay below 10,000 characters. Move reusable details into `rules/` or templates instead of expanding agent prompts.
+## Ограничение размера субагентов
 
-## Adapting For A Team Repository
+Каждый файл субагента должен оставаться короче 10 000 символов. Повторно используемые детали нужно переносить в `rules/` или шаблоны, а не раздувать промпты субагентов.
 
-Copy or keep this module as the project root used by analysts. If your GigaCode fork expects `.gigacode/` in a different location, preserve the internal layout and adjust only the outer module path.
+## Адаптация для командного репозитория
+
+Используйте этот модуль как корень проекта для аналитиков. Если ваш форк GigaCode ожидает `.gigacode/` в другом месте, сохраните внутреннюю структуру и измените только внешний путь модуля.

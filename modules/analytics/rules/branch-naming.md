@@ -1,12 +1,12 @@
-# Branch Naming Rules
+# Правила именования веток
 
-Recommended branch format:
+Рекомендуемый формат ветки:
 
 `analysis/<feature-slug>`
 
-Examples:
+Примеры:
 
 - `analysis/card-blocking`
 - `analysis/payment-retry`
 
-Use lowercase ASCII, digits, and hyphens. Avoid spaces and ticket-only branch names.
+Используйте строчные ASCII-буквы, цифры и дефисы. Не используйте пробелы и названия, состоящие только из номера тикета.
