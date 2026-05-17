@@ -1,1 +1,10 @@
-.worktrees/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.gigacode/tmp/
+.gigacode/logs/
+docs/development/*/tmp/
+repomix-output.*
+graphify-output/
