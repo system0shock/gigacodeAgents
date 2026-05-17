@@ -4,7 +4,7 @@
 
 **Goal:** Build a Git-ready GigaCode project template for analysts performing reverse analysis of one business feature at a time.
 
-**Architecture:** The repository is a self-contained project root. GigaCode discovers project settings, skills, agents, commands, and hooks under `.gigacode/`, while analyst outputs are AsciiDoc files under `docs/features/<feature-name>/`.
+**Architecture:** The repository contains a self-contained analytics module at `modules/analytics/`. GigaCode discovers project settings, skills, agents, commands, and hooks under `modules/analytics/.gigacode/` when analysts run it from that module, while analyst outputs are AsciiDoc files under `modules/analytics/docs/features/<feature-name>/`.
 
 **Tech Stack:** GigaCode/Qwen Code-compatible JSON settings, Markdown skill/agent/command files with YAML frontmatter, Python 3 hook scripts, PowerShell and POSIX shell smoke checks, AsciiDoc templates.
 
@@ -12,20 +12,23 @@
 
 ## File Structure
 
-- Create `.gigacode/settings.json`: project settings, hook wiring, safe permissions, UI defaults.
-- Create `.gigacode/skills/reverse-analysis/SKILL.md`: one workflow skill for reverse analysis.
-- Create `.gigacode/agents/*.md`: five focused subagents, each below 10,000 characters.
-- Create `.gigacode/hooks/preflight_check.py`: validates reverse-analysis prompt input from hook JSON.
-- Create `.gigacode/hooks/validate_output.py`: validates generated AsciiDoc output from repo state and hook JSON.
-- Create `.gigacode/commands/reverse-analysis.md`: project slash command prompt.
-- Create `docs/templates/feature-analysis.adoc`: reusable AsciiDoc output contract.
-- Create `docs/features/.gitkeep`: keeps output directory in git.
-- Create `rules/reverse-analysis.md`: shared workflow rules.
-- Create `rules/branch-naming.md`: branch naming guidance.
-- Create `scripts/smoke-check.ps1`: Windows smoke check.
-- Create `scripts/smoke-check.sh`: Linux smoke check.
-- Create `README.md`: quick start and operating guide.
+- Create `modules/analytics/.gigacode/settings.json`: project settings, hook wiring, safe permissions, UI defaults.
+- Create `modules/analytics/.gigacode/skills/reverse-analysis/SKILL.md`: one workflow skill for reverse analysis.
+- Create `modules/analytics/.gigacode/agents/*.md`: five focused subagents, each below 10,000 characters.
+- Create `modules/analytics/.gigacode/hooks/preflight_check.py`: validates reverse-analysis prompt input from hook JSON.
+- Create `modules/analytics/.gigacode/hooks/validate_output.py`: validates generated AsciiDoc output from repo state and hook JSON.
+- Create `modules/analytics/.gigacode/commands/reverse-analysis.md`: project slash command prompt.
+- Create `modules/analytics/docs/templates/feature-analysis.adoc`: reusable AsciiDoc output contract.
+- Create `modules/analytics/docs/features/.gitkeep`: keeps output directory in git.
+- Create `modules/analytics/rules/reverse-analysis.md`: shared workflow rules.
+- Create `modules/analytics/rules/branch-naming.md`: branch naming guidance.
+- Create `modules/analytics/scripts/smoke-check.ps1`: Windows smoke check.
+- Create `modules/analytics/scripts/smoke-check.sh`: Linux smoke check.
+- Create `modules/analytics/README.md`: analytics quick start and operating guide.
+- Create `README.md`: repository-level module index.
 - Create `.gitignore`: local/runtime ignores.
+
+All task paths below are relative to `modules/analytics/` unless the path is explicitly `README.md` or `.gitignore` at repository root.
 
 ## Task 1: Repository Skeleton and Static Rules
 

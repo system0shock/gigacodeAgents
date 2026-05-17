@@ -1,1 +1,9 @@
 .worktrees/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+modules/analytics/.gigacode/tmp/
+modules/analytics/.gigacode/logs/
+modules/analytics/docs/features/*/tmp/

@@ -1,0 +1,54 @@
+{
+  "ui": {
+    "showCitations": true,
+    "showLineNumbers": true,
+    "hideTips": true,
+    "shellOutputMaxLines": 20
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(git status*)",
+      "Bash(git branch*)",
+      "Bash(git diff*)",
+      "Bash(python .gigacode/hooks/*)",
+      "Edit(docs/features/**)"
+    ],
+    "ask": [
+      "Edit",
+      "Bash(git add*)",
+      "Bash(git commit*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Bash(rm -rf *)",
+      "Bash(del /s *)",
+      "Bash(format *)"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/preflight_check.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/validate_output.py"
+          }
+        ]
+      }
+    ]
+  }
+}

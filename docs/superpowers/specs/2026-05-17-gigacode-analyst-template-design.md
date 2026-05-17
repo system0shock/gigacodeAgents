@@ -4,7 +4,7 @@
 
 Create a Git-ready project template for analysts who use the GigaCode CLI, a fork of Qwen Code. The template must be usable on Windows and Linux, must follow Qwen Code configuration semantics, and must replace user-facing `qwen` naming with `gigacode`.
 
-The first version is a self-contained project folder. Analysts clone the repository, open the project root, run `gigacode`, and use the included project-level skills, agents, hooks, commands, and rules.
+The first version is a self-contained analytics module. Analysts clone the repository, open `modules/analytics/`, run `gigacode`, and use the included project-level skills, agents, hooks, commands, and rules. Future modules can be added next to it, such as `modules/development/` and `modules/nt/`.
 
 Final analyst-facing documentation produced by the workflow must be written in AsciiDoc.
 
@@ -39,39 +39,41 @@ If the fork still expects `.qwen` internally, the template will need a compatibi
 ## Repository Layout
 
 ```text
-.gigacode/
-  settings.json
-  skills/
-    reverse-analysis/
-      SKILL.md
-  agents/
-    intake-scope.md
-    code-mapping.md
-    documentation.md
-    evidence-gap.md
-    review.md
-  hooks/
-    preflight_check.py
-    validate_output.py
-  commands/
-    reverse-analysis.md
-docs/
-  features/
-    .gitkeep
-  templates/
-    feature-analysis.adoc
-rules/
-  reverse-analysis.md
-  branch-naming.md
-scripts/
-  smoke-check.ps1
-  smoke-check.sh
-README.md
+modules/
+  analytics/
+    .gigacode/
+      settings.json
+      skills/
+        reverse-analysis/
+          SKILL.md
+      agents/
+        intake-scope.md
+        code-mapping.md
+        documentation.md
+        evidence-gap.md
+        review.md
+      hooks/
+        preflight_check.py
+        validate_output.py
+      commands/
+        reverse-analysis.md
+    docs/
+      features/
+        .gitkeep
+      templates/
+        feature-analysis.adoc
+    rules/
+      reverse-analysis.md
+      branch-naming.md
+    scripts/
+      smoke-check.ps1
+      smoke-check.sh
+    README.md
 ```
 
 ## Runtime Workflow
 
-The analyst starts from the repository root and runs `gigacode`.
+The analyst starts from `modules/analytics/` and runs `gigacode`.
 
 The primary entry point is the project custom command `/reverse-analysis`. The command instructs GigaCode to use the `reverse-analysis` skill, gather the feature name and source context, and produce documentation under `docs/features/<feature-name>/`.
 
@@ -162,10 +164,10 @@ The template documents how the workflow behaves:
 
 ## Smoke Checks
 
-The repository includes lightweight checks for both target operating systems:
+The analytics module includes lightweight checks for both target operating systems:
 
-- `scripts/smoke-check.ps1` for Windows PowerShell.
-- `scripts/smoke-check.sh` for Linux shells.
+- `modules/analytics/scripts/smoke-check.ps1` for Windows PowerShell.
+- `modules/analytics/scripts/smoke-check.sh` for Linux shells.
 
 The checks verify repository structure, JSON validity, expected files, YAML frontmatter presence, and direct hook-script execution. They do not require `gigacode` or Atlassian MCP to be installed.
 

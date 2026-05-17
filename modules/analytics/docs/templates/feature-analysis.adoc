@@ -1,0 +1,41 @@
+= Feature Reverse Analysis Template
+:toc:
+:sectnums:
+
+== Scope
+
+Feature name::
+  <feature name>
+
+Included::
+  <confirmed included scope>
+
+Excluded::
+  <confirmed excluded scope>
+
+Sources::
+  * Code: <files or modules>
+  * Jira: <ticket or "not used">
+  * Confluence: <page or "not used">
+  * User input: <prompt or clarification>
+
+== Evidence Rules
+
+Every factual statement must be backed by at least one source. Unsupported statements belong in assumptions or open questions.
+
+== Required Output Files
+
+`overview.adoc`::
+  Business and technical overview of the feature.
+
+`flow.adoc`::
+  Main execution flow, branches, and failure paths.
+
+`integrations.adoc`::
+  External APIs, queues, events, services, and dependencies.
+
+`data.adoc`::
+  Data structures, storage, identifiers, and ownership.
+
+`questions.adoc`::
+  Open questions, contradictions, assumptions, and follow-up decisions.
