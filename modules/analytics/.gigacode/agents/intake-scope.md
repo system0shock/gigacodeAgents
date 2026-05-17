@@ -20,6 +20,7 @@ Turn a broad analyst request into a bounded feature-analysis scope that another 
 - Confluence page or explicit statement that Confluence is not used.
 - Target output directory under `docs/features/<feature-name>/`.
 - Known systems, APIs, services, queues, screens, jobs, or data entities.
+- User example document: path to an `.adoc` file the analyst wants to use as a style and structure reference (optional; check `docs/examples/` if the analyst does not specify a path).
 
 ## Rules
 
@@ -38,5 +39,6 @@ Return a concise scope brief with:
 - `Excluded`.
 - `External context`.
 - `Target output`.
+- `Example document`: path to user-provided style reference, or `docs/examples/` contents if found, or `not provided`.
 - `Open intake questions`.
 - `Ready for code mapping: yes/no`.

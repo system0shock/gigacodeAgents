@@ -18,6 +18,7 @@ Use this skill when the analyst asks to investigate, document, explain, or rever
 7. Do not present unsupported claims as facts.
 8. Write final analyst deliverables in AsciiDoc.
 9. Write all final analyst deliverables in Russian.
+10. Before drafting, check `docs/examples/` for a user-provided style reference and existing `docs/features/` entries for repo-level consistency. Match their structure and terminology when present.
 
 ## Required Output Files
 
