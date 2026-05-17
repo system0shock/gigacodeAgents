@@ -125,7 +125,7 @@ The template includes five project subagents:
 
 Agents should use conservative permission defaults. Review and evidence agents should be read-oriented. Documentation may edit the `docs/features/<feature-name>/` output directory when the user has approved scope.
 
-Each subagent file should stay below 10 KB. If instructions approach that limit, move reusable details into `rules/` or templates and keep the agent prompt focused on role, inputs, outputs, and constraints.
+Each subagent file should stay below 10,000 characters. If instructions approach that limit, move reusable details into `rules/` or templates and keep the agent prompt focused on role, inputs, outputs, and constraints.
 
 When drafting the subagent files, use the VoltAgent catalog as an additional source for proven subagent role patterns. Do not copy large prompts verbatim; extract only relevant structural ideas such as focused descriptions, single responsibility, clear deliverables, and explicit tool boundaries.
 
@@ -201,4 +201,4 @@ The v1 is successful when:
 - The README provides a two-command style quick start after prerequisites are installed.
 - Smoke checks pass on Windows and Linux-compatible shell environments.
 - Generated AsciiDoc documentation workflow is constrained to one feature and separates facts, assumptions, gaps, and questions.
-- Project subagent files stay below 10 KB unless a future design explicitly justifies a larger file.
+- Project subagent files stay below 10,000 characters unless a future design explicitly justifies a larger file.
