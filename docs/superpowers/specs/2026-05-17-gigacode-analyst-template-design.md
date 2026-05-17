@@ -6,9 +6,13 @@ Create a Git-ready project template for analysts who use the GigaCode CLI, a for
 
 The first version is a self-contained project folder. Analysts clone the repository, open the project root, run `gigacode`, and use the included project-level skills, agents, hooks, commands, and rules.
 
+Final analyst-facing documentation produced by the workflow must be written in AsciiDoc.
+
 ## Source Requirements
 
 The design is based on `core_docs/gigacode_reverse_analysis_brief.pdf` and `core_docs/gigacode_reverse_analysis_detailed_reworked.pdf`.
+
+Additional subagent design inspiration may be taken from `https://github.com/VoltAgent/awesome-claude-code-subagents`. That repository is a Claude Code subagent catalog, so it is a reference for role boundaries, specialization patterns, and prompt structure only. Any reused idea must be adapted to GigaCode/Qwen Code frontmatter, tool naming, and project layout.
 
 The v1 workflow must support reverse analysis of one business feature at a time:
 
@@ -54,6 +58,8 @@ If the fork still expects `.qwen` internally, the template will need a compatibi
 docs/
   features/
     .gitkeep
+  templates/
+    feature-analysis.adoc
 rules/
   reverse-analysis.md
   branch-naming.md
@@ -98,12 +104,14 @@ The skill also defines the expected documentation structure:
 
 ```text
 docs/features/<feature-name>/
-  overview.md
-  flow.md
-  integrations.md
-  data.md
-  questions.md
+  overview.adoc
+  flow.adoc
+  integrations.adoc
+  data.adoc
+  questions.adoc
 ```
+
+All generated feature files must be valid AsciiDoc. Markdown headings, tables, and fenced code blocks should be avoided in generated analyst artifacts unless they are inside literal examples where Markdown syntax is being discussed.
 
 ## Agent Design
 
@@ -117,13 +125,17 @@ The template includes five project subagents:
 
 Agents should use conservative permission defaults. Review and evidence agents should be read-oriented. Documentation may edit the `docs/features/<feature-name>/` output directory when the user has approved scope.
 
+Each subagent file should stay below 10 KB. If instructions approach that limit, move reusable details into `rules/` or templates and keep the agent prompt focused on role, inputs, outputs, and constraints.
+
+When drafting the subagent files, use the VoltAgent catalog as an additional source for proven subagent role patterns. Do not copy large prompts verbatim; extract only relevant structural ideas such as focused descriptions, single responsibility, clear deliverables, and explicit tool boundaries.
+
 ## Hooks
 
 The template includes two hook scripts.
 
 `preflight_check.py` validates incoming reverse-analysis requests. It should detect whether the prompt includes a feature name, a Jira/Confluence reference or explicit refusal, and enough target-output context. If input is incomplete, it should return a blocking response with concrete questions.
 
-`validate_output.py` validates generated documentation. It should check for expected files, required sections, open questions, missing evidence markers, and unfinished placeholders such as `TODO`, `TBD`, or `FIXME`.
+`validate_output.py` validates generated AsciiDoc documentation. It should check for expected `.adoc` files, required sections, open questions, missing evidence markers, and unfinished placeholders such as `TODO`, `TBD`, or `FIXME`.
 
 Hook wiring belongs in `.gigacode/settings.json` using the same hook event and command-hook semantics as Qwen Code. The preflight hook should run on prompt submission. The validation hook should run near response completion or before/after writes, depending on the available GigaCode hook behavior inherited from Qwen Code.
 
@@ -167,6 +179,7 @@ The README must explain:
 - How to run smoke checks.
 - How to invoke `/reverse-analysis`.
 - Expected inputs and outputs.
+- That generated analyst deliverables are AsciiDoc files under `docs/features/<feature-name>/`.
 - MCP responsibility and limitations.
 - How to adapt the template for a real team repository.
 
@@ -187,4 +200,5 @@ The v1 is successful when:
 - A user can inspect all skills, agents, hooks, settings, commands, and rules in git.
 - The README provides a two-command style quick start after prerequisites are installed.
 - Smoke checks pass on Windows and Linux-compatible shell environments.
-- Generated documentation workflow is constrained to one feature and separates facts, assumptions, gaps, and questions.
+- Generated AsciiDoc documentation workflow is constrained to one feature and separates facts, assumptions, gaps, and questions.
+- Project subagent files stay below 10 KB unless a future design explicitly justifies a larger file.
