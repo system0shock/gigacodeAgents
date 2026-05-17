@@ -1,56 +1,56 @@
 # GigaCode Developer Template
 
-This repository is a GigaCode project template for enterprise developer workflows.
+Этот репозиторий является проектным шаблоном GigaCode для enterprise-процессов разработки.
 
-The default workflow language is Russian. GigaCode asks clarifying questions, explains blockers, and writes Markdown development artifacts in Russian unless the user asks for another language. Technical identifiers such as file paths, commands, branch names, hook names, code symbols, package names, and raw command output stay unchanged.
+Язык workflow по умолчанию - русский. GigaCode задает уточняющие вопросы, объясняет блокеры и пишет Markdown-артефакты разработки на русском языке, если пользователь явно не попросил другой язык. Технические идентификаторы, такие как file paths, commands, branch names, hook names, code symbols, package names и raw command output, остаются без перевода.
 
-It provides two project commands:
+Шаблон предоставляет две проектные команды:
 
-- `/develop-feature`: plan or implement a feature.
-- `/fix-bug`: investigate, plan, or implement a bug fix.
+- `/develop-feature`: спланировать или реализовать фичу.
+- `/fix-bug`: расследовать, спланировать или исправить баг.
 
-Both commands use the `development-flow` skill and support two modes:
+Обе команды используют skill `development-flow` и поддерживают два режима:
 
-- `plan-only`: produce Markdown development artifacts without source edits.
-- `implement`: plan, pass git safety checks, make scoped edits, verify behavior, and prepare PR-ready notes.
+- `plan-only`: подготовить Markdown-артефакты разработки без изменения исходного кода.
+- `implement`: спланировать работу, пройти git safety checks, внести scoped edits, проверить поведение и подготовить PR-ready notes.
 
-## Prerequisites
+## Требования
 
 - GigaCode CLI
 - Git
 - Python 3
-- PowerShell on Windows
-- Bash for Linux-compatible smoke checks
+- PowerShell на Windows
+- Bash для Linux-compatible smoke checks
 
-## Quick Start
+## Быстрый старт
 
-Run from the repository root:
+Запустите из корня репозитория:
 
 ```powershell
 gigacode
 ```
 
-Feature example:
+Пример для фичи:
 
 ```text
 /develop-feature plan-only payment retry with acceptance criteria: retry failed provider calls once after transient timeout
 ```
 
-Bug example:
+Пример для бага:
 
 ```text
 /fix-bug plan-only card blocking timeout expected: user sees final status actual: request hangs after provider timeout
 ```
 
-## Outputs
+## Выходные артефакты
 
-Developer artifacts are Markdown files under:
+Артефакты разработки создаются как Markdown-файлы в каталоге:
 
 ```text
 docs/development/<task-slug>/
 ```
 
-Expected files:
+Ожидаемые файлы:
 
 - `context.md`
 - `plan.md`
@@ -60,21 +60,21 @@ Expected files:
 
 ## Project Intelligence
 
-The workflow uses project analytics, Repomix, and Graphify when available.
+Workflow использует project analytics, Repomix и Graphify, когда они доступны.
 
 Fallbacks:
 
-- If analytics are absent, it continues with code, tests, local docs, and user-provided context.
-- If Repomix is absent, it uses direct repository inspection.
-- If Graphify is absent, it uses manual impact mapping.
+- Если analytics отсутствует, workflow продолжает работу с кодом, тестами, локальной документацией и контекстом от пользователя.
+- Если Repomix отсутствует, используется direct repository inspection.
+- Если Graphify отсутствует, используется manual impact mapping.
 
 ## Enterprise Git Safety
 
-The template blocks implementation and git writes on protected branches such as `main`, `master`, `develop`, `release/*`, `hotfix/*`, `production`, `staging`, and `uat`.
+Шаблон блокирует реализацию и git write operations на защищенных ветках, включая `main`, `master`, `develop`, `release/*`, `hotfix/*`, `production`, `staging` и `uat`.
 
-The template blocks destructive git operations by default, including `git reset --hard`, destructive `git clean` variants, forced pushes, branch deletion, remote URL changes, and direct protected-branch commits.
+Шаблон по умолчанию блокирует destructive git operations, включая `git reset --hard`, destructive `git clean` variants, forced pushes, branch deletion, remote URL changes и direct protected-branch commits.
 
-The template does not auto-commit or auto-push in v1. PR readiness means the workflow prepares reviewer-facing notes and verification evidence for a human or CI workflow.
+В v1 шаблон не выполняет auto-commit и auto-push. PR readiness означает, что workflow готовит reviewer-facing notes и verification evidence для человека или CI workflow.
 
 ## Smoke Checks
 
@@ -90,10 +90,10 @@ Linux-compatible shell:
 bash scripts/smoke-check.sh
 ```
 
-Smoke checks do not require GigaCode, Repomix, Graphify, MCP servers, network access, or enterprise credentials.
+Smoke checks не требуют GigaCode, Repomix, Graphify, MCP servers, network access или enterprise credentials.
 
-## Adapting for a Team
+## Адаптация под команду
 
-Update `rules/git-safety.md` for team-specific protected branches and protected paths.
+Обновите `rules/git-safety.md` под protected branches и protected paths вашей команды.
 
-Update `.gigacode/settings.json` only with project-safe defaults. Do not store secrets, tokens, personal paths, or environment-specific credentials in this repository.
+Обновляйте `.gigacode/settings.json` только project-safe defaults. Не храните в репозитории secrets, tokens, personal paths или environment-specific credentials.
