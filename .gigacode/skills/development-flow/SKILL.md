@@ -1,0 +1,100 @@
+---
+name: development-flow
+description: MUST BE USED for GigaCode developer workflows that plan or implement features and bug fixes with enterprise git safety, project context, verification, and PR-ready Markdown artifacts.
+---
+
+# Development Flow
+
+Use this skill when the developer asks to plan, implement, fix, debug, or prepare a code change.
+
+## Language
+
+Use Russian by default for user-facing interaction and Markdown workflow artifacts. Keep technical identifiers such as paths, commands, branch names, hook names, code symbols, package names, configuration keys, and raw command output unchanged.
+
+## Modes
+
+- `plan-only`: analyze, map impact, and write Markdown artifacts without editing source code.
+- `implement`: run the full plan-only flow, pass git safety checks, make scoped edits, verify behavior, and prepare PR-ready notes.
+
+Default to `plan-only` when the requested mode is unclear, high-risk, or missing acceptance criteria.
+
+## Request Types
+
+- Feature work starts from a desired capability, behavior, or technical improvement.
+- Bug work starts from an observed failure, regression, incident, error, failing test, or mismatch between expected and actual behavior.
+- If the request type is unclear, ask before planning implementation.
+
+## Required Context
+
+Before planning or editing:
+
+1. Read project analytics when present.
+2. Use Repomix output when present.
+3. Use Graphify output or the Graphify skill when present.
+4. If Repomix is absent, inspect the repository directly with file listing and targeted search.
+5. If Graphify is absent, build a manual impact map from entry points, imports, call sites, tests, and configuration.
+6. Confirm current behavior from live files before editing.
+
+Record missing optional context in `docs/development/<task-slug>/context.md`.
+
+## Git Safety
+
+Before source edits in implement mode:
+
+1. Run `git status --short`.
+2. Run `git branch --show-current`.
+3. Run `git rev-list --left-right --count HEAD...@{u}` when upstream exists.
+4. Stop on protected branches.
+5. Stop when unrelated user changes overlap with planned edits.
+6. Do not commit or push by default.
+
+Never run destructive git operations, force pushes, branch deletion, or remote URL changes unless the user gives explicit instruction outside the normal workflow.
+
+## Feature Flow
+
+1. Clarify feature goal, acceptance criteria, included scope, excluded scope, and constraints.
+2. Collect project context.
+3. Map impact.
+4. Write plan and verification strategy.
+5. Stop for clarification if scope or safety is unclear.
+6. In implement mode, edit only after git guard passes.
+7. Verify behavior.
+8. Write PR-ready notes.
+
+## Bug Flow
+
+1. Clarify symptom, expected behavior, actual behavior, reproduction steps, affected environment, severity, and workarounds.
+2. Collect project context.
+3. Plan reproduction.
+4. Identify likely root cause.
+5. Write fix plan and regression strategy.
+6. Stop for clarification if reproduction or impact is unclear.
+7. In implement mode, edit only after git guard passes.
+8. Verify the regression fix first, then broader checks.
+9. Write PR-ready notes.
+
+## Output Files
+
+Write Markdown artifacts under `docs/development/<task-slug>/`:
+
+- `context.md`
+- `plan.md`
+- `implementation.md`
+- `verification.md`
+- `pr-summary.md`
+
+Plan-only artifacts must clearly state when implementation or verification was not executed.
+
+## Agents
+
+Use these project agents when appropriate:
+
+1. `dev-intake`
+2. `project-context`
+3. `code-map`
+4. `implementation-plan`
+5. `coder`
+6. `test-review`
+7. `pr-readiness`
+
+Each agent file and role description must remain below 10,000 characters.
