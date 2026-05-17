@@ -4,7 +4,7 @@
 
 **Goal:** Build a Git-ready GigaCode project template for enterprise developer workflows that supports feature development and bug fixing in plan-only and implement modes.
 
-**Architecture:** The repository is a self-contained project root. GigaCode discovers project settings, skills, agents, commands, and hooks under `.gigacode/`, while developer workflow artifacts are Markdown files under `docs/development/<task-slug>/`. Git safety is enforced both by workflow instructions and by hook scripts that block protected branches, destructive git operations, unsafe pushes, and protected infrastructure edits.
+**Architecture:** The repository is a self-contained project root. GigaCode discovers project settings, skills, agents, commands, and hooks under `.gigacode/`, while developer workflow artifacts are Markdown files under `docs/development/<task-slug>/`. Git safety is enforced both by workflow instructions and by hook scripts that block protected branches, destructive git operations, unsafe pushes, and protected infrastructure edits. User-facing workflow communication and generated developer artifacts are Russian by default; technical identifiers stay ASCII/English.
 
 **Tech Stack:** GigaCode/Qwen Code-compatible JSON settings, Markdown skill/agent/command files with YAML frontmatter, Python 3 hook scripts, PowerShell and POSIX shell smoke checks, Markdown templates.
 
@@ -23,6 +23,7 @@
 - Create `docs/templates/development-plan.md`: reusable Markdown artifact contract.
 - Create `docs/development/.gitkeep`: keeps output directory in git.
 - Create `rules/development-flow.md`: shared development workflow rules.
+- Create `rules/language-policy.md`: Russian-default interaction and artifact language policy.
 - Create `rules/git-safety.md`: protected branches, protected paths, and forbidden git operations.
 - Create `rules/branch-naming.md`: enterprise-safe branch naming guidance.
 - Create `scripts/smoke-check.ps1`: Windows smoke check.
@@ -37,6 +38,7 @@
 - Create: `docs/development/.gitkeep`
 - Create: `docs/templates/development-plan.md`
 - Create: `rules/development-flow.md`
+- Create: `rules/language-policy.md`
 - Create: `rules/git-safety.md`
 - Create: `rules/branch-naming.md`
 
@@ -174,7 +176,38 @@ Implementation invariants:
 - Do not auto-commit or auto-push in v1.
 ```
 
-- [ ] **Step 6: Create `rules/git-safety.md`**
+- [ ] **Step 6: Create `rules/language-policy.md`**
+
+Write:
+
+```markdown
+# Language Policy
+
+The workflow communicates with the user in Russian by default.
+
+Default Russian content:
+
+- clarifying questions;
+- blocker explanations;
+- plan summaries;
+- Markdown artifacts under `docs/development/<task-slug>/`;
+- PR-ready notes prepared by the workflow.
+
+Keep these identifiers unchanged and ASCII/English unless the project already uses another convention:
+
+- file and directory names;
+- command names;
+- branch names;
+- hook names;
+- code symbols;
+- package names;
+- configuration keys;
+- raw command output excerpts.
+
+If the user explicitly asks for another language, follow the user request for prose while preserving technical identifiers.
+```
+
+- [ ] **Step 7: Create `rules/git-safety.md`**
 
 Write:
 
@@ -232,7 +265,7 @@ Protected paths:
 Changes to protected paths require explicit human confirmation that names the files and explains the risk.
 ```
 
-- [ ] **Step 7: Create `rules/branch-naming.md`**
+- [ ] **Step 8: Create `rules/branch-naming.md`**
 
 Write:
 
@@ -254,25 +287,26 @@ Examples:
 Use lowercase ASCII, digits, and hyphens. Avoid spaces, ticket-only branch names, and names that look like protected branches.
 ```
 
-- [ ] **Step 8: Verify skeleton**
+- [ ] **Step 9: Verify skeleton**
 
 Run:
 
 ```powershell
 Test-Path docs\templates\development-plan.md
 Test-Path rules\development-flow.md
+Test-Path rules\language-policy.md
 Test-Path rules\git-safety.md
 Test-Path rules\branch-naming.md
 ```
 
 Expected: all commands print `True`.
 
-- [ ] **Step 9: Commit skeleton**
+- [ ] **Step 10: Commit skeleton**
 
 Run:
 
 ```powershell
-git add .gitignore docs/development/.gitkeep docs/templates/development-plan.md rules/development-flow.md rules/git-safety.md rules/branch-naming.md
+git add .gitignore docs/development/.gitkeep docs/templates/development-plan.md rules/development-flow.md rules/language-policy.md rules/git-safety.md rules/branch-naming.md
 git commit -m "Add developer template skeleton"
 ```
 
@@ -386,6 +420,10 @@ description: MUST BE USED for GigaCode developer workflows that plan or implemen
 
 Use this skill when the developer asks to plan, implement, fix, debug, or prepare a code change.
 
+## Language
+
+Use Russian by default for user-facing interaction and Markdown workflow artifacts. Keep technical identifiers such as paths, commands, branch names, hook names, code symbols, package names, configuration keys, and raw command output unchanged.
+
 ## Modes
 
 - `plan-only`: analyze, map impact, and write Markdown artifacts without editing source code.
@@ -496,11 +534,12 @@ Follow this sequence:
 2. Clarify feature goal, acceptance criteria, included scope, excluded scope, and constraints.
 3. Inspect analytics, Repomix, and Graphify when available.
 4. Use documented fallbacks when optional context is unavailable.
-5. Map impacted code before planning edits.
-6. In implement mode, run git safety checks before editing source files.
-7. Produce Markdown artifacts under `docs/development/<task-slug>/`.
-8. Record verification evidence before claiming completion.
-9. Do not auto-commit or auto-push.
+5. Communicate with the user in Russian and write Markdown workflow artifacts in Russian unless the user asks otherwise.
+6. Map impacted code before planning edits.
+7. In implement mode, run git safety checks before editing source files.
+8. Produce Markdown artifacts under `docs/development/<task-slug>/`.
+9. Record verification evidence before claiming completion.
+10. Do not auto-commit or auto-push.
 ```
 
 - [ ] **Step 4: Write `.gigacode/commands/fix-bug.md`**
@@ -524,12 +563,13 @@ Follow this sequence:
 2. Clarify symptom, expected behavior, actual behavior, reproduction evidence, affected environment, severity, and workarounds.
 3. Inspect analytics, Repomix, and Graphify when available.
 4. Use documented fallbacks when optional context is unavailable.
-5. Map impacted code and likely failing paths before planning edits.
-6. In implement mode, run git safety checks before editing source files.
-7. Prefer regression evidence before making the fix when feasible.
-8. Produce Markdown artifacts under `docs/development/<task-slug>/`.
-9. Record verification evidence before claiming completion.
-10. Do not auto-commit or auto-push.
+5. Communicate with the user in Russian and write Markdown workflow artifacts in Russian unless the user asks otherwise.
+6. Map impacted code and likely failing paths before planning edits.
+7. In implement mode, run git safety checks before editing source files.
+8. Prefer regression evidence before making the fix when feasible.
+9. Produce Markdown artifacts under `docs/development/<task-slug>/`.
+10. Record verification evidence before claiming completion.
+11. Do not auto-commit or auto-push.
 ```
 
 - [ ] **Step 5: Verify settings and frontmatter**
@@ -598,6 +638,8 @@ Outputs:
 - Missing inputs.
 - Safety blockers.
 
+Use Russian for prose in questions and summaries. Keep the task slug ASCII.
+
 Feature intake requires goal, behavior, acceptance criteria, and constraints.
 
 Bug intake requires symptom, expected behavior, actual behavior, reproduction evidence or reason it is unavailable, affected environment when known, and severity when known.
@@ -650,6 +692,8 @@ Output a concise context summary for `docs/development/<task-slug>/context.md`:
 - Open questions.
 - Risk areas.
 
+Write prose in Russian by default. Keep paths, commands, code symbols, and raw command output unchanged.
+
 Do not edit source files. Do not commit. Do not push.
 ```
 
@@ -691,6 +735,8 @@ Use live files for final confirmation even when Repomix or Graphify are availabl
 
 Output a compact impact map with file paths and reasons each area matters.
 
+Write prose in Russian by default. Keep paths, commands, code symbols, and raw command output unchanged.
+
 Do not edit source files. Do not commit. Do not push.
 ```
 
@@ -721,6 +767,8 @@ Output for `docs/development/<task-slug>/plan.md`:
 - Rollback notes.
 - Risks.
 - Open questions.
+
+Write prose in Russian by default. Keep paths, commands, code symbols, and raw command output unchanged.
 
 Feature plans must connect steps to acceptance criteria.
 
@@ -773,6 +821,8 @@ Outputs:
 - Changed files.
 - Rationale for each change.
 - Notes for tests that should be run by `test-review`.
+
+Write implementation notes in Russian by default. Keep paths, commands, code symbols, and raw command output unchanged.
 ```
 
 - [ ] **Step 6: Create `.gigacode/agents/test-review.md`**
@@ -813,6 +863,8 @@ Output for `docs/development/<task-slug>/verification.md`:
 - Skipped checks and reasons.
 - Residual risk.
 
+Write prose in Russian by default. Keep paths, commands, code symbols, and raw command output unchanged.
+
 Do not claim tests passed unless command output proves it.
 Do not commit. Do not push.
 ```
@@ -844,6 +896,8 @@ Output for `docs/development/<task-slug>/pr-summary.md`:
 - Risk notes.
 - Rollback notes.
 - Follow-up tasks.
+
+Write prose in Russian by default. Keep paths, commands, code symbols, and raw command output unchanged.
 
 For bug fixes, include root cause and regression evidence when known.
 
@@ -1326,6 +1380,7 @@ $required = @(
   ".gigacode/hooks/validate_development_output.py",
   "docs/templates/development-plan.md",
   "rules/development-flow.md",
+  "rules/language-policy.md",
   "rules/git-safety.md",
   "rules/branch-naming.md"
 )
@@ -1389,6 +1444,7 @@ required=(
   ".gigacode/hooks/validate_development_output.py"
   "docs/templates/development-plan.md"
   "rules/development-flow.md"
+  "rules/language-policy.md"
   "rules/git-safety.md"
   "rules/branch-naming.md"
 )
@@ -1431,6 +1487,8 @@ Create:
 # GigaCode Developer Template
 
 This repository is a GigaCode project template for enterprise developer workflows.
+
+The default workflow language is Russian. GigaCode asks clarifying questions, explains blockers, and writes Markdown development artifacts in Russian unless the user asks for another language. Technical identifiers such as file paths, commands, branch names, hook names, code symbols, package names, and raw command output stay unchanged.
 
 It provides two project commands:
 
@@ -1606,6 +1664,7 @@ Spec coverage:
 - `/develop-feature` and `/fix-bug` are covered by Task 2.
 - Plan-only and implement modes are covered by Tasks 2, 3, 5, and 6.
 - Markdown artifacts are covered by Tasks 1, 5, and 6.
+- Russian-default user interaction and workflow artifact language are covered by Tasks 1, 2, 3, and 6.
 - Analytics, Repomix, Graphify, and fallbacks are covered by Tasks 1, 2, 3, and 6.
 - Enterprise git safety is covered by Tasks 1, 2, 4, and 6.
 - Protected branch and destructive git blocking are covered by Tasks 1, 2, 4, 6, and 7.

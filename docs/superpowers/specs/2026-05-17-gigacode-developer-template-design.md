@@ -15,6 +15,8 @@ Both commands use one shared project skill, `development-flow`, because feature 
 
 Developer-facing workflow artifacts are Markdown in v1. A future version may switch these outputs to AsciiDoc if the project standard requires it.
 
+The default interaction language is Russian. GigaCode should ask clarifying questions, explain blockers, summarize plans, and write developer workflow artifacts in Russian unless the user explicitly requests another language. Technical identifiers such as file names, command names, branch names, hook names, and code symbols stay ASCII/English.
+
 ## Source Requirements
 
 The design is based on the existing analyst template concept in `docs/superpowers/specs/2026-05-17-gigacode-analyst-template-design.md` and the implementation plan in `docs/superpowers/plans/2026-05-17-gigacode-analyst-template.md`.
@@ -246,6 +248,8 @@ pr-summary.md
 
 In plan-only mode, `implementation.md`, `verification.md`, and `pr-summary.md` may contain planned content and explicit "not executed" notes. They must not pretend that code was changed or tests were run.
 
+Artifact prose is written in Russian by default. Keep technical paths, command output excerpts, branch names, class names, function names, and configuration keys unchanged.
+
 ## Skill Design
 
 The single project skill is `development-flow`.
@@ -265,6 +269,7 @@ It defines these invariants:
 - Add or update tests proportionate to risk.
 - Record verification evidence before claiming completion.
 - Never invent successful checks, commits, pushes, or deployment status.
+- Communicate with the user in Russian by default and write workflow artifacts in Russian unless the user asks for another language.
 
 The skill must also define the difference between feature and bug flows so the shared workflow does not erase their different goals.
 
@@ -491,6 +496,7 @@ Smoke checks must not require GigaCode, Repomix, Graphify, Atlassian MCP, networ
 The README must explain:
 
 - what the developer template is for;
+- that the workflow communicates and writes developer artifacts in Russian by default;
 - the difference between `/develop-feature` and `/fix-bug`;
 - the difference between plan-only and implement modes;
 - Windows and Linux prerequisites;
@@ -522,6 +528,7 @@ The v1 is successful when:
 - The repository contains a complete `.gigacode` project configuration for developer workflows.
 - `/develop-feature` and `/fix-bug` are available as explicit project commands.
 - Both commands support plan-only and implement modes.
+- The workflow uses Russian by default for user interaction and Markdown development artifacts.
 - The workflow inspects analytics, Repomix, and Graphify when available.
 - The workflow has explicit fallbacks for missing analytics, Repomix, and Graphify.
 - Developer artifacts are Markdown files under `docs/development/<task-slug>/`.
