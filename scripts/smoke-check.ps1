@@ -63,6 +63,8 @@ if ($missing -notmatch '"decision":\s*"block"') {
 }
 
 if (Get-Command openspec -ErrorAction SilentlyContinue) {
+  # Use 'list --specs' not 'validate --strict': validate requires --type change
+  # when the name is ambiguous, and strict validation needs populated specs.
   openspec list --specs | Out-Null
   Write-Host "openspec config valid"
 } else {

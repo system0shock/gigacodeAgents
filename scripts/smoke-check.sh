@@ -64,6 +64,8 @@ missing="$(printf '%s' '{"last_assistant_message":"Complete in docs/development/
 printf '%s' "$missing" | grep -q '"decision": "block"'
 
 if command -v openspec >/dev/null 2>&1; then
+  # Use 'list --specs' not 'validate --strict': validate requires --type change
+  # when the name is ambiguous, and strict validation needs populated specs.
   openspec list --specs >/dev/null
   echo "openspec config valid"
 else
