@@ -73,9 +73,20 @@ Never run destructive git operations, force pushes, branch deletion, or remote U
 8. Verify the regression fix first, then broader checks.
 9. Write PR-ready notes.
 
-## Output Files
+## Specs and Output Files
 
-Write Markdown artifacts under `docs/development/<task-slug>/`:
+Authoritative specifications use OpenSpec under `openspec/` (see
+`rules/openspec.md`). Drive specs through the change lifecycle:
+
+1. Create or continue a change with `/opsx:propose "<idea>"` (or `openspec new
+   change "<id>"`). This produces `openspec/changes/<change-id>/` with
+   `proposal.md`, `design.md`, `tasks.md`, and delta specs.
+2. Keep the authoritative requirement/scenario detail in the change's spec
+   delta, not in free-form notes.
+3. A change is not ready for implementation until
+   `openspec validate <change-id> --strict` passes.
+
+Human-facing run notes remain Markdown under `docs/development/<task-slug>/`:
 
 - `context.md`
 - `plan.md`
@@ -83,7 +94,9 @@ Write Markdown artifacts under `docs/development/<task-slug>/`:
 - `verification.md`
 - `pr-summary.md`
 
-Plan-only artifacts must clearly state when implementation or verification was not executed.
+Run notes summarize and link to the OpenSpec change; they do not replace it.
+Plan-only artifacts must clearly state when implementation or verification was
+not executed.
 
 ## Agents
 
