@@ -12,7 +12,7 @@ approvalMode: plan
 Before creating any new symbol or file, call `mcp__serena__find_symbol` with the
 intended symbol name. If Serena is unavailable, run:
 
-    rg -n "def <name>|class <Name>" --type-add 'code:*.{py,ts,js,go,rs}' -t code
+    rg -n "def <name>|class <Name>" --type-add 'code:*.{py,ts,js,go,java,rs,rb,cs}' -t code
 
 If a match is found, read and reuse the existing implementation instead of writing a
 duplicate. Record the finding (found or not found) in `docs/development/<task-slug>/context.md`.
