@@ -12,7 +12,10 @@ $required = @(
   "rules/development-flow.md",
   "rules/language-policy.md",
   "rules/git-safety.md",
-  "rules/branch-naming.md"
+  "rules/branch-naming.md",
+  "openspec/config.yaml",
+  "rules/openspec.md",
+  ".gigacode/skills/openspec-propose/SKILL.md"
 )
 
 foreach ($path in $required) {
@@ -57,6 +60,13 @@ if ($feature -notmatch '"decision":\s*"allow"') {
 $missing = '{"last_assistant_message":"Complete in docs/development/sample-task/"}' | python .gigacode/hooks/validate_development_output.py
 if ($missing -notmatch '"decision":\s*"block"') {
   throw "validate_development_output did not block missing artifacts"
+}
+
+if (Get-Command openspec -ErrorAction SilentlyContinue) {
+  openspec list --specs | Out-Null
+  Write-Host "openspec config valid"
+} else {
+  Write-Warning "SKIP: openspec CLI not installed; spec validation not run"
 }
 
 Write-Host "Smoke check passed"

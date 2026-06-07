@@ -14,6 +14,9 @@ required=(
   "rules/language-policy.md"
   "rules/git-safety.md"
   "rules/branch-naming.md"
+  "openspec/config.yaml"
+  "rules/openspec.md"
+  ".gigacode/skills/openspec-propose/SKILL.md"
 )
 
 for path in "${required[@]}"; do
@@ -59,5 +62,12 @@ printf '%s' "$feature" | grep -q '"decision": "allow"'
 
 missing="$(printf '%s' '{"last_assistant_message":"Complete in docs/development/sample-task/"}' | "$python_cmd" .gigacode/hooks/validate_development_output.py)"
 printf '%s' "$missing" | grep -q '"decision": "block"'
+
+if command -v openspec >/dev/null 2>&1; then
+  openspec list --specs >/dev/null
+  echo "openspec config valid"
+else
+  echo "SKIP: openspec CLI not installed; spec validation not run" >&2
+fi
 
 echo "Smoke check passed"
