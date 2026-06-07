@@ -97,3 +97,29 @@ Smoke checks не требуют GigaCode, Repomix, Graphify, MCP servers, netwo
 Обновите `rules/git-safety.md` под protected branches и protected paths вашей команды.
 
 Обновляйте `.gigacode/settings.json` только project-safe defaults. Не храните в репозитории secrets, tokens, personal paths или environment-specific credentials.
+
+## OpenSpec-спецификации
+
+Шаблон управляет авторитетными спецификациями через OpenSpec.
+
+Предварительное условие (один раз на машину):
+
+    npm install -g @fission-ai/openspec@1.4.1
+
+Шаблон поставляет адаптированные для GigaCode навыки и команды OpenSpec в
+`.gigacode/` и файл `openspec/config.yaml`. Если потребуется перегенерировать
+их, запустите `openspec init --tools qwen --force` и перенесите
+`.qwen/skills/openspec-*` и `.qwen/commands/opsx-*` в `.gigacode/`.
+
+Рабочий процесс:
+
+1. `/opsx:propose "<идея>"` — создать изменение в `openspec/changes/<id>/`.
+2. Заполнить артефакты; запустить `openspec validate <id> --strict`.
+3. `/opsx:apply` — реализовать, `/opsx:archive` — завершить.
+
+Правила формата описаны в `rules/openspec.md`. Рабочие заметки по запуску
+остаются в `docs/development/<task-slug>/` и ссылаются на изменение OpenSpec.
+
+> **Примечание:** Формат файлов команд (`.toml` против `.md`) для команд
+> `opsx-*` не верифицирован — поставляются оба формата. Проверьте
+> совместимость с вашей сборкой GigaCode.
