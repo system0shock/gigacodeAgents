@@ -37,6 +37,29 @@ Before planning or editing:
 
 Record missing optional context in `docs/development/<task-slug>/context.md`.
 
+## Search Before Create
+
+Before proposing any new function, class, module, or file, search for an existing
+implementation using Serena's `find_symbol` tool:
+
+```
+mcp__serena__find_symbol(name_or_pattern="<SymbolName>")
+```
+
+If Serena is unavailable, use `rg` to search by symbol name across the repository:
+
+```bash
+rg -n "def <symbol_name>|class <SymbolName>|function <symbolName>" --type-add 'code:*.{py,ts,js,go,java,rs,rb,cs}' -t code
+```
+
+If a matching symbol is found:
+1. Record its location in `docs/development/<task-slug>/context.md`.
+2. Read the existing implementation before proposing changes.
+3. Extend or adapt the existing code; do not write a duplicate.
+
+If no match is found, record that in `context.md` and proceed with new implementation.
+This rule applies in both plan-only and implement modes.
+
 ## Git Safety
 
 Before source edits in implement mode:
