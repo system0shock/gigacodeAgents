@@ -34,3 +34,18 @@ Implementation invariants:
 - Добавлять или обновлять tests пропорционально риску.
 - Фиксировать verification evidence до заявления о завершении.
 - Не выполнять auto-commit или auto-push в v1.
+
+## Serena: Search Before Create
+
+When Serena MCP is available (`mcp__serena__find_symbol` tool is present):
+
+1. Before proposing a new function, class, or module, call `find_symbol` with
+   the intended name.
+2. If a match is found anywhere in the repository, read it and reuse or extend
+   it; do not write a duplicate.
+3. Record the search result (found / not found / Serena unavailable) in
+   `docs/development/<task-slug>/context.md`.
+
+When Serena is unavailable:
+- Fall back to `rg` symbol search as documented in `rules/development-flow.md`.
+- Record that Serena was unavailable in `context.md`.
