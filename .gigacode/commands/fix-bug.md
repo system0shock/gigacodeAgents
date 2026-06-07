@@ -18,6 +18,10 @@ Follow this sequence:
 6. Map impacted code and likely failing paths before planning edits.
 7. In implement mode, run git safety checks before editing source files.
 8. Prefer regression evidence before making the fix when feasible.
-9. Produce Markdown artifacts under `docs/development/<task-slug>/`.
-10. Record verification evidence before claiming completion.
-11. Do not auto-commit or auto-push.
+9. Create or continue an OpenSpec change with `/opsx:propose`; keep the
+   authoritative spec under `openspec/changes/<change-id>/` and validate it with
+   `openspec validate <change-id> --strict`.
+10. Produce human run notes under `docs/development/<task-slug>/` that link to the
+   OpenSpec change.
+11. Record verification evidence before claiming completion.
+12. Do not auto-commit or auto-push.
