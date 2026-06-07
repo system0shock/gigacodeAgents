@@ -17,6 +17,7 @@ required=(
   "openspec/config.yaml"
   "rules/openspec.md"
   ".gigacode/skills/openspec-propose/SKILL.md"
+  ".serena/project.yml"
 )
 
 for path in "${required[@]}"; do
@@ -70,6 +71,12 @@ if command -v openspec >/dev/null 2>&1; then
   echo "openspec config valid"
 else
   echo "SKIP: openspec CLI not installed; spec validation not run" >&2
+fi
+
+if command -v serena >/dev/null 2>&1; then
+  echo "serena CLI available"
+else
+  echo "NOTE: serena CLI not installed; Serena MCP will not start. Install with: uv tool install -p 3.13 serena-agent" >&2
 fi
 
 echo "Smoke check passed"

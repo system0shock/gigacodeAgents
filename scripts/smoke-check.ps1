@@ -15,7 +15,8 @@ $required = @(
   "rules/branch-naming.md",
   "openspec/config.yaml",
   "rules/openspec.md",
-  ".gigacode/skills/openspec-propose/SKILL.md"
+  ".gigacode/skills/openspec-propose/SKILL.md",
+  ".serena/project.yml"
 )
 
 foreach ($path in $required) {
@@ -69,6 +70,12 @@ if (Get-Command openspec -ErrorAction SilentlyContinue) {
   Write-Host "openspec config valid"
 } else {
   Write-Warning "SKIP: openspec CLI not installed; spec validation not run"
+}
+
+if (Get-Command serena -ErrorAction SilentlyContinue) {
+  Write-Host "serena CLI available"
+} else {
+  Write-Warning "NOTE: serena CLI not installed; Serena MCP will not start. Install with: uv tool install -p 3.13 serena-agent"
 }
 
 Write-Host "Smoke check passed"
