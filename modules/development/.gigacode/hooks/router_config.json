@@ -1,0 +1,18 @@
+{
+  "UserPromptSubmit": [
+    {"check": "prompt_preflight"},
+    {"check": "prompt_context"}
+  ],
+  "PreToolUse": [
+    {"check": "pretool_guard", "tools": ["Bash", "Edit", "Write", "MultiEdit"]},
+    {"check": "plan_gate", "tools": ["Edit", "Write", "MultiEdit"], "paths": ["src/**/*.java", "src/**/*.kt", "src/**/*.kts"]},
+    {"check": "context_inject", "tools": ["Edit", "Write", "MultiEdit"], "paths": ["**/*.java", "**/*.kt"]}
+  ],
+  "PostToolUse": [
+    {"check": "posttool_static", "tools": ["Edit", "Write", "MultiEdit"], "paths": ["**/*.java", "**/*.kt"], "options": {"warn_only": []}}
+  ],
+  "Stop": [
+    {"check": "stop_final"},
+    {"check": "stop_build"}
+  ]
+}
