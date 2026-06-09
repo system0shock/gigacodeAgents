@@ -1,0 +1,95 @@
+{
+  "ui": {
+    "showCitations": true,
+    "showLineNumbers": true,
+    "hideTips": true,
+    "shellOutputMaxLines": 20
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(git status*)",
+      "Bash(git branch*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(./gradlew*)",
+      "Bash(gradlew*)",
+      "Bash(gradle*)",
+      "Bash(./mvnw*)",
+      "Bash(mvnw*)",
+      "Bash(mvn*)",
+      "Bash(ktlint*)",
+      "Bash(detekt*)",
+      "Bash(repomix*)",
+      "Bash(graphify*)",
+      "Bash(python .gigacode/hooks/*)",
+      "Edit(docs/plans/**)",
+      "Edit(src/**)"
+    ],
+    "ask": [
+      "Edit",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/secrets/**)",
+      "Bash(rm -rf *)",
+      "Bash(del /s *)",
+      "Bash(format *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(mvn deploy*)",
+      "Bash(gradle publish*)",
+      "Bash(./gradlew publish*)"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/router.py UserPromptSubmit"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/router.py PreToolUse"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/router.py PostToolUse"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/router.py Stop"
+          }
+        ]
+      }
+    ]
+  }
+}
