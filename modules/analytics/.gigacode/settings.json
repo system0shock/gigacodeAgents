@@ -14,7 +14,8 @@
       "Bash(repomix*)",
       "Bash(graphify*)",
       "Bash(python .gigacode/hooks/*)",
-      "Edit(docs/features/**)"
+      "Edit(docs/features/**)",
+      "Edit(docs/scopes/**)"
     ],
     "ask": [
       "Edit",

@@ -15,7 +15,7 @@ Identify the smallest useful code map for the confirmed business feature.
 
 1. Inspect repository structure.
 2. If `repomix` is available, use it to build a compact repository map before deep file reading.
-3. If `graphify` is available, use it to identify dependency clusters and a minimal feature subgraph.
+3. If `graphify` is available, use it to identify dependency clusters and a minimal feature subgraph: extract the 1-2-hop dependency neighborhood of the feature's entry-point packages to bound the blast radius.
 4. If either optional tool is unavailable, continue with built-in file search and record that limitation.
 5. Search for feature terms, ticket names, API names, domain entities, and integration identifiers.
 6. Identify likely entry points.

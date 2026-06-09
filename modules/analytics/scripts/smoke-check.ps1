@@ -24,8 +24,8 @@ foreach ($path in $required) {
 Get-Content ".gigacode/settings.json" -Raw | ConvertFrom-Json | Out-Null
 
 $agents = Get-ChildItem ".gigacode/agents/*.md"
-if ($agents.Count -ne 5) {
-  throw "Expected 5 agent files, found $($agents.Count)"
+if ($agents.Count -ne 4) {
+  throw "Expected 4 agent files, found $($agents.Count)"
 }
 
 foreach ($agent in $agents) {
@@ -66,6 +66,30 @@ if ($validationMissing.decision -ne "block") {
 $template = Get-Content "docs/templates/feature-analysis.adoc" -Raw
 if (-not $template.TrimStart().StartsWith("=")) {
   throw "AsciiDoc template must start with a document title"
+}
+
+try {
+  New-Item -ItemType Directory -Force -Path "docs/features/tmp-smoke" | Out-Null
+  Set-Content -Path "docs/features/tmp-smoke/overview.adoc" -Value "= Обзор`n`nИсточник: код`n`nОписание функции." -Encoding UTF8
+  Set-Content -Path "docs/features/tmp-smoke/flow.adoc" -Value "= Поток`n`nИсточник: код`n`nОсновной сценарий." -Encoding UTF8
+  Set-Content -Path "docs/features/tmp-smoke/integrations.adoc" -Value "= Интеграции`n`nИсточник: код`n`nВнешние системы." -Encoding UTF8
+  Set-Content -Path "docs/features/tmp-smoke/data.adoc" -Value "= Данные`n`nИсточник: код`n`nСущности и таблицы." -Encoding UTF8
+  Set-Content -Path "docs/features/tmp-smoke/questions.adoc" -Value "= Вопросы`n`nСтатус: открытый вопрос`n`nУточнить лимиты." -Encoding UTF8
+  Set-Content -Path "docs/scopes/tmp-smoke.md" -Value "# Область анализа: tmp-smoke`n`nСтатус: подтвержден`n`nКаталог результата: docs/features/tmp-smoke/" -Encoding UTF8
+
+  $decision = ('{"last_assistant_message":"Reverse analysis complete in docs/features/tmp-smoke/"}' | python .gigacode/hooks/validate_output.py | ConvertFrom-Json).decision
+  if ($decision -ne "allow") {
+    throw "Expected valid scoped output to allow, got $decision"
+  }
+
+  Set-Content -Path "docs/features/tmp-smoke/overview.adoc" -Value "= Обзор`n`nОписание функции без меток." -Encoding UTF8
+  $decision = ('{"last_assistant_message":"Reverse analysis complete in docs/features/tmp-smoke/"}' | python .gigacode/hooks/validate_output.py | ConvertFrom-Json).decision
+  if ($decision -ne "block") {
+    throw "Expected missing evidence labels to block, got $decision"
+  }
+} finally {
+  Remove-Item -Recurse -Force "docs/features/tmp-smoke" -ErrorAction SilentlyContinue
+  Remove-Item -Force "docs/scopes/tmp-smoke.md" -ErrorAction SilentlyContinue
 }
 
 Write-Host "Analytics module smoke check passed."
