@@ -80,6 +80,16 @@ the affected gate degrades to an instruction embedded in the skill/agent prompt
 
 ## Architecture
 
+### 0. Enforcement Hierarchy (revision 2026-06-10)
+
+Context injection is the primary mechanism: the cheapest place to stop a
+violation is before generation, by making existing code and rules visible to
+the agent up front. Blocking gates are the backstop. Only deterministic checks
+may block (git safety, `openspec validate`, build, lint on changed files).
+Heuristic checks (duplicate detection, clean-code) are **advisory-only**: they
+inject warnings via `additionalContext`, never deny, until data from the
+decision journal justifies promoting a specific rule to blocking.
+
 ### 1. Hook Router
 
 A single dispatcher script, `.gigacode/hooks/router.py`, is registered in
@@ -110,8 +120,22 @@ Design constraints:
   edit plus a new gate file, never a router edit.
 - The router must be safe by default: if a gate script crashes or times out, the
   router records the failure and, for safety-critical gates (git guard,
-  existing-code, spec-structure), treats the failure as a soft block with a clear
-  reason rather than silently allowing the action.
+  spec-structure), treats the failure as a soft block with a clear
+  reason rather than silently allowing the action. Every soft-block reason must
+  name the escape hatch (`disableAllHooks`) so a broken Python environment never
+  leaves the template unusable without explanation.
+- The router reads stdin as `utf-8-sig`: PowerShell pipes prepend a UTF-8 BOM
+  that breaks naive `json.load`, and a parse failure must never silently allow
+  (this exact bug made `git_guard` a no-op on Windows before 2026-06-10).
+- The router appends every decision (event, gate, verdict, reason) to
+  `.gigacode/hooks/decisions.jsonl`. This journal is the data source for tuning
+  advisory rules and false-positive rates.
+- Stop-loop protection: a gate may block a `Stop` event at most twice per
+  session; the third trigger degrades to a warning with a report. Without this,
+  build/artifact gates can trap the agent in an infinite stop-fix-stop loop.
+- Latency budget: `PreToolUse` handling (router + matching gates) stays under
+  200 ms; matchers in the config table are narrow so the router is not spawned
+  for irrelevant tools.
 
 ### 2. Quality Gates
 
@@ -123,7 +147,7 @@ JSON and have no knowledge of the router's aggregation.
 | Gate | Trigger | Purpose | Problem |
 |---|---|---|---|
 | `gate_context_inject` | `SessionStart`, `SubagentStart`, `UserPromptSubmit` | Inject coding rules, test rules, and a module/symbol index so the agent starts grounded | 1 |
-| `gate_existing_code` | `PreToolUse` on `WriteFile`/new-file `Edit` | Detect symbol-name collisions and near-duplicate blocks against the existing tree; block or inject "this already exists at X" | 1 |
+| `gate_existing_code` | `PreToolUse` on `WriteFile`/new-file `Edit` | Detect symbol-name collisions and near-duplicate blocks against the existing tree; **advisory-only**: inject "this already exists at X" via `additionalContext`, never deny (promotion to blocking requires decision-journal evidence) | 1 |
 | `gate_spec_structure` | `PreToolUse`/`PostToolUse` on writes under `openspec/` or `docs/development/<task>/` | Run OpenSpec validation; block on structure violations and unresolved placeholders | 2 |
 | `gate_lint` | `PostToolUse` on changed code files | Run the project linter on changed files only | quality |
 | `gate_build` | `Stop` / before PR readiness | Run the project build/compile check | quality |
@@ -176,18 +200,19 @@ template documents setup but does not ship credentials.
   Agent prompts are updated so that, before proposing any new function, type, or
   file, the agent must search for an existing implementation through Serena.
   `gate_existing_code` prefers Serena's index when present. This is the most
-  direct lever on problem 1.
+  direct lever on problem 1. Before Phase 4 builds on it, Serena must be
+  installed and exercised end-to-end once (Java via Eclipse JDT LS is mature;
+  Kotlin LSP support is weaker and must be verified on real project code).
+- **Graphify (priority 2, skill not MCP).** Repository knowledge graph; its
+  JSON output feeds `gate_context_inject` as a module/relationship map. For
+  event-driven codebases it covers what symbol search cannot: producer ->
+  topic -> consumer flows.
 - **Context7 (priority 3).** Up-to-date library/framework documentation, to
   reduce API hallucination when new code is genuinely needed.
-- **context-mode (priority 3).** Used **only as an MCP context compressor**
-  (`ctx_execute`, `ctx_search`, `ctx_fetch_and_index`). Its own hook framework is
-  **not** adopted, because this template uses its own hook router; running two
-  hook systems on the same events would conflict. The router and context-mode
-  must not both be registered for the same hook event.
 
 When a server is unavailable, the workflow continues with `rg`/symbol search and
 user-provided context, and records the limitation, exactly like the existing
-Repomix/Graphify fallback policy.
+Graphify fallback policy.
 
 ### 6. OpenSpec Adoption (Full Tool)
 
@@ -217,6 +242,21 @@ The project adopts OpenSpec as the specification engine.
   (propose -> apply -> archive). Developer task artifacts under
   `docs/development/<task-slug>/` are retained for human-facing run notes; the
   authoritative spec lives in `openspec/`.
+- Run notes are three files (revision 2026-06-10): `journal.md` (context,
+  impact map, plan, implementation notes), `verification.md`, `pr-summary.md`.
+  The earlier five-file scheme duplicated OpenSpec content and taxed every
+  small fix. Legacy designs under `docs/superpowers/` are archived as-is once
+  migrated into `openspec/specs/`.
+
+### 7. Agent Pipeline (revision 2026-06-10)
+
+The developer template runs three agents instead of the original seven:
+`repo-context` (project intelligence + impact map, including event flows),
+`coder` (scoped edits), `verifier` (verification evidence + PR notes). Intake
+stays in the main session because only the main session can ask the user
+questions; implementation planning lives in the OpenSpec change artifacts.
+Fewer handoffs mean less context loss between subagents — the enforcement
+layer, not pipeline structure, now carries the discipline.
 
 **Residual compatibility risk to verify in Phase 1 (cheap check):** OpenSpec
 natively generates slash commands and agent instructions for some tools
@@ -239,16 +279,19 @@ Each phase is its own OpenSpec change with its own smoke checks.
 - **Phase 2 — Serena MCP.** Declare Serena in `settings.json`; update agent
   prompts to require searching for existing code through Serena before proposing
   new code. Fast, high-impact strike on problem 1.
-- **Phase 3 — Hook router.** Build `router.py` and `router.config.json`; move
-  `git_guard`, `preflight`, and `validate_development_output` behind the router;
-  add smoke tests that feed sample event JSON for each registered `(event,
-  matcher)`.
+- **Phase 3 — Hook router.** Step 0: run a logging-only hook against a live
+  GigaCode build to confirm real event and tool names before anything is wired
+  (the hook model above is documented Qwen behavior; fork drift is a real
+  risk). Then build `router.py` and `router.config.json`; move `git_guard`,
+  `preflight`, and `validate_development_output` behind the router with narrow
+  matchers; add smoke tests that feed sample event JSON for each registered
+  `(event, matcher)`.
 - **Phase 4 — Quality gates.** Implement `gate_context_inject`,
   `gate_existing_code`, `gate_spec_structure`, `gate_lint`, `gate_build`,
   `gate_clean_code`, wired through the router and `quality-gates.json`. Main
   strike on both problems at enforcement time.
-- **Phase 5 — Context7 + context-mode.** Declare both as MCP servers
-  (context-mode as a context compressor only). Optional; document fallbacks.
+- **Phase 5 — Context7 + Graphify.** Declare Context7 as an MCP server; wire
+  Graphify output into `gate_context_inject`. Optional; document fallbacks.
 
 ## Settings
 
@@ -278,12 +321,26 @@ to verify, without GigaCode, MCP, or network access:
   environment, this assertion is skipped-with-record rather than failing the
   suite.
 - Unconfigured `gate_lint`/`gate_build` return skip-with-record, not a block.
+- Hooks parse BOM-prefixed stdin (`utf-8-sig`) — PowerShell pipe samples.
+- A missing or crashing gate script produces a soft block with a reason naming
+  the escape hatch, never a silent allow.
+- Stop-loop protection: the third consecutive `Stop` block from the same gate
+  degrades to a warning in the sample run.
+- Router decisions are appended to `decisions.jsonl`.
+- `PreToolUse` routing latency is measured and stays under the 200 ms budget.
 - `router.py` and each gate file stay below 10,000 characters.
 
 ## Out of Scope
 
 - Applying these mechanisms to the analyst template (a later iteration).
-- Adopting context-mode's hook framework.
+- **context-mode (dropped 2026-06-10).** Its unique value is output compression
+  and surviving compaction, which addresses a problem not yet measured, and its
+  `ctx_execute` would route shell commands around `git_guard`'s `^Bash$`
+  matcher. Re-entry condition: if `decisions.jsonl` after Phases 3-4 shows
+  sessions suffering from compaction or oversized build logs, add it back as an
+  optional compressor with explicit git-command routing rules.
+- **Repomix (dropped 2026-06-10).** Static snapshots go stale and duplicate
+  Serena + Graphify + direct inspection.
 - Shipping MCP credentials or auto-installing MCP servers.
 - Auto-commit, auto-push, auto-PR (unchanged from the prior design).
 - Guaranteeing OpenSpec native command generation for GigaCode (verified, not
@@ -293,14 +350,16 @@ to verify, without GigaCode, MCP, or network access:
 
 - A single `hook_router` dispatches all developer-flow hooks via a config table;
   adding a gate requires no router edit.
-- `gate_existing_code` blocks or warns on duplicate symbols/blocks, and agents
-  are instructed and able to find existing code through Serena before writing new
-  code. Problem 1 is enforced mechanically, not only by instruction.
+- `gate_existing_code` warns on duplicate symbols/blocks (advisory-only), and
+  agents are instructed and able to find existing code through Serena before
+  writing new code. Problem 1 is attacked primarily by context injection;
+  `decisions.jsonl` provides the evidence base for any future promotion of the
+  advisory gate to blocking.
 - Specs live in an `openspec/` structure and `gate_spec_structure` blocks writes
   that fail `openspec validate --strict`. Problem 2 is enforced mechanically.
 - `gate_lint`, `gate_build`, and `gate_clean_code` run on the right events,
   scoped to changed files, and skip-with-record when unconfigured.
-- Serena, Context7, and context-mode are integrated as optional MCP context
-  providers with documented fallbacks; none is required for smoke checks.
+- Serena, Graphify, and Context7 are integrated as optional context providers
+  with documented fallbacks; none is required for smoke checks.
 - Smoke checks pass offline on Windows and Linux shells.
 - `router.py` and every gate file stay below 10,000 characters.
