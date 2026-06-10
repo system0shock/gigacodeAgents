@@ -55,6 +55,12 @@ printf '%s' "$block" | grep -q '"decision": "block"'
 clean="$(printf '%s' '{"command":"git clean -f -d"}' | "$python_cmd" .gigacode/hooks/git_guard.py)"
 printf '%s' "$clean" | grep -q '"decision": "block"'
 
+flag_bypass="$(printf '%s' '{"command":"git -C . reset --hard HEAD"}' | "$python_cmd" .gigacode/hooks/git_guard.py)"
+printf '%s' "$flag_bypass" | grep -q '"decision": "block"'
+
+config_bypass="$(printf '%s' '{"command":"git -c core.pager=cat clean -f -d"}' | "$python_cmd" .gigacode/hooks/git_guard.py)"
+printf '%s' "$config_bypass" | grep -q '"decision": "block"'
+
 ask="$(printf '%s' '{"path":".github/workflows/deploy.yml"}' | "$python_cmd" .gigacode/hooks/git_guard.py)"
 printf '%s' "$ask" | grep -q '"decision": "ask"'
 

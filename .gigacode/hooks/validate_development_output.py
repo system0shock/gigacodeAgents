@@ -45,7 +45,8 @@ def read_file(path):
 
 def main():
     try:
-        event = json.load(sys.stdin)
+        # utf-8-sig: PowerShell pipes may prepend a UTF-8 BOM that breaks json.load
+        event = json.loads(sys.stdin.buffer.read().decode("utf-8-sig", errors="replace"))
     except json.JSONDecodeError:
         respond("allow")
         return

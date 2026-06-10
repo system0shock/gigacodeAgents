@@ -118,42 +118,67 @@ def split_command(command):
         return command.split()
 
 
-def is_git_command(tokens, subcommand=None):
+# Global git flags that consume a separate value token (git -C <path> reset ...).
+GIT_GLOBAL_VALUE_FLAGS = {
+    "-c",
+    "-C",
+    "--git-dir",
+    "--work-tree",
+    "--namespace",
+    "--super-prefix",
+    "--exec-path",
+    "--config-env",
+    "--attr-source",
+    "--list-cmds",
+}
+
+
+def git_subcommand_index(tokens):
+    """Index of the git subcommand, skipping global flags like `-C <path>` or `-c k=v`."""
     if not tokens or tokens[0].lower() != "git":
-        return False
-    if subcommand is None:
-        return True
-    return len(tokens) > 1 and tokens[1].lower() == subcommand
-
-
-def clean_flags_are_destructive(tokens):
-    flags = [token for token in tokens[2:] if token.startswith("-")]
-    combined = "".join(flag.lstrip("-") for flag in flags)
-    return "f" in combined and "d" in combined
+        return -1
+    i = 1
+    while i < len(tokens):
+        token = tokens[i]
+        if not token.startswith("-"):
+            return i
+        if token in GIT_GLOBAL_VALUE_FLAGS and "=" not in token:
+            i += 2
+        else:
+            i += 1
+    return -1
 
 
 def is_destructive_git_command(command):
     tokens = split_command(command)
     lowered = [token.lower() for token in tokens]
+    sub_idx = git_subcommand_index(tokens)
+    if sub_idx < 0:
+        return False, ""
+    subcommand = lowered[sub_idx]
+    rest = lowered[sub_idx + 1:]
 
-    if is_git_command(lowered, "reset") and "--hard" in lowered:
+    if subcommand == "reset" and "--hard" in rest:
         return True, "Blocked `git reset --hard`."
 
-    if is_git_command(lowered, "clean") and clean_flags_are_destructive(lowered):
-        return True, "Blocked destructive `git clean` with force and directory flags."
+    if subcommand == "clean":
+        flags = [token for token in rest if token.startswith("-")]
+        combined = "".join(flag.lstrip("-") for flag in flags)
+        if "f" in combined and "d" in combined:
+            return True, "Blocked destructive `git clean` with force and directory flags."
 
-    if is_git_command(lowered, "push"):
-        if any(token.startswith("--force") for token in lowered):
+    if subcommand == "push":
+        if any(token.startswith("--force") for token in rest):
             return True, "Blocked force push."
-        if "--delete" in lowered:
+        if "--delete" in rest:
             return True, "Blocked remote branch deletion."
-        if any(re.match(r"^:[^:\s]+$", token) for token in lowered[2:]):
+        if any(re.match(r"^:[^:\s]+$", token) for token in rest):
             return True, "Blocked remote branch deletion by refspec."
 
-    if is_git_command(lowered, "branch") and any(token in ("-d", "-D", "--delete") for token in tokens):
+    if subcommand == "branch" and any(token in ("-d", "--delete") for token in rest):
         return True, "Blocked local branch deletion."
 
-    if is_git_command(lowered, "remote") and len(lowered) > 2 and lowered[2] == "set-url":
+    if subcommand == "remote" and rest and rest[0] == "set-url":
         return True, "Blocked remote URL change."
 
     return False, ""
@@ -161,18 +186,14 @@ def is_destructive_git_command(command):
 
 def is_branch_write(command):
     tokens = split_command(command.lower())
-    if is_git_command(tokens, "commit"):
-        return True
-    if is_git_command(tokens, "push"):
-        return True
-    if is_git_command(tokens, "rebase"):
-        return True
-    return False
+    sub_idx = git_subcommand_index(tokens)
+    return sub_idx >= 0 and tokens[sub_idx] in ("commit", "push", "rebase")
 
 
 def main():
     try:
-        event = json.load(sys.stdin)
+        # utf-8-sig: PowerShell pipes may prepend a UTF-8 BOM that breaks json.load
+        event = json.loads(sys.stdin.buffer.read().decode("utf-8-sig", errors="replace"))
     except json.JSONDecodeError:
         respond("allow")
         return

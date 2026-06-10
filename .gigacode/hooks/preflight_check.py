@@ -25,7 +25,8 @@ def has_any(text, words):
 
 def main():
     try:
-        event = json.load(sys.stdin)
+        # utf-8-sig: PowerShell pipes may prepend a UTF-8 BOM that breaks json.load
+        event = json.loads(sys.stdin.buffer.read().decode("utf-8-sig", errors="replace"))
     except json.JSONDecodeError:
         respond("allow")
         return
@@ -53,7 +54,7 @@ def main():
             respond("ask", "Для implement mode по багу нужны симптом, expected/actual behavior, reproduction evidence или error details.")
             return
 
-    reminder = "Проверьте analytics, Repomix и Graphify при наличии; если их нет, используйте описанные fallbacks."
+    reminder = "Проверьте analytics и Graphify при наличии; если их нет, используйте описанные fallbacks."
     respond("allow", reminder)
 
 
