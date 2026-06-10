@@ -14,21 +14,35 @@ HOOKS_DIR = os.path.join(ROOT, ".gigacode", "hooks")
 PASSED = 0
 
 
-def run_router(event_name, payload, router=ROUTER, bom=False):
-    data = json.dumps(payload).encode("utf-8")
-    if bom:
-        data = b"\xef\xbb\xbf" + data
+def run_router(event_name, payload, router=ROUTER, bom=False, raw=None, extra_args=None):
+    """Run the router subprocess.
+
+    raw: if provided, send these bytes as stdin instead of json.dumps(payload).
+    extra_args: optional list of extra CLI arguments appended after --event NAME.
+    """
+    if raw is not None:
+        data = raw
+    else:
+        data = json.dumps(payload).encode("utf-8")
+        if bom:
+            data = b"\xef\xbb\xbf" + data
+    cmd = [sys.executable, router, "--event", event_name]
+    if extra_args:
+        cmd.extend(extra_args)
     proc = subprocess.run(
-        [sys.executable, router, "--event", event_name],
+        cmd,
         input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
     )
-    assert proc.returncode == 0, f"router exited {proc.returncode}: {proc.stderr.decode()}"
+    if proc.returncode != 0:
+        raise SystemExit(f"router exited {proc.returncode}: {proc.stderr.decode()}")
     return json.loads(proc.stdout.decode("utf-8"))
 
 
 def check(name, condition, detail=""):
+    # FIX 6: explicit raise so python -O cannot neuter the suite
     global PASSED
-    assert condition, f"{name}: {detail}"
+    if not condition:
+        raise SystemExit(f"FAIL {name}: {detail}")
     PASSED += 1
     print(f"ok: {name}")
 
@@ -106,6 +120,15 @@ def main():
     check("stop_budget_first_block", first["decision"] == "block", first)
     check("stop_budget_second_block", second["decision"] == "block", second)
     check("stop_budget_third_degrades", third["decision"] == "allow" and "systemMessage" in third, third)
+
+    # FIX 4: stop-budget reset — an allow-Stop clears the counter; next block restarts budget
+    allow_payload = {"last_assistant_message": "hello", "session_id": "t-budget"}
+    reset_result = run_router("Stop", allow_payload, router=tmp_router)
+    check("stop_budget_reset_allow", reset_result["decision"] == "allow", reset_result)
+    # After reset, same blocking payload must block again (not degrade)
+    restart_first = run_router("Stop", payload, router=tmp_router)
+    check("stop_budget_restart_blocks", restart_first["decision"] == "block", restart_first)
+
     shutil.rmtree(tmp, ignore_errors=True)
 
     # 12. Latency: full router run on a benign PreToolUse sample
@@ -130,6 +153,42 @@ def main():
         for gate in route["gates"]:
             gate_path = os.path.join(HOOKS_DIR, "gates", gate + ".py")
             check(f"gate_exists_{gate}", os.path.exists(gate_path), gate_path)
+
+    # FIX 3a: garbage stdin → allow, exit 0
+    tmp, tmp_router, tmp_config = temp_hooks_copy()
+    result = run_router("PreToolUse", None, router=tmp_router, raw=b"{not json")
+    check("garbage_stdin_allow", result["decision"] == "allow", result)
+
+    # FIX 3b: non-dict JSON (null) stdin → allow, exit 0
+    result = run_router("Stop", None, router=tmp_router, raw=b"null")
+    check("non_dict_stdin_allow", result["decision"] == "allow", result)
+
+    # FIX 3c: invalid regex config → fail-closed block with disableAllHooks, exit 0
+    with open(tmp_config, "w", encoding="utf-8") as handle:
+        json.dump({"version": 1, "stop_block_budget": 2, "routes": [
+            {"event": "PreToolUse", "tool_pattern": "^(Bash",
+             "gates": ["git_guard"], "safety_critical": True}
+        ]}, handle)
+    bad_regex_payload = json.dumps(
+        {"tool_name": "Bash", "tool_input": {"command": "git reset --hard"}}
+    ).encode("utf-8")
+    result = run_router("PreToolUse", None, router=tmp_router, raw=bad_regex_payload)
+    check("invalid_regex_fail_closed",
+          result["decision"] == "block" and "disableAllHooks" in result.get("reason", ""),
+          result)
+
+    shutil.rmtree(tmp, ignore_errors=True)
+
+    # FIX 3d: unknown CLI arg → exit 0, decision allow (argparse exit 2 is gone)
+    # Use a fresh temp copy with a valid config to isolate from the bad-regex config above
+    tmp2, tmp_router2, _ = temp_hooks_copy()
+    benign = json.dumps(
+        {"tool_name": "Bash", "tool_input": {"command": "echo hi"}}
+    ).encode("utf-8")
+    result = run_router("PreToolUse", None, router=tmp_router2, raw=benign,
+                        extra_args=["--bogus"])
+    check("unknown_arg_no_abort", result["decision"] == "allow", result)
+    shutil.rmtree(tmp2, ignore_errors=True)
 
     print(f"\nAll {PASSED} router checks passed")
 

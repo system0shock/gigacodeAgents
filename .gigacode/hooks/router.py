@@ -7,7 +7,6 @@ decisions (block > ask > allow), journals every decision to
 .gigacode/logs/decisions.jsonl, and degrades repeated Stop blocks to a
 warning after the configured budget.
 """
-import argparse
 import importlib.util
 import json
 import os
@@ -33,7 +32,7 @@ SEVERITY = {"allow": 0, "ask": 1, "block": 2}
 def journal(record):
     try:
         os.makedirs(LOGS_DIR, exist_ok=True)
-        record["ts"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        record["ts"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")  # FIX 7: timezone
         with open(JOURNAL_PATH, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
     except OSError:
@@ -51,6 +50,9 @@ def load_state():
 def save_state(state):
     try:
         os.makedirs(LOGS_DIR, exist_ok=True)
+        # FIX 5: prune to 50 most-recent keys so the file stays bounded
+        if len(state) > 50:
+            state = dict(list(state.items())[-50:])
         with open(STATE_PATH, "w", encoding="utf-8") as handle:
             json.dump(state, handle)
     except OSError:
@@ -94,6 +96,7 @@ def aggregate(results):
 def apply_stop_budget(event_name, final, config, event):
     if event_name != "Stop":
         return final
+    # sessions without session_id share one budget key — acceptable v1 tradeoff
     key = "stop:" + str(event.get("session_id", "default"))
     state = load_state()
     if final["decision"] != "block":
@@ -114,33 +117,18 @@ def apply_stop_budget(event_name, final, config, event):
     return final
 
 
-def main():
-    # Ensure UTF-8 output even on Windows where the console codepage may differ
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+def event_arg(argv):
+    """FIX 2: manual scan so unknown args never trigger argparse exit 2."""
+    for i, token in enumerate(argv):
+        if token == "--event" and i + 1 < len(argv):
+            return argv[i + 1]
+        if token.startswith("--event="):
+            return token.split("=", 1)[1]
+    return ""
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--event", default="")
-    args = parser.parse_args()
 
-    try:
-        event = json.loads(sys.stdin.buffer.read().decode("utf-8-sig", errors="replace"))
-    except json.JSONDecodeError as exc:
-        journal({"kind": "parse_error", "error": str(exc)})
-        print(json.dumps({"decision": "allow"}))
-        return
-
-    event_name = args.event or str(event.get("hook_event_name", ""))
-    tool_name = str(event.get("tool_name", ""))
-
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as handle:
-            config = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        journal({"kind": "config_error", "error": str(exc)})
-        print(json.dumps({"decision": "block", "reason": f"router.config.json unreadable: {exc}. {ESCAPE_HATCH}"}, ensure_ascii=False))
-        return
-
+def decide(event, event_name, tool_name, config):
+    """Core routing logic. Returns the final decision dict."""
     results = []
     for route in config.get("routes", []):
         if route.get("event") != event_name:
@@ -150,13 +138,61 @@ def main():
             continue
         for gate_name in route.get("gates", []):
             result, error = run_gate(gate_name, event, route.get("safety_critical", False))
-            journal({"kind": "gate", "event": event_name, "tool": tool_name, "gate": gate_name,
-                     "decision": result["decision"], "reason": result.get("reason", ""), "error": error})
+            journal({"kind": "gate", "event": event_name, "tool": tool_name,
+                     "gate": gate_name, "decision": result["decision"],
+                     "reason": result.get("reason", ""), "error": error})
             results.append(result)
-
     final = aggregate(results)
     final = apply_stop_budget(event_name, final, config, event)
-    journal({"kind": "final", "event": event_name, "tool": tool_name, "decision": final["decision"]})
+    journal({"kind": "final", "event": event_name, "tool": tool_name,
+             "decision": final["decision"]})
+    return final
+
+
+def main():
+    # Ensure UTF-8 output even on Windows where the console codepage may differ
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
+    # FIX 2: no argparse — unknown args are silently ignored
+    ev_name_from_arg = event_arg(sys.argv[1:])
+
+    try:
+        event = json.loads(sys.stdin.buffer.read().decode("utf-8-sig", errors="replace"))
+    except json.JSONDecodeError as exc:
+        journal({"kind": "parse_error", "error": str(exc)})
+        print(json.dumps({"decision": "allow"}))
+        return
+
+    # FIX 1a: non-dict JSON (null, [], "x") treated same as parse error
+    if not isinstance(event, dict):
+        journal({"kind": "parse_error", "error": f"expected object, got {type(event).__name__}"})
+        print(json.dumps({"decision": "allow"}))
+        return
+
+    event_name = ev_name_from_arg or str(event.get("hook_event_name", ""))
+    tool_name = str(event.get("tool_name", ""))
+
+    # FIX 1b: load config, then wrap ALL remaining logic fail-closed
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as handle:
+            config = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        journal({"kind": "config_error", "error": str(exc)})
+        print(json.dumps({"decision": "block",
+                          "reason": f"router.config.json unreadable: {exc}. {ESCAPE_HATCH}"},
+                         ensure_ascii=False))
+        return
+
+    try:
+        final = decide(event, event_name, tool_name, config)
+    except Exception as exc:
+        journal({"kind": "router_error", "error": str(exc)})
+        print(json.dumps({"decision": "block",
+                          "reason": f"Hook router internal error: {exc}. {ESCAPE_HATCH}"},
+                         ensure_ascii=False))
+        return
+
     print(json.dumps(final, ensure_ascii=False))
 
 
