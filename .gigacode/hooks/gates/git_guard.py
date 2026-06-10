@@ -42,13 +42,6 @@ PROTECTED_PATHS = [
 ]
 
 
-def respond(decision, reason=""):
-    payload = {"decision": decision}
-    if reason:
-        payload["reason"] = reason
-    print(json.dumps(payload, ensure_ascii=False))
-
-
 def run_git(args):
     try:
         result = subprocess.run(
@@ -190,33 +183,33 @@ def is_branch_write(command):
     return sub_idx >= 0 and tokens[sub_idx] in ("commit", "push", "rebase")
 
 
+def run(event):
+    """Gate contract: event dict in, decision dict out."""
+    command = command_from_event(event)
+    file_path = path_from_event(event)
+
+    if command:
+        blocked, reason = is_destructive_git_command(command)
+        if blocked:
+            return {"decision": "block", "reason": reason + " Use an explicit human-approved recovery workflow."}
+        branch = current_branch()
+        if is_protected_branch(branch) and is_branch_write(command):
+            return {"decision": "block", "reason": f"Blocked git write operation on protected branch '{branch}'. Create a feature or bugfix branch first."}
+
+    if protected_path(file_path):
+        return {"decision": "ask", "reason": f"Protected path '{file_path}' requires explicit confirmation with risk explanation."}
+
+    return {"decision": "allow"}
+
+
 def main():
     try:
         # utf-8-sig: PowerShell pipes may prepend a UTF-8 BOM that breaks json.load
         event = json.loads(sys.stdin.buffer.read().decode("utf-8-sig", errors="replace"))
     except json.JSONDecodeError:
-        respond("allow")
+        print(json.dumps({"decision": "allow"}, ensure_ascii=False))
         return
-
-    command = command_from_event(event)
-    file_path = path_from_event(event)
-    branch = current_branch()
-
-    if command:
-        blocked, reason = is_destructive_git_command(command)
-        if blocked:
-            respond("block", reason + " Use an explicit human-approved recovery workflow.")
-            return
-
-        if is_protected_branch(branch) and is_branch_write(command):
-            respond("block", f"Blocked git write operation on protected branch '{branch}'. Create a feature or bugfix branch first.")
-            return
-
-    if protected_path(file_path):
-        respond("ask", f"Protected path '{file_path}' requires explicit confirmation with risk explanation.")
-        return
-
-    respond("allow")
+    print(json.dumps(run(event), ensure_ascii=False))
 
 
 if __name__ == "__main__":

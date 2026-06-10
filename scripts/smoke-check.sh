@@ -6,7 +6,7 @@ required=(
   ".gigacode/skills/development-flow/SKILL.md"
   ".gigacode/commands/develop-feature.md"
   ".gigacode/commands/fix-bug.md"
-  ".gigacode/hooks/git_guard.py"
+  ".gigacode/hooks/gates/git_guard.py"
   ".gigacode/hooks/preflight_check.py"
   ".gigacode/hooks/validate_development_output.py"
   "docs/templates/development-journal.md"
@@ -49,19 +49,19 @@ for path in .gigacode/agents/*.md; do
   fi
 done
 
-block="$(printf '%s' '{"command":"git reset --hard HEAD"}' | "$python_cmd" .gigacode/hooks/git_guard.py)"
+block="$(printf '%s' '{"command":"git reset --hard HEAD"}' | "$python_cmd" .gigacode/hooks/gates/git_guard.py)"
 printf '%s' "$block" | grep -q '"decision": "block"'
 
-clean="$(printf '%s' '{"command":"git clean -f -d"}' | "$python_cmd" .gigacode/hooks/git_guard.py)"
+clean="$(printf '%s' '{"command":"git clean -f -d"}' | "$python_cmd" .gigacode/hooks/gates/git_guard.py)"
 printf '%s' "$clean" | grep -q '"decision": "block"'
 
-flag_bypass="$(printf '%s' '{"command":"git -C . reset --hard HEAD"}' | "$python_cmd" .gigacode/hooks/git_guard.py)"
+flag_bypass="$(printf '%s' '{"command":"git -C . reset --hard HEAD"}' | "$python_cmd" .gigacode/hooks/gates/git_guard.py)"
 printf '%s' "$flag_bypass" | grep -q '"decision": "block"'
 
-config_bypass="$(printf '%s' '{"command":"git -c core.pager=cat clean -f -d"}' | "$python_cmd" .gigacode/hooks/git_guard.py)"
+config_bypass="$(printf '%s' '{"command":"git -c core.pager=cat clean -f -d"}' | "$python_cmd" .gigacode/hooks/gates/git_guard.py)"
 printf '%s' "$config_bypass" | grep -q '"decision": "block"'
 
-ask="$(printf '%s' '{"path":".github/workflows/deploy.yml"}' | "$python_cmd" .gigacode/hooks/git_guard.py)"
+ask="$(printf '%s' '{"path":".github/workflows/deploy.yml"}' | "$python_cmd" .gigacode/hooks/gates/git_guard.py)"
 printf '%s' "$ask" | grep -q '"decision": "ask"'
 
 feature="$(printf '%s' '{"prompt":"/develop-feature plan-only payment retry"}' | "$python_cmd" .gigacode/hooks/preflight_check.py)"

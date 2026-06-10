@@ -5,7 +5,7 @@ $required = @(
   ".gigacode/skills/development-flow/SKILL.md",
   ".gigacode/commands/develop-feature.md",
   ".gigacode/commands/fix-bug.md",
-  ".gigacode/hooks/git_guard.py",
+  ".gigacode/hooks/gates/git_guard.py",
   ".gigacode/hooks/preflight_check.py",
   ".gigacode/hooks/validate_development_output.py",
   "docs/templates/development-journal.md",
@@ -38,27 +38,27 @@ Get-ChildItem .gigacode/agents/*.md | ForEach-Object {
   }
 }
 
-$block = '{"command":"git reset --hard HEAD"}' | python .gigacode/hooks/git_guard.py
+$block = '{"command":"git reset --hard HEAD"}' | python .gigacode/hooks/gates/git_guard.py
 if ($block -notmatch '"decision":\s*"block"') {
   throw "git_guard did not block reset --hard"
 }
 
-$clean = '{"command":"git clean -f -d"}' | python .gigacode/hooks/git_guard.py
+$clean = '{"command":"git clean -f -d"}' | python .gigacode/hooks/gates/git_guard.py
 if ($clean -notmatch '"decision":\s*"block"') {
   throw "git_guard did not block destructive git clean"
 }
 
-$flagBypass = '{"command":"git -C . reset --hard HEAD"}' | python .gigacode/hooks/git_guard.py
+$flagBypass = '{"command":"git -C . reset --hard HEAD"}' | python .gigacode/hooks/gates/git_guard.py
 if ($flagBypass -notmatch '"decision":\s*"block"') {
   throw "git_guard did not block reset --hard behind global -C flag"
 }
 
-$configBypass = '{"command":"git -c core.pager=cat clean -f -d"}' | python .gigacode/hooks/git_guard.py
+$configBypass = '{"command":"git -c core.pager=cat clean -f -d"}' | python .gigacode/hooks/gates/git_guard.py
 if ($configBypass -notmatch '"decision":\s*"block"') {
   throw "git_guard did not block git clean behind global -c flag"
 }
 
-$ask = '{"path":".github/workflows/deploy.yml"}' | python .gigacode/hooks/git_guard.py
+$ask = '{"path":".github/workflows/deploy.yml"}' | python .gigacode/hooks/gates/git_guard.py
 if ($ask -notmatch '"decision":\s*"ask"') {
   throw "git_guard did not ask on protected path"
 }

@@ -15,6 +15,7 @@
       "Bash(git rev-list*)",
       "Bash(rg*)",
       "Bash(python .gigacode/hooks/*)",
+      "Bash(python .gigacode/hooks/gates/*)",
       "Edit(docs/development/**)"
     ],
     "ask": [
@@ -60,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/git_guard.py"
+            "command": "python .gigacode/hooks/gates/git_guard.py"
           }
         ]
       },
