@@ -98,6 +98,16 @@ Smoke checks не требуют GigaCode, Graphify, MCP servers, network access
 
 Обновляйте `.gigacode/settings.json` только project-safe defaults. Не храните в репозитории secrets, tokens, personal paths или environment-specific credentials.
 
+### Проверка семантики хуков вашей сборки GigaCode
+
+Имена событий и тулов в `router.config.json` соответствуют документации
+Qwen Code. GigaCode — форк, поэтому перед продакшен-использованием один раз
+проверьте реальные имена: временно зарегистрируйте
+`python .gigacode/hooks/hook_probe.py` на интересующие события в
+`.gigacode/settings.json`, выполните типовые действия (запрос, правка файла,
+git-команда) и сверьте `hook_event_name`/`tool_name` в
+`.gigacode/logs/hook-probe.jsonl` с матчерами в `router.config.json`.
+
 ## OpenSpec-спецификации
 
 Шаблон управляет авторитетными спецификациями через OpenSpec.
