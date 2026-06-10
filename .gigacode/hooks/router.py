@@ -138,6 +138,10 @@ def decide(event, event_name, tool_name, config):
             continue
         agent_pattern = route.get("agent_pattern")
         if agent_pattern:
+            # Missing/non-string agent field resolves to "" which won't match a
+            # non-empty pattern, so the route is SKIPPED. agent_pattern scopes a
+            # gate to named agents; routes that must fire for all agents
+            # (including unknown ones) must omit it rather than use ".*".
             agent = ""
             for key in ("agent_type", "subagent_type", "agent_name"):
                 value = event.get(key)

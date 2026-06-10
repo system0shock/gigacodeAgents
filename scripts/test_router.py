@@ -204,6 +204,16 @@ def main():
     # alternative field name fork-drift tolerance
     result = run_router("SubagentStart", {"subagent_type": "coder"}, router=tmp_router3)
     check("agent_pattern_alt_field", result["decision"] == "block", result)
+    # invalid agent_pattern regex must fail-closed, same as tool_pattern
+    with open(tmp_config3, "w", encoding="utf-8") as handle:
+        json.dump({"version": 1, "stop_block_budget": 2, "routes": [
+            {"event": "SubagentStart", "agent_pattern": "^(coder",
+             "gates": ["nonexistent_gate"], "safety_critical": True}
+        ]}, handle)
+    result = run_router("SubagentStart", {"agent_type": "coder"}, router=tmp_router3)
+    check("invalid_agent_pattern_fail_closed",
+          result["decision"] == "block" and "disableAllHooks" in result.get("reason", ""),
+          result)
     shutil.rmtree(tmp3, ignore_errors=True)
 
     print(f"\nAll {PASSED} router checks passed")
