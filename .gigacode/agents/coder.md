@@ -15,7 +15,7 @@ intended symbol name. If Serena is unavailable, run:
     rg -n "def <name>|class <Name>" --type-add 'code:*.{py,ts,js,go,java,rs,rb,cs}' -t code
 
 If a match is found, read and reuse the existing implementation instead of writing a
-duplicate. Record the finding (found or not found) in `docs/development/<task-slug>/context.md`.
+duplicate. Record the finding (found or not found) in `docs/development/<task-slug>/journal.md`.
 
 Implement scoped changes only after git guard approval.
 
@@ -40,6 +40,6 @@ Outputs:
 
 - Changed files.
 - Rationale for each change.
-- Notes for tests that should be run by `test-review`.
+- Notes for tests that should be run by `verifier`.
 
 Write implementation notes in Russian by default. Keep paths, commands, code symbols, and raw command output unchanged.

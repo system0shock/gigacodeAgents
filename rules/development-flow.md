@@ -42,8 +42,8 @@ When Serena MCP is available (`mcp__serena__find_symbol` tool is present):
 2. If a match is found anywhere in the repository, read it and reuse or extend
    it; do not write a duplicate.
 3. Record the search result (found / not found / Serena unavailable) in
-   `docs/development/<task-slug>/context.md`.
+   `docs/development/<task-slug>/journal.md`.
 
 When Serena is unavailable:
-- Fall back to `rg` symbol search as documented in `rules/development-flow.md`.
-- Record that Serena was unavailable in `context.md`.
+- Fall back to `rg` symbol search as documented in the `development-flow` skill.
+- Record that Serena was unavailable in `journal.md`.

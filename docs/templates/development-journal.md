@@ -1,4 +1,7 @@
-# Development Task Template
+# Development Journal Template
+
+Шаблон для `docs/development/<task-slug>/journal.md`. Результаты проверок
+пишите в `verification.md`, сводку для ревьюера — в `pr-summary.md`.
 
 ## Context
 
@@ -59,10 +62,8 @@
 
 Опишите, как изменение вводится в работу и как его откатить при проблемах.
 
-## Review Notes
+## Implementation Notes
 
-- Changed areas:
-- Risk notes:
-- Follow-up tasks:
+- Зафиксируйте ход реализации: что изменено, почему, отклонения от плана.
 
-Подготовьте заметки для ревью на русском языке. Технические идентификаторы, команды и raw command output не переводите.
+Заметки для ревью (changed areas, risk notes, follow-up tasks) пишите в `pr-summary.md`, а не здесь.

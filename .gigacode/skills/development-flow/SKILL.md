@@ -24,6 +24,14 @@ Default to `plan-only` when the requested mode is unclear, high-risk, or missing
 - Bug work starts from an observed failure, regression, incident, error, failing test, or mismatch between expected and actual behavior.
 - If the request type is unclear, ask before planning implementation.
 
+Intake is done by the main session, not a subagent — only the main session can
+ask the user questions. Before dispatching any agent, settle: task type
+(`feature`/`bug`), mode, task slug (lowercase ASCII, digits, hyphens), included
+and excluded scope, missing inputs, and safety blockers. Feature intake requires
+goal, behavior, acceptance criteria, and constraints. Bug intake requires
+symptom, expected and actual behavior, reproduction evidence (or why it is
+unavailable), affected environment, and severity when known.
+
 ## Required Context
 
 Before planning or editing:
@@ -34,7 +42,7 @@ Before planning or editing:
 4. Inspect the repository directly with file listing and targeted search.
 5. Confirm current behavior from live files before editing.
 
-Record missing optional context in `docs/development/<task-slug>/context.md`.
+Record missing optional context in `docs/development/<task-slug>/journal.md`.
 
 ## Search Before Create
 
@@ -52,11 +60,11 @@ rg -n "def <symbol_name>|class <SymbolName>|function <symbolName>" --type-add 'c
 ```
 
 If a matching symbol is found:
-1. Record its location in `docs/development/<task-slug>/context.md`.
+1. Record its location in `docs/development/<task-slug>/journal.md`.
 2. Read the existing implementation before proposing changes.
 3. Extend or adapt the existing code; do not write a duplicate.
 
-If no match is found, record that in `context.md` and proceed with new implementation.
+If no match is found, record that in `journal.md` and proceed with new implementation.
 This rule applies in both plan-only and implement modes.
 
 ## Git Safety
@@ -110,11 +118,9 @@ Authoritative specifications use OpenSpec under `openspec/` (see
 
 Human-facing run notes remain Markdown under `docs/development/<task-slug>/`:
 
-- `context.md`
-- `plan.md`
-- `implementation.md`
-- `verification.md`
-- `pr-summary.md`
+- `journal.md` — context, impact map, plan, and implementation notes
+- `verification.md` — commands run, evidence, skipped checks
+- `pr-summary.md` — reviewer-facing summary
 
 Run notes summarize and link to the OpenSpec change; they do not replace it.
 Plan-only artifacts must clearly state when implementation or verification was
@@ -124,12 +130,12 @@ not executed.
 
 Use these project agents when appropriate:
 
-1. `dev-intake`
-2. `project-context`
-3. `code-map`
-4. `implementation-plan`
-5. `coder`
-6. `test-review`
-7. `pr-readiness`
+1. `repo-context` — project intelligence and impact map (including event flows).
+2. `coder` — scoped edits in implement mode after git safety passes.
+3. `verifier` — verification evidence and reviewer-facing PR notes.
+
+Intake and implementation planning stay in the main session: intake needs user
+dialogue, and the plan lives in the OpenSpec change (`proposal.md`, `design.md`,
+`tasks.md`), not in a separate planning artifact.
 
 Each agent file and role description must remain below 10,000 characters.

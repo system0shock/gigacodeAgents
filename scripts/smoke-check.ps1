@@ -8,7 +8,7 @@ $required = @(
   ".gigacode/hooks/git_guard.py",
   ".gigacode/hooks/preflight_check.py",
   ".gigacode/hooks/validate_development_output.py",
-  "docs/templates/development-plan.md",
+  "docs/templates/development-journal.md",
   "rules/development-flow.md",
   "rules/language-policy.md",
   "rules/git-safety.md",

@@ -5,9 +5,7 @@ import re
 import sys
 
 REQUIRED_FILES = [
-    "context.md",
-    "plan.md",
-    "implementation.md",
+    "journal.md",
     "verification.md",
     "pr-summary.md",
 ]

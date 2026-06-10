@@ -52,11 +52,12 @@ docs/development/<task-slug>/
 
 Ожидаемые файлы:
 
-- `context.md`
-- `plan.md`
-- `implementation.md`
-- `verification.md`
-- `pr-summary.md`
+- `journal.md` — контекст, impact map, план и ход реализации
+- `verification.md` — команды проверки и доказательства
+- `pr-summary.md` — сводка для ревьюера
+
+Журнал ссылается на авторитетную OpenSpec-спецификацию в `openspec/` и не
+дублирует её.
 
 ## Project Intelligence
 
