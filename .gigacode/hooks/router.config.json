@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "stop_block_budget": 2,
+  "routes": [
+    {
+      "event": "UserPromptSubmit",
+      "gates": ["preflight_check"]
+    },
+    {
+      "event": "PreToolUse",
+      "tool_pattern": "^(Bash|Shell)$",
+      "gates": ["git_guard"],
+      "safety_critical": true
+    },
+    {
+      "event": "PreToolUse",
+      "tool_pattern": "^(WriteFile|Edit)$",
+      "gates": ["git_guard"],
+      "safety_critical": true
+    },
+    {
+      "event": "Stop",
+      "gates": ["validate_development_output"]
+    }
+  ]
+}
