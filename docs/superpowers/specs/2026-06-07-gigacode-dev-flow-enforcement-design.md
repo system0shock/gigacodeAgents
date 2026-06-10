@@ -128,7 +128,7 @@ Design constraints:
   that breaks naive `json.load`, and a parse failure must never silently allow
   (this exact bug made `git_guard` a no-op on Windows before 2026-06-10).
 - The router appends every decision (event, gate, verdict, reason) to
-  `.gigacode/hooks/decisions.jsonl`. This journal is the data source for tuning
+  `.gigacode/logs/decisions.jsonl`. This journal is the data source for tuning
   advisory rules and false-positive rates.
 - Stop-loop protection: a gate may block a `Stop` event at most twice per
   session; the third trigger degrades to a warning with a report. Without this,

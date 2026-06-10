@@ -76,6 +76,13 @@ Fallbacks:
 
 В v1 шаблон не выполняет auto-commit и auto-push. PR readiness означает, что workflow готовит reviewer-facing notes и verification evidence для человека или CI workflow.
 
+Все хуки проходят через единый роутер `.gigacode/hooks/router.py`:
+маршрутизация описана в `.gigacode/hooks/router.config.json`, каждое решение
+журналируется в `.gigacode/logs/decisions.jsonl`. Добавление нового гейта —
+это новый файл в `.gigacode/hooks/gates/` плюс строка в конфиге; роутер не
+редактируется. Если хуки сломаны, временный выключатель —
+`"disableAllHooks": true` в `.gigacode/settings.json`.
+
 ## Smoke Checks
 
 Windows:

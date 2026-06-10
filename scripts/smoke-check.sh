@@ -9,6 +9,9 @@ required=(
   ".gigacode/hooks/gates/git_guard.py"
   ".gigacode/hooks/gates/preflight_check.py"
   ".gigacode/hooks/gates/validate_development_output.py"
+  ".gigacode/hooks/router.py"
+  ".gigacode/hooks/router.config.json"
+  ".gigacode/hooks/hook_probe.py"
   "docs/templates/development-journal.md"
   "rules/development-flow.md"
   "rules/language-policy.md"
@@ -69,6 +72,9 @@ printf '%s' "$feature" | grep -q '"decision": "allow"'
 
 missing="$(printf '%s' '{"last_assistant_message":"Complete in docs/development/sample-task/"}' | "$python_cmd" .gigacode/hooks/gates/validate_development_output.py)"
 printf '%s' "$missing" | grep -q '"decision": "block"'
+
+"$python_cmd" -m json.tool .gigacode/hooks/router.config.json >/dev/null
+"$python_cmd" scripts/test_router.py
 
 if command -v openspec >/dev/null 2>&1; then
   # Use 'list --specs' not 'validate --strict': validate requires --type change

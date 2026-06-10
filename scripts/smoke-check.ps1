@@ -8,6 +8,9 @@ $required = @(
   ".gigacode/hooks/gates/git_guard.py",
   ".gigacode/hooks/gates/preflight_check.py",
   ".gigacode/hooks/gates/validate_development_output.py",
+  ".gigacode/hooks/router.py",
+  ".gigacode/hooks/router.config.json",
+  ".gigacode/hooks/hook_probe.py",
   "docs/templates/development-journal.md",
   "rules/development-flow.md",
   "rules/language-policy.md",
@@ -71,6 +74,13 @@ if ($feature -notmatch '"decision":\s*"allow"') {
 $missing = '{"last_assistant_message":"Complete in docs/development/sample-task/"}' | python .gigacode/hooks/gates/validate_development_output.py
 if ($missing -notmatch '"decision":\s*"block"') {
   throw "validate_development_output did not block missing artifacts"
+}
+
+python -m json.tool .gigacode/hooks/router.config.json | Out-Null
+
+python scripts/test_router.py
+if ($LASTEXITCODE -ne 0) {
+  throw "router tests failed"
 }
 
 if (Get-Command openspec -ErrorAction SilentlyContinue) {
