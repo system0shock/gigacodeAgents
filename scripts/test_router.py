@@ -190,6 +190,22 @@ def main():
     check("unknown_arg_no_abort", result["decision"] == "allow", result)
     shutil.rmtree(tmp2, ignore_errors=True)
 
+    # 15. agent_pattern routes match the subagent type
+    tmp3, tmp_router3, tmp_config3 = temp_hooks_copy()
+    with open(tmp_config3, "w", encoding="utf-8") as handle:
+        json.dump({"version": 1, "stop_block_budget": 2, "routes": [
+            {"event": "SubagentStart", "agent_pattern": "^coder$",
+             "gates": ["nonexistent_gate"], "safety_critical": True}
+        ]}, handle)
+    result = run_router("SubagentStart", {"agent_type": "coder"}, router=tmp_router3)
+    check("agent_pattern_match", result["decision"] == "block", result)
+    result = run_router("SubagentStart", {"agent_type": "verifier"}, router=tmp_router3)
+    check("agent_pattern_no_match", result["decision"] == "allow", result)
+    # alternative field name fork-drift tolerance
+    result = run_router("SubagentStart", {"subagent_type": "coder"}, router=tmp_router3)
+    check("agent_pattern_alt_field", result["decision"] == "block", result)
+    shutil.rmtree(tmp3, ignore_errors=True)
+
     print(f"\nAll {PASSED} router checks passed")
 
 

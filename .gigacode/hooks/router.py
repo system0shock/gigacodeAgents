@@ -136,6 +136,16 @@ def decide(event, event_name, tool_name, config):
         pattern = route.get("tool_pattern")
         if pattern and not re.search(pattern, tool_name):
             continue
+        agent_pattern = route.get("agent_pattern")
+        if agent_pattern:
+            agent = ""
+            for key in ("agent_type", "subagent_type", "agent_name"):
+                value = event.get(key)
+                if isinstance(value, str) and value:
+                    agent = value
+                    break
+            if not re.search(agent_pattern, agent):
+                continue
         for gate_name in route.get("gates", []):
             result, error = run_gate(gate_name, event, route.get("safety_critical", False))
             journal({"kind": "gate", "event": event_name, "tool": tool_name,
@@ -172,6 +182,7 @@ def main():
 
     event_name = ev_name_from_arg or str(event.get("hook_event_name", ""))
     tool_name = str(event.get("tool_name", ""))
+    event["hook_event_name"] = event_name  # canonical name so gates can branch on it
 
     # FIX 1b: load config, then wrap ALL remaining logic fail-closed
     try:
