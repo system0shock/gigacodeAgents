@@ -4,7 +4,16 @@
   "routes": [
     {
       "event": "UserPromptSubmit",
-      "gates": ["preflight_check"]
+      "gates": ["preflight_check", "gate_context_inject"]
+    },
+    {
+      "event": "SessionStart",
+      "gates": ["gate_context_inject"]
+    },
+    {
+      "event": "SubagentStart",
+      "agent_pattern": "coder",
+      "gates": ["gate_context_inject"]
     },
     {
       "event": "PreToolUse",

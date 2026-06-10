@@ -92,8 +92,33 @@ def test_lib():
         check("lib_journal_skip", '"gate_test"' in line and '"skip"' in line, line)
 
 
+def test_context_inject():
+    gate = load_gate("gate_context_inject")
+    with fixture_root() as fix:
+        os.makedirs(os.path.join(fix, "openspec", "changes", "add-sample"))
+        result = gate.run({"hook_event_name": "SessionStart"})
+        ctx = result.get("additionalContext", "")
+        check("ci_session_decision", result["decision"] == "allow", result)
+        check("ci_session_rules", "Development Flow Rules" in ctx, ctx[:200])
+        check("ci_session_changes", "add-sample" in ctx, ctx[-200:])
+
+        result = gate.run({"hook_event_name": "SubagentStart", "agent_type": "coder"})
+        ctx = result.get("additionalContext", "")
+        check("ci_subagent_search", "find_symbol" in ctx, ctx[:200])
+        check("ci_subagent_changes", "add-sample" in ctx, ctx[-200:])
+
+        result = gate.run({"hook_event_name": "UserPromptSubmit",
+                           "prompt": "/develop-feature implement payment retry"})
+        ctx = result.get("additionalContext", "")
+        check("ci_prompt_changes", "add-sample" in ctx, result)
+
+        result = gate.run({"hook_event_name": "UserPromptSubmit", "prompt": "привет"})
+        check("ci_plain_prompt_silent", "additionalContext" not in result, result)
+
+
 def main():
     test_lib()
+    test_context_inject()
     print(f"\nAll {PASSED} gate checks passed")
 
 
