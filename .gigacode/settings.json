@@ -57,7 +57,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|Shell|WriteFile|Edit",
+        "matcher": "^(Bash|Shell|WriteFile|Edit)$",
         "hooks": [
           {
             "type": "command",
