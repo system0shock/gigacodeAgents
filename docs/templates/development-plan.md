@@ -13,11 +13,10 @@
 ## Project Intelligence
 
 - Analytics: present: <path or summary> | absent: <fallback used>
-- Repomix: present: <path or summary> | absent: <fallback used>
 - Graphify: present: <path or summary> | absent: <fallback used>
 - External context: present: <link or summary> | absent: <fallback used>
 
-Зафиксируйте доступные источники понимания проекта. Если `Analytics`, `Repomix` или `Graphify` отсутствуют, укажите `absent: <fallback used>`, например `absent: direct repository inspection and manual impact mapping`.
+Зафиксируйте доступные источники понимания проекта. Если `Analytics` или `Graphify` отсутствуют, укажите `absent: <fallback used>`, например `absent: direct repository inspection and manual impact mapping`.
 
 ## Scope
 

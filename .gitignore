@@ -7,5 +7,4 @@ __pycache__/
 .gigacode/tmp/
 .gigacode/logs/
 docs/development/*/tmp/
-repomix-output.*
 graphify-output/

@@ -29,11 +29,10 @@ Default to `plan-only` when the requested mode is unclear, high-risk, or missing
 Before planning or editing:
 
 1. Read project analytics when present.
-2. Use Repomix output when present.
-3. Use Graphify output or the Graphify skill when present.
-4. If Repomix is absent, inspect the repository directly with file listing and targeted search.
-5. If Graphify is absent, build a manual impact map from entry points, imports, call sites, tests, and configuration.
-6. Confirm current behavior from live files before editing.
+2. Use Graphify output or the Graphify skill when present.
+3. If Graphify is absent, build a manual impact map from entry points, imports, call sites, tests, and configuration.
+4. Inspect the repository directly with file listing and targeted search.
+5. Confirm current behavior from live files before editing.
 
 Record missing optional context in `docs/development/<task-slug>/context.md`.
 

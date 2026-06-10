@@ -12,15 +12,13 @@ Operating modes:
 Required context order:
 
 1. Прочитать project analytics, если они есть.
-2. Использовать `Repomix` output, если он есть.
-3. Использовать `Graphify` output, если он есть.
-4. Если optional tools недоступны, перейти к direct repository inspection и manual impact mapping.
-5. Подтвердить текущее поведение по live code до редактирования файлов.
+2. Использовать `Graphify` output, если он есть.
+3. Если optional tools недоступны, перейти к direct repository inspection и manual impact mapping.
+4. Подтвердить текущее поведение по live code до редактирования файлов.
 
 Fallbacks:
 
 - Если analytics отсутствует, зафиксировать это в плане и не делать выводы о проекте без проверки кода.
-- Если `Repomix` output отсутствует или устарел, читать релевантные файлы напрямую.
 - Если `Graphify` output отсутствует или не покрывает область задачи, вручную составить `Impact Map`.
 
 Implementation invariants:

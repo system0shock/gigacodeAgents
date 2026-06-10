@@ -27,7 +27,7 @@ Map:
 - Existing tests.
 - Missing or unclear coverage.
 
-Use live files for final confirmation even when Repomix or Graphify are available.
+Use live files for final confirmation even when Graphify output is available.
 
 Output a compact impact map with file paths and reasons each area matters.
 

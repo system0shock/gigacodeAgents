@@ -1,6 +1,6 @@
 ---
 name: project-context
-description: MUST BE USED before planning developer changes to collect analytics, Repomix, Graphify, local docs, and external context when available, with explicit fallbacks when optional tools are missing.
+description: MUST BE USED before planning developer changes to collect analytics, Graphify, local docs, and external context when available, with explicit fallbacks when optional tools are missing.
 model: inherit
 approvalMode: plan
 ---
@@ -16,7 +16,6 @@ Look for:
 - `docs/architecture/**`
 - `docs/incidents/**`
 - ADRs or decision records
-- Repomix output files
 - Graphify output directories or reports
 - README and build files
 - related tickets or external context provided by the user
@@ -24,8 +23,8 @@ Look for:
 Fallbacks:
 
 - If analytics are absent, continue with code, tests, local docs, and user-provided context.
-- If Repomix is absent, use direct repository inspection with file listing and targeted search.
 - If Graphify is absent, use manual impact mapping from entry points, imports, call sites, tests, and configuration.
+- Always confirm findings with direct repository inspection: file listing and targeted search.
 
 Output a concise context summary for `docs/development/<task-slug>/context.md`:
 

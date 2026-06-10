@@ -60,13 +60,12 @@ docs/development/<task-slug>/
 
 ## Project Intelligence
 
-Workflow использует project analytics, Repomix и Graphify, когда они доступны.
+Workflow использует project analytics и Graphify, когда они доступны.
 
 Fallbacks:
 
 - Если analytics отсутствует, workflow продолжает работу с кодом, тестами, локальной документацией и контекстом от пользователя.
-- Если Repomix отсутствует, используется direct repository inspection.
-- Если Graphify отсутствует, используется manual impact mapping.
+- Если Graphify отсутствует, используется direct repository inspection и manual impact mapping.
 
 ## Enterprise Git Safety
 
@@ -90,7 +89,7 @@ Linux-compatible shell:
 bash scripts/smoke-check.sh
 ```
 
-Smoke checks не требуют GigaCode, Repomix, Graphify, MCP servers, network access или enterprise credentials.
+Smoke checks не требуют GigaCode, Graphify, MCP servers, network access или enterprise credentials.
 
 ## Адаптация под команду
 
