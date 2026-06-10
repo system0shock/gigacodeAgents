@@ -50,18 +50,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/gates/preflight_check.py"
+            "command": "python .gigacode/hooks/router.py --event UserPromptSubmit"
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "",
+        "matcher": "Bash|Shell|WriteFile|Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/gates/git_guard.py"
+            "command": "python .gigacode/hooks/router.py --event PreToolUse"
           }
         ]
       },
@@ -94,7 +94,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/gates/validate_development_output.py"
+            "command": "python .gigacode/hooks/router.py --event Stop"
           }
         ]
       }
