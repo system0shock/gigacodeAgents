@@ -25,6 +25,7 @@ def load_gate(name):
 
 
 def check(name, condition, detail=""):
+    # explicit raise (not assert) so python -O cannot neuter the suite
     global PASSED
     if not condition:
         raise SystemExit(f"FAIL {name}: {detail}")
@@ -51,11 +52,15 @@ class fixture_root:
 
     def __enter__(self):
         self.tmp = make_fixture()
+        self._orig = os.environ.get("GIGACODE_ROOT")
         os.environ["GIGACODE_ROOT"] = self.tmp
         return self.tmp
 
     def __exit__(self, *exc):
-        os.environ.pop("GIGACODE_ROOT", None)
+        if self._orig is None:
+            os.environ.pop("GIGACODE_ROOT", None)
+        else:
+            os.environ["GIGACODE_ROOT"] = self._orig
         shutil.rmtree(self.tmp, ignore_errors=True)
         return False
 

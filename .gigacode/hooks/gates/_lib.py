@@ -85,6 +85,8 @@ def message_from_event(event):
 
 
 def matches_globs(path, globs):
+    # fnmatch '*' crosses directory separators (unlike POSIX glob), so
+    # 'src/*.kt' also matches 'src/a/Main.kt'. Use '**/*.kt' for all depths.
     normalized = path.replace("\\", "/")
     if normalized.startswith("./"):
         normalized = normalized[2:]
@@ -106,6 +108,10 @@ def run_command(command, timeout, extra_args=None):
         tokens = shlex.split(command, posix=False)
     except ValueError:
         tokens = command.split()
+    # posix=False keeps Windows backslash paths intact but leaves surrounding
+    # quotes on tokens; strip them so quoted space-containing args work.
+    tokens = [token[1:-1] if len(token) >= 2 and token[0] == token[-1]
+              and token[0] in "\"'" else token for token in tokens]
     if not tokens:
         return -1, "empty command"
     exe = shutil.which(tokens[0]) or shutil.which(tokens[0], path=root())
