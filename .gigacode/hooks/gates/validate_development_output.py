@@ -30,7 +30,8 @@ def find_task_dir(message):
 
 
 def read_file(path):
-    with open(path, "r", encoding="utf-8") as handle:
+    # errors="replace": a non-UTF-8 artifact must not crash the gate
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
         return handle.read()
 
 
