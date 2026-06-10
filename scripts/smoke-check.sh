@@ -7,8 +7,8 @@ required=(
   ".gigacode/commands/develop-feature.md"
   ".gigacode/commands/fix-bug.md"
   ".gigacode/hooks/gates/git_guard.py"
-  ".gigacode/hooks/preflight_check.py"
-  ".gigacode/hooks/validate_development_output.py"
+  ".gigacode/hooks/gates/preflight_check.py"
+  ".gigacode/hooks/gates/validate_development_output.py"
   "docs/templates/development-journal.md"
   "rules/development-flow.md"
   "rules/language-policy.md"
@@ -64,10 +64,10 @@ printf '%s' "$config_bypass" | grep -q '"decision": "block"'
 ask="$(printf '%s' '{"path":".github/workflows/deploy.yml"}' | "$python_cmd" .gigacode/hooks/gates/git_guard.py)"
 printf '%s' "$ask" | grep -q '"decision": "ask"'
 
-feature="$(printf '%s' '{"prompt":"/develop-feature plan-only payment retry"}' | "$python_cmd" .gigacode/hooks/preflight_check.py)"
+feature="$(printf '%s' '{"prompt":"/develop-feature plan-only payment retry"}' | "$python_cmd" .gigacode/hooks/gates/preflight_check.py)"
 printf '%s' "$feature" | grep -q '"decision": "allow"'
 
-missing="$(printf '%s' '{"last_assistant_message":"Complete in docs/development/sample-task/"}' | "$python_cmd" .gigacode/hooks/validate_development_output.py)"
+missing="$(printf '%s' '{"last_assistant_message":"Complete in docs/development/sample-task/"}' | "$python_cmd" .gigacode/hooks/gates/validate_development_output.py)"
 printf '%s' "$missing" | grep -q '"decision": "block"'
 
 if command -v openspec >/dev/null 2>&1; then

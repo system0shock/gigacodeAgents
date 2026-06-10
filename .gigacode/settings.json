@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/preflight_check.py"
+            "command": "python .gigacode/hooks/gates/preflight_check.py"
           }
         ]
       }
@@ -94,7 +94,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/validate_development_output.py"
+            "command": "python .gigacode/hooks/gates/validate_development_output.py"
           }
         ]
       }

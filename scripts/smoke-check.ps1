@@ -6,8 +6,8 @@ $required = @(
   ".gigacode/commands/develop-feature.md",
   ".gigacode/commands/fix-bug.md",
   ".gigacode/hooks/gates/git_guard.py",
-  ".gigacode/hooks/preflight_check.py",
-  ".gigacode/hooks/validate_development_output.py",
+  ".gigacode/hooks/gates/preflight_check.py",
+  ".gigacode/hooks/gates/validate_development_output.py",
   "docs/templates/development-journal.md",
   "rules/development-flow.md",
   "rules/language-policy.md",
@@ -63,12 +63,12 @@ if ($ask -notmatch '"decision":\s*"ask"') {
   throw "git_guard did not ask on protected path"
 }
 
-$feature = '{"prompt":"/develop-feature plan-only payment retry"}' | python .gigacode/hooks/preflight_check.py
+$feature = '{"prompt":"/develop-feature plan-only payment retry"}' | python .gigacode/hooks/gates/preflight_check.py
 if ($feature -notmatch '"decision":\s*"allow"') {
   throw "preflight did not allow complete plan-only feature prompt"
 }
 
-$missing = '{"last_assistant_message":"Complete in docs/development/sample-task/"}' | python .gigacode/hooks/validate_development_output.py
+$missing = '{"last_assistant_message":"Complete in docs/development/sample-task/"}' | python .gigacode/hooks/gates/validate_development_output.py
 if ($missing -notmatch '"decision":\s*"block"') {
   throw "validate_development_output did not block missing artifacts"
 }
