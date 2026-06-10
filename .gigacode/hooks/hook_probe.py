@@ -30,7 +30,7 @@ def main():
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
     except OSError:
         pass
-    print(json.dumps({"decision": "allow"}))
+    print(json.dumps({"decision": "allow"}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
