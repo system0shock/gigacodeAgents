@@ -272,11 +272,48 @@ def test_lint():
         check("lint_list_java_block", result["decision"] == "block", result)
 
 
+def test_build():
+    gate = load_gate("gate_build")
+    with fixture_root() as fix:
+        write_script(fix, "fail.py", 1)
+        write_script(fix, "pass.py", 0)
+
+        # not a PR-readiness moment -> no build even with a failing command
+        write_qg(fix, {"build": {"command": "python fail.py", "timeout_seconds": 30}})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "hi"})
+        check("build_not_pr_moment", result["decision"] == "allow", result)
+
+        pr_message = "Готово: docs/development/sample-task/pr-summary.md"
+
+        # unconfigured -> silent allow (journal-only skip)
+        write_qg(fix, {"build": {"command": ""}})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": pr_message})
+        check("build_unconfigured_allow",
+              result["decision"] == "allow" and "additionalContext" not in result, result)
+
+        # failing build blocks
+        write_qg(fix, {"build": {"command": "python fail.py", "timeout_seconds": 30}})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": pr_message})
+        check("build_fail_block", result["decision"] == "block", result)
+
+        # passing build allows
+        write_qg(fix, {"build": {"command": "python pass.py", "timeout_seconds": 30}})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": pr_message})
+        check("build_pass_allow", result["decision"] == "allow", result)
+
+        # configured-but-broken command -> allow with anomaly note
+        write_qg(fix, {"build": {"command": "definitely-missing-tool-xyz"}})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": pr_message})
+        check("build_broken_command_note",
+              result["decision"] == "allow" and "additionalContext" in result, result)
+
+
 def main():
     test_lib()
     test_context_inject()
     test_spec_structure()
     test_lint()
+    test_build()
     print(f"\nAll {PASSED} gate checks passed")
 
 

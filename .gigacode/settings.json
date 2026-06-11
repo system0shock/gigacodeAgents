@@ -105,7 +105,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/router.py --event Stop"
+            "command": "python .gigacode/hooks/router.py --event Stop",
+            "timeout": 630000
           }
         ]
       }
