@@ -318,6 +318,18 @@ def main():
     result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": "src/Foo.kt"}})
     check("guard_allow_src_write", result["decision"] == "allow", result)
 
+    # 21. Pre-seeded budget counter must NOT pre-exhaust the budget
+    # STATE_PATH in router.py: LOGS_DIR = hooks/../logs  =>  tmp/logs/router-state.json
+    tmp4, tmp_router4, _ = temp_hooks_copy()
+    state_path = os.path.join(tmp4, "logs", "router-state.json")
+    os.makedirs(os.path.dirname(state_path), exist_ok=True)
+    with open(state_path, "w", encoding="utf-8") as handle:
+        json.dump({"stop:t-seed": 99}, handle)
+    payload = {"last_assistant_message": "Complete in docs/development/sample-task/", "session_id": "t-seed"}
+    result = run_router("Stop", payload, router=tmp_router4)
+    check("budget_preseed_still_blocks", result["decision"] == "block", result)
+    shutil.rmtree(tmp4, ignore_errors=True)
+
     print(f"\nAll {PASSED} router checks passed")
 
 

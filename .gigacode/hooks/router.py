@@ -42,9 +42,17 @@ def journal(record):
 def load_state():
     try:
         with open(STATE_PATH, "r", encoding="utf-8") as handle:
-            return json.load(handle)
+            raw = json.load(handle)
     except (OSError, json.JSONDecodeError):
         return {}
+    if not isinstance(raw, dict):
+        return {}
+    # Distrust agent-writable counters: keep only small non-negative ints (0..10).
+    # Genuine consecutive-block counts never exceed stop_block_budget + 1 before a
+    # budget-exhausted allow resets the key; 10 is well above any realistic budget
+    # while rejecting a pre-seeded huge value (e.g. 99) that would otherwise
+    # pre-exhaust the budget on the first real block.
+    return {k: v for k, v in raw.items() if isinstance(v, int) and 0 <= v <= 10}
 
 
 def save_state(state):
@@ -104,10 +112,13 @@ def apply_stop_budget(event_name, final, config, event):
             state.pop(key)
             save_state(state)
         return final
+    budget = config.get("stop_block_budget", 2)
+    # Prior count is already sanitized by load_state (0..10), so a pre-seeded
+    # large value is dropped and treated as 0.  Use normal accumulation so
+    # genuine degradation after the configured budget is preserved.
     count = state.get(key, 0) + 1
     state[key] = count
     save_state(state)
-    budget = config.get("stop_block_budget", 2)
     if count > budget:
         journal({"kind": "stop_budget_exhausted", "session": key, "count": count})
         return {
