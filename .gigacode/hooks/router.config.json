@@ -35,7 +35,7 @@
     {
       "event": "PostToolUse",
       "tool_pattern": "^(WriteFile|Edit)$",
-      "gates": ["gate_spec_structure", "gate_lint"]
+      "gates": ["gate_spec_structure", "gate_lint", "gate_clean_code"]
     },
     {
       "event": "Stop",

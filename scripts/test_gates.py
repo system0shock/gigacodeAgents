@@ -317,12 +317,61 @@ def test_build():
               and "таймаут" in result.get("additionalContext", ""), result)
 
 
+def test_clean_code():
+    gate = load_gate("gate_clean_code")
+    with fixture_root() as fix:
+        write_qg(fix, {"clean_code": {"max_file_lines": 400, "max_function_lines": 60,
+                                      "placeholder_markers": ["TODO", "FIXME", "XXX"]}})
+        src = os.path.join(fix, "src")
+        os.makedirs(src)
+
+        def write_kt(name, text):
+            path = os.path.join(src, name)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(text)
+            return path
+
+        # long file warns
+        path = write_kt("Big.kt", "\n".join(["// line"] * 450))
+        result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": path}})
+        check("cc_long_file_warn", "450" in result.get("additionalContext", ""), result)
+        check("cc_long_file_allow", result["decision"] == "allow", result)
+
+        # TODO marker warns
+        path = write_kt("Todo.kt", "fun a() {\n    // TODO finish\n}\n")
+        result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": path}})
+        check("cc_todo_warn", "TODO" in result.get("additionalContext", ""), result)
+
+        # long function warns
+        body = "fun bigFunction(x: Int) {\n" + "    println(x)\n" * 70 + "}\n"
+        path = write_kt("LongFun.kt", body)
+        result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": path}})
+        check("cc_long_function_warn", "блок" in result.get("additionalContext", ""), result)
+
+        # Thread.sleep in a test file warns
+        path = write_kt("PaymentServiceTest.kt",
+                        "class PaymentServiceTest {\n    fun t() { Thread.sleep(1000) }\n}\n")
+        result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": path}})
+        check("cc_sleep_in_test_warn", "Thread.sleep" in result.get("additionalContext", ""), result)
+
+        # clean small file is silent
+        path = write_kt("Ok.kt", "fun ok() {\n    println(1)\n}\n")
+        result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": path}})
+        check("cc_clean_silent", "additionalContext" not in result, result)
+
+
 def main():
     test_lib()
     test_context_inject()
     test_spec_structure()
     test_lint()
     test_build()
+    test_clean_code()
     print(f"\nAll {PASSED} gate checks passed")
 
 
