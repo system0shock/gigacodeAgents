@@ -126,9 +126,88 @@ def test_context_inject():
         check("ci_plain_prompt_silent", "additionalContext" not in result, result)
 
 
+def write_change(root_dir, change_id, complete=True, valid=False):
+    """OpenSpec change fixture. complete=False omits tasks.md and the delta."""
+    base = os.path.join(root_dir, "openspec", "changes", change_id)
+    os.makedirs(os.path.join(base, "specs", "sample"), exist_ok=True)
+    with open(os.path.join(base, "proposal.md"), "w", encoding="utf-8") as handle:
+        handle.write("## Why\nReason.\n\n## What Changes\n- change\n\n## Impact\n- none\n")
+    if complete:
+        with open(os.path.join(base, "tasks.md"), "w", encoding="utf-8") as handle:
+            handle.write("## 1. Group\n- [ ] 1.1 Do it\n")
+        if valid:
+            spec = ("## ADDED Requirements\n\n### Requirement: Sample\n"
+                    "The system SHALL sample.\n\n#### Scenario: Works\n"
+                    "- **WHEN** invoked\n- **THEN** it works\n")
+        else:
+            spec = "## ADDED Requirements\n\n### Requirement: Sample\nNo scenario here.\n"
+        with open(os.path.join(base, "specs", "sample", "spec.md"), "w", encoding="utf-8") as handle:
+            handle.write(spec)
+    return base
+
+
+def test_spec_structure():
+    gate = load_gate("gate_spec_structure")
+    with fixture_root() as fix:
+        # PreToolUse: spec truth and archive are write-protected
+        result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": "openspec/specs/payments/spec.md"}})
+        check("ss_pre_specs_block", result["decision"] == "block", result)
+        result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": "openspec/changes/archive/old/proposal.md"}})
+        check("ss_pre_archive_block", result["decision"] == "block", result)
+        result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": "openspec/changes/my-change/proposal.md"}})
+        check("ss_pre_change_allow", result["decision"] == "allow", result)
+
+        # PostToolUse: CLI unavailable -> skip-with-record + advisory context
+        write_change(fix, "my-change", complete=True, valid=False)
+        os.environ["OPENSPEC_BIN"] = os.path.join(fix, "missing-openspec")
+        try:
+            result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                               "tool_input": {"file_path": "openspec/changes/my-change/tasks.md"}})
+        finally:
+            os.environ.pop("OPENSPEC_BIN", None)
+        check("ss_post_cli_missing_allow", result["decision"] == "allow", result)
+        check("ss_post_cli_missing_note", "пропущена" in result.get("additionalContext", ""), result)
+
+        # Stop: no PR-readiness mention -> no validation at all
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "hello"})
+        check("ss_stop_no_mention_allow", result["decision"] == "allow", result)
+
+        if shutil.which("openspec"):
+            # PostToolUse: complete but invalid change -> block
+            result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                               "tool_input": {"file_path": "openspec/changes/my-change/specs/sample/spec.md"}})
+            check("ss_post_invalid_block", result["decision"] == "block", result)
+
+            # PostToolUse: incomplete invalid change -> advisory only
+            write_change(fix, "draft-change", complete=False)
+            result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                               "tool_input": {"file_path": "openspec/changes/draft-change/proposal.md"}})
+            check("ss_post_incomplete_advisory",
+                  result["decision"] == "allow" and "additionalContext" in result, result)
+
+            # Stop with PR-readiness mention and an invalid change -> block
+            result = gate.run({"hook_event_name": "Stop",
+                               "last_assistant_message": "Готово, см. openspec/changes/my-change/"})
+            check("ss_stop_invalid_block", result["decision"] == "block", result)
+
+            # Valid change passes PostToolUse
+            shutil.rmtree(os.path.join(fix, "openspec", "changes", "draft-change"))
+            shutil.rmtree(os.path.join(fix, "openspec", "changes", "my-change"))
+            write_change(fix, "good-change", complete=True, valid=True)
+            result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                               "tool_input": {"file_path": "openspec/changes/good-change/tasks.md"}})
+            check("ss_post_valid_allow", result["decision"] == "allow", result)
+        else:
+            print("SKIP: openspec CLI not on PATH; live validation tests skipped")
+
+
 def main():
     test_lib()
     test_context_inject()
+    test_spec_structure()
     print(f"\nAll {PASSED} gate checks passed")
 
 

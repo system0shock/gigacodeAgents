@@ -88,6 +88,17 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "^(WriteFile|Edit)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/router.py --event PostToolUse"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "",

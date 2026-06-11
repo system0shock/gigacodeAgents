@@ -216,6 +216,12 @@ def main():
           result)
     shutil.rmtree(tmp3, ignore_errors=True)
 
+    # 16. Spec truth is write-protected through the full router path
+    result = run_router("PreToolUse", {"tool_name": "WriteFile",
+                                       "tool_input": {"file_path": "openspec/specs/payments/spec.md",
+                                                      "content": "x"}})
+    check("spec_truth_write_block", result["decision"] == "block", result)
+
     print(f"\nAll {PASSED} router checks passed")
 
 
