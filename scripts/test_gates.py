@@ -364,6 +364,22 @@ def test_clean_code():
                            "tool_input": {"file_path": path}})
         check("cc_clean_silent", "additionalContext" not in result, result)
 
+        # non-code extension: early exit, no analysis
+        md_path = os.path.join(src, "notes.md")
+        with open(md_path, "w", encoding="utf-8") as handle:
+            handle.write("TODO: write docs\n" * 500)
+        result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": md_path}})
+        check("cc_non_code_silent", "additionalContext" not in result, result)
+
+        # markers configured as a bare string: fall back to defaults,
+        # not char-by-char iteration (which would warn on this clean file)
+        write_qg(fix, {"clean_code": {"placeholder_markers": "TODO"}})
+        path = write_kt("Str.kt", "fun s() {\n    println(\"D O T\")\n}\n")
+        result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": path}})
+        check("cc_marker_string_fallback", "additionalContext" not in result, result)
+
 
 def main():
     test_lib()

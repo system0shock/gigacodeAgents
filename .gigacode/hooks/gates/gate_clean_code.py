@@ -25,9 +25,20 @@ def resolve(path):
     return os.path.join(_lib.root(), path)
 
 
+def safe_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def long_blocks(lines, max_len):
     """Naive brace-depth scan; function-like = the opening line has '(' and is
-    not a control-flow statement. Heuristic by design — advisory only."""
+    not a control-flow statement. Heuristic by design — advisory only.
+
+    max_len bounds the whole brace SPAN (opening line through closing line),
+    not just the body. Allman-style functions ('{' alone on its line, no '('
+    there) are missed — acceptable for a heuristic."""
     warnings = []
     stack = []
     for lineno, line in enumerate(lines, 1):
@@ -56,9 +67,12 @@ def run(event):
     except OSError:
         return {"decision": "allow"}
     config = _lib.load_quality_gates().get("clean_code") or {}
-    max_file = int(config.get("max_file_lines", 400))
-    max_func = int(config.get("max_function_lines", 60))
-    markers = config.get("placeholder_markers") or ["TODO", "FIXME", "XXX"]
+    max_file = safe_int(config.get("max_file_lines", 400), 400)
+    max_func = safe_int(config.get("max_function_lines", 60), 60)
+    markers = config.get("placeholder_markers")
+    # a non-list (e.g. a bare string) would be iterated char-by-char below
+    if not isinstance(markers, list) or not markers:
+        markers = ["TODO", "FIXME", "XXX"]
 
     warnings = []
     if len(lines) > max_file:
