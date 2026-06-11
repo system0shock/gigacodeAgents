@@ -37,6 +37,9 @@ foreach ($path in $required) {
 }
 
 python -m json.tool .gigacode/settings.json | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw "invalid JSON: .gigacode/settings.json"
+}
 
 Get-ChildItem .gigacode/agents/*.md | ForEach-Object {
   $content = Get-Content $_ -Raw
@@ -85,6 +88,9 @@ if ($missing -notmatch '"decision":\s*"block"') {
 }
 
 python -m json.tool .gigacode/hooks/router.config.json | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw "invalid JSON: .gigacode/hooks/router.config.json"
+}
 
 python scripts/test_router.py
 if ($LASTEXITCODE -ne 0) {
@@ -92,6 +98,9 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 python -m json.tool .gigacode/quality-gates.json | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw "invalid JSON: .gigacode/quality-gates.json"
+}
 
 python scripts/test_gates.py
 if ($LASTEXITCODE -ne 0) {
