@@ -21,6 +21,14 @@ required=(
   "rules/openspec.md"
   ".gigacode/skills/openspec-propose/SKILL.md"
   ".serena/project.yml"
+  ".gigacode/hooks/gates/_lib.py"
+  ".gigacode/hooks/gates/gate_context_inject.py"
+  ".gigacode/hooks/gates/gate_spec_structure.py"
+  ".gigacode/hooks/gates/gate_lint.py"
+  ".gigacode/hooks/gates/gate_build.py"
+  ".gigacode/hooks/gates/gate_clean_code.py"
+  ".gigacode/hooks/gates/gate_existing_code.py"
+  ".gigacode/quality-gates.json"
 )
 
 for path in "${required[@]}"; do
@@ -75,6 +83,8 @@ printf '%s' "$missing" | grep -q '"decision": "block"'
 
 "$python_cmd" -m json.tool .gigacode/hooks/router.config.json >/dev/null
 "$python_cmd" scripts/test_router.py
+"$python_cmd" -m json.tool .gigacode/quality-gates.json >/dev/null
+"$python_cmd" scripts/test_gates.py
 
 if command -v openspec >/dev/null 2>&1; then
   # Use 'list --specs' not 'validate --strict': validate requires --type change

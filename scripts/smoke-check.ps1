@@ -19,7 +19,15 @@ $required = @(
   "openspec/config.yaml",
   "rules/openspec.md",
   ".gigacode/skills/openspec-propose/SKILL.md",
-  ".serena/project.yml"
+  ".serena/project.yml",
+  ".gigacode/hooks/gates/_lib.py",
+  ".gigacode/hooks/gates/gate_context_inject.py",
+  ".gigacode/hooks/gates/gate_spec_structure.py",
+  ".gigacode/hooks/gates/gate_lint.py",
+  ".gigacode/hooks/gates/gate_build.py",
+  ".gigacode/hooks/gates/gate_clean_code.py",
+  ".gigacode/hooks/gates/gate_existing_code.py",
+  ".gigacode/quality-gates.json"
 )
 
 foreach ($path in $required) {
@@ -81,6 +89,13 @@ python -m json.tool .gigacode/hooks/router.config.json | Out-Null
 python scripts/test_router.py
 if ($LASTEXITCODE -ne 0) {
   throw "router tests failed"
+}
+
+python -m json.tool .gigacode/quality-gates.json | Out-Null
+
+python scripts/test_gates.py
+if ($LASTEXITCODE -ne 0) {
+  throw "gate tests failed"
 }
 
 if (Get-Command openspec -ErrorAction SilentlyContinue) {
