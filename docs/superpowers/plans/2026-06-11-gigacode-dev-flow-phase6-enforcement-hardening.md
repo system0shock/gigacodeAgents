@@ -4,7 +4,7 @@
 
 **Goal:** Close the confirmed red-team bypasses in the GigaCode enforcement layer — the git_guard single-token parser (Theme 1), the unprotected `.gigacode/**` self-tampering surface and run_command RCE (Theme 2), the hollow flow guarantees (Theme 4), and fragile path matching (Theme 5).
 
-**Architecture:** The fixes harden existing gates (`git_guard`, `gate_spec_structure`, `validate_development_output`, `gate_build`), the shared `_lib`, and `router.py`; one new shared helper (`git_changed_paths`) lets Stop gates derive triggers from the working tree instead of the agent's message text. No new gate files. Every `gates/*.py` must stay under 10,000 chars (auto-checked by test_router.py).
+**Architecture:** The fixes harden existing gates (`git_guard`, `gate_spec_structure`, `validate_development_output`, `gate_build`), the shared `_lib`, and `router.py`; one new shared helper (`git_changed_paths`) lets Stop gates derive triggers from the working tree instead of the agent's message text. No new gate files. There is NO character-size cap on Python gate/router files — write them at whatever length is clearest; the test suite reports each file's size informationally and only asserts the file is non-empty and parses.
 
 **Tech Stack:** Python 3 stdlib, the existing offline test harness (`check()` + explicit `SystemExit`, fixtures via `GIGACODE_ROOT`), Windows-primary (PowerShell + Git Bash).
 
@@ -347,7 +347,7 @@ def run(event):
     return {"decision": "allow"}
 ```
 
-Update `path_from_event`/`protected_path` to normalize via `_norm` (collapse `//`, `..`, `./`). Keep the file < 10,000 chars — if tight, drop comments, not coverage.
+Update `path_from_event`/`protected_path` to normalize via `_norm` (collapse `//`, `..`, `./`). There is no size cap — keep the file clear and well-commented.
 
 - [ ] **Step 4: Run tests to verify pass**
 
@@ -712,7 +712,7 @@ git commit -m "Derive Stop-gate triggers from the working tree and require an Op
 
 ### Task 6: Final hardening review
 
-Controller-level (not an implementation task): dispatch a final reviewer over the whole Phase 6 diff (from the commit before Task 1 to HEAD), re-checking each closed finding against `docs/superpowers/reviews/2026-06-11-enforcement-red-team.md` (does the payload now block? any new over-block regression? any gate over 10k chars?), then run the full offline verification:
+Controller-level (not an implementation task): dispatch a final reviewer over the whole Phase 6 diff (from the commit before Task 1 to HEAD), re-checking each closed finding against `docs/superpowers/reviews/2026-06-11-enforcement-red-team.md` (does the payload now block? any new over-block regression?), then run the full offline verification:
 
 - `python scripts/test_gates.py`
 - `python scripts/test_router.py`
