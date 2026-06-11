@@ -57,7 +57,6 @@ def search(pattern):
 
 
 def run(event):
-    tool = str(event.get("tool_name", ""))
     path = _lib.path_from_event(event)
     content = _lib.content_from_event(event)
     if not content:

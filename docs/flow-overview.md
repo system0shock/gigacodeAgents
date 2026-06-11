@@ -71,24 +71,24 @@ intake (главная сессия) → repo-context → OpenSpec propose
 | Верификация | `docs/development/<task>/verification.md` | Что прогнали, результаты, что пропущено и почему |
 | PR-сводка | `docs/development/<task>/pr-summary.md` | Готовый текст для PR |
 | Код | feature-ветка | Только правки; commit/push — руками или по явной команде |
-| Журнал гейтов | `.gigacode/hooks/decisions.jsonl` | Каждое решение каждого гейта — для тюнинга системы |
+| Журнал гейтов | `.gigacode/logs/decisions.jsonl` | Каждое решение каждого гейта — для тюнинга системы |
 
 ## 5. Как работают хуки
 
 Один диспетчер `router.py` зарегистрирован на все события. GigaCode передаёт
 ему JSON события на stdin (имя события, тул, параметры, cwd); роутер по
 конфиг-таблице `router.config.json` находит подходящие гейты, прогоняет их и
-возвращает агрегированное решение: deny/block, инъекция контекста или пропуск.
+возвращает агрегированное решение: block, ask, инъекция контекста или allow.
 
 | Событие | Гейт | Действие |
 |---|---|---|
 | `SessionStart`, `SubagentStart(coder)` | context_inject | инъекция правил + индекса символов |
 | `UserPromptSubmit` | preflight | блок невалидного запроса |
 | `PreToolUse(Bash)` | git_guard | блок: защищённые ветки, `reset --hard`, force-push и т.п. |
-| `PreToolUse(Write/Edit → openspec/)` | spec_structure | блок невалидной спеки |
-| `PreToolUse(Write/Edit → код)` | existing_code | **advisory**: «похожий символ уже есть в X» |
-| `PostToolUse(Write/Edit)` | lint, clean_code | блок по линтеру изменённых файлов; эвристики — предупреждение |
-| `Stop` | build, validate_output | блок до зелёного билда и полных артефактов, максимум 2 ретрая |
+| `PreToolUse(Write/Edit)` | spec_structure | блок записи в `openspec/specs|archive` (остальные пути гейт пропускает сам) |
+| `PreToolUse(Write/Edit)` | existing_code | **advisory**: «похожий символ уже есть в X» (только новые файлы) |
+| `PostToolUse(Write/Edit)` | spec_structure, lint, clean_code | strict-валидация change + блок по линтеру; эвристики — предупреждение |
+| `Stop` | validate_output, spec_structure, build | блок до полных артефактов, валидных changes и зелёного билда; максимум 2 ретрая |
 
 Предохранители: лимит ретраев против бесконечных циклов на Stop,
 latency-бюджет ≤ 200 мс на pre-проверку, при падении гейта — внятная причина и
