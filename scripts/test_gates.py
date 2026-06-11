@@ -160,6 +160,19 @@ def test_spec_structure():
                            "tool_input": {"file_path": "openspec/changes/my-change/proposal.md"}})
         check("ss_pre_change_allow", result["decision"] == "allow", result)
 
+        # Path normalization & case-insensitivity: all variants must BLOCK
+        for variant in ("OpenSpec/Specs/payments/spec.md",
+                        "openspec//specs/payments/spec.md",
+                        "openspec/changes/../specs/payments/spec.md",
+                        "./openspec/specs/payments/spec.md"):
+            result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
+                               "tool_input": {"file_path": variant}})
+            check(f"ss_pre_variant::{variant[:30]}", result["decision"] == "block", (variant, result))
+        # benign nearby path still allowed
+        result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": "openspec/changes/my-change/proposal.md"}})
+        check("ss_pre_change_still_allow", result["decision"] == "allow", result)
+
         # PostToolUse: CLI unavailable -> skip-with-record + advisory context
         write_change(fix, "my-change", complete=True, valid=False)
         os.environ["OPENSPEC_BIN"] = os.path.join(fix, "missing-openspec")

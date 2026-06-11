@@ -52,17 +52,26 @@ def load_quality_gates():
         return {}
 
 
+def _norm_path(value):
+    """Normalize a file path: forward slashes, collapse // and /./, resolve ..,
+    strip a leading ./  so regex guards cannot be bypassed by case, redundant
+    separators, or dot-dot traversal."""
+    p = value.replace("\\", "/")
+    p = os.path.normpath(p).replace("\\", "/")
+    return p[2:] if p.startswith("./") else p
+
+
 def path_from_event(event):
     for key in ("path", "file_path", "filename"):
         value = event.get(key)
         if isinstance(value, str):
-            return value.replace("\\", "/")
+            return _norm_path(value)
     tool_input = event.get("tool_input")
     if isinstance(tool_input, dict):
         for key in ("path", "file_path", "filename"):
             value = tool_input.get(key)
             if isinstance(value, str):
-                return value.replace("\\", "/")
+                return _norm_path(value)
     return ""
 
 

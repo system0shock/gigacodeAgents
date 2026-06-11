@@ -15,8 +15,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _lib
 
-DENY_RE = re.compile(r"(^|/)openspec/(specs|changes/archive)/")
-CHANGE_RE = re.compile(r"(^|/)openspec/changes/([A-Za-z0-9][A-Za-z0-9._-]*)/")
+DENY_RE = re.compile(r"(^|/)openspec/(specs|changes/archive)/", re.IGNORECASE)
+CHANGE_RE = re.compile(r"(^|/)openspec/changes/([A-Za-z0-9][A-Za-z0-9._-]*)/", re.IGNORECASE)
 
 
 def openspec_validate(args):
