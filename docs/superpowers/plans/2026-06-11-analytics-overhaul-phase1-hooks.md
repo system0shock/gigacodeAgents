@@ -248,7 +248,9 @@ def test_stop_budget():
         check("rt_stop_counts_again", sb.run(ev)["decision"] == "block")
 
 
-def test_real_config_and_sizes():
+def test_real_config():
+    # No size checks: the 10k-character limit applies to agent .md files only,
+    # not to Python scripts (user decision 2026-06-11).
     config_path = os.path.join(HOOKS_SRC, "router.config.json")
     if os.path.exists(config_path):
         with open(config_path, "r", encoding="utf-8") as handle:
@@ -259,13 +261,6 @@ def test_real_config_and_sizes():
                       os.path.exists(os.path.join(HOOKS_SRC, "gates", gate + ".py")))
     else:
         print("skip: router.config.json not wired yet")
-    for base, _, names in os.walk(HOOKS_SRC):
-        for name in names:
-            if not name.endswith(".py"):
-                continue
-            with open(os.path.join(base, name), "r", encoding="utf-8") as handle:
-                size = len(handle.read())
-            check(f"rt_size:{name}", size < 10000, f"{size} chars")
 
 
 def main():
@@ -274,7 +269,7 @@ def main():
     test_routing()
     test_gate_failures()
     test_stop_budget()
-    test_real_config_and_sizes()
+    test_real_config()
     print(f"All {PASSED} router checks passed")
 
 

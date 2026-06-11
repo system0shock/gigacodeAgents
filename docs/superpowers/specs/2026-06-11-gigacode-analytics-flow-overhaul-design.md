@@ -304,8 +304,8 @@ blocks an existing-spec fixture and allows a new-capability fixture;
 `gate_final_format` rejects wrong-naming/wrong-placement fixtures;
 `validate_run_output` blocks an incomplete-manifest fixture; BOM-prefixed
 stdin parses correctly; unconfigured quality-gate commands are silent allows;
-`openspec` CLI assertions skip-with-record when the CLI is unavailable; every
-hook/gate file stays below 10,000 characters.
+`openspec` CLI assertions skip-with-record when the CLI is unavailable. The
+10,000-character limit applies to agent `.md` files only, not Python scripts.
 
 ## Out of Scope
 
