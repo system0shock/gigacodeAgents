@@ -8,9 +8,12 @@ separators (`raw_segments`), env-assignments and wrappers (env/nice/bash -c/...)
 are peeled (`peel`), and the program is matched by basename (`_prog`) so
 `cd x && /usr/bin/git.exe reset --hard` is caught the same as `git reset --hard`.
 
-Path policy: writes to enforcement-owned paths (`.gigacode/**`) and openspec
-truth BLOCK (fail-closed — the layer must not be editable by the agent it
-constrains); writes to PROTECTED_PATHS (CI/secrets/infra) ASK.
+Path policy: shell writes to `openspec/specs/` and `openspec/changes/archive/`
+BLOCK; file-tool (WriteFile/Edit) writes to `openspec/specs/` are intentionally
+ALLOWED here — the create-once bootstrap rule for them lives in
+`gate_spec_bootstrap`, whose router route must stay `safety_critical: true` to
+remain fail-closed. `.gigacode/**` self-protect blocks on both channels; writes
+to PROTECTED_PATHS (CI/secrets/infra) ASK.
 
 This gate is self-contained (it does not import _lib) and runs on the
 safety-critical PreToolUse Bash/Shell and WriteFile/Edit routes.
@@ -39,8 +42,7 @@ PROTECTED_PATHS = [
 ]
 # Enforcement-owned paths: writes here BLOCK (fail-closed).
 SELF_PROTECT = [".gigacode/**", ".gigacode"]
-# Mirror of gate_spec_structure.DENY_RE so shell-redirection writes to openspec
-# truth are caught here too (gate_spec_structure only sees WriteFile/Edit).
+# specs/ blocked on the shell channel only; file-tool writes are governed by gate_spec_bootstrap (create-once).
 OPENSPEC_ARCHIVE_RE=re.compile(r"(^|/)openspec/changes/archive/",re.IGNORECASE)
 OPENSPEC_SPECS_RE=re.compile(r"(^|/)openspec/specs/",re.IGNORECASE)
 

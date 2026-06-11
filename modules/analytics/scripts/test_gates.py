@@ -98,6 +98,12 @@ def test_git_guard():
           gate.run({"tool_input": {"file_path": ".env"}})["decision"] == "ask")
     check("gg_benign",
           gate.run({"tool_input": {"command": "git status"}})["decision"] == "allow")
+    check("gg_file_archive",
+          gate.run({"tool_input": {"file_path": "openspec/changes/archive/a.md"}})["decision"] == "block")
+    check("gg_file_archive_traversal",
+          gate.run({"tool_input": {"file_path": "openspec/specs/../changes/archive/a.md"}})["decision"] == "block")
+    check("gg_shell_tee_specs",
+          gate.run({"tool_input": {"command": "tee openspec/specs/cap/spec.md"}})["decision"] == "block")
 
 
 def main():
