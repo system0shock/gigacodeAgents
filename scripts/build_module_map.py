@@ -31,11 +31,14 @@ def load_graph(path):
 def build_lines(data, graph_path):
     nodes = {n["id"]: n for n in data.get("nodes", [])
              if isinstance(n, dict) and "id" in n}
-    links = [l for l in data.get("links", []) if isinstance(l, dict)]
+    links = [lnk for lnk in data.get("links", []) if isinstance(lnk, dict)]
     degree = defaultdict(int)
     for link in links:
-        degree[link.get("source")] += 1
-        degree[link.get("target")] += 1
+        # count only endpoints that exist: dangling links must not inflate
+        # a real node's rank in the degree sort below
+        for endpoint in (link.get("source"), link.get("target")):
+            if endpoint in nodes:
+                degree[endpoint] += 1
     communities = defaultdict(list)
     for node in nodes.values():
         communities[node.get("community")].append(node)
@@ -46,7 +49,8 @@ def build_lines(data, graph_path):
     for cid, members in sorted(communities.items(),
                                key=lambda kv: (-len(kv[1]), str(kv[0]))):
         members.sort(key=lambda n: -degree[n["id"]])
-        lines.append(f"## Module {cid} ({len(members)} nodes)")
+        cid_label = "unassigned" if cid is None else cid
+        lines.append(f"## Module {cid_label} ({len(members)} nodes)")
         for node in members[:8]:
             label = node.get("label") or node["id"]
             src = node.get("source_file") or ""
@@ -87,17 +91,22 @@ def main():
                         default=os.path.join(".gigacode", "context", "module-map.md"))
     parser.add_argument("--max-lines", type=int, default=120)
     args = parser.parse_args()
+    if args.max_lines < 4:
+        sys.exit("module-map: --max-lines must be >= 4 (the header alone takes 4 lines)")
 
     data = load_graph(args.graph)
     lines = build_lines(data, args.graph.replace("\\", "/"))
-    if len(lines) > args.max_lines:
-        lines = lines[:max(args.max_lines, 1)] + ["", "(truncated: --max-lines reached)"]
+    total = len(lines)
+    if total > args.max_lines:
+        lines = lines[:args.max_lines] + ["", "(truncated: --max-lines reached)"]
     out_dir = os.path.dirname(args.out)
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines) + "\n")
-    print(f"module-map: wrote {args.out} ({len(lines)} lines)")
+    note = f"{len(lines)} lines" if total <= args.max_lines \
+        else f"{args.max_lines} of {total} lines, truncated"
+    print(f"module-map: wrote {args.out} ({note})")
 
 
 if __name__ == "__main__":

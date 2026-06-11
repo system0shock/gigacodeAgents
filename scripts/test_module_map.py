@@ -83,6 +83,17 @@ def main():
         check("map_missing_graph_fails", rc != 0, (rc, out))
         rc, out, _ = run_builder(tmp, {"nodes": [], "links": []})
         check("map_empty_graph_fails", rc != 0, (rc, out))
+        rc, out, _ = run_builder(tmp, sample_graph(), ["--max-lines", "0"])
+        check("map_invalid_max_lines_fails", rc != 0, (rc, out))
+
+    with tempfile.TemporaryDirectory(prefix="module-map-test-") as tmp:
+        # null community renders as 'unassigned'; dangling link must not crash
+        graph = {"nodes": [{"id": "x_Lone", "label": "Lone"}],
+                 "links": [{"source": "x_Lone", "target": "ghost_Node",
+                            "relation": "calls"}]}
+        rc, out, text = run_builder(tmp, graph)
+        check("map_null_community",
+              rc == 0 and "## Module unassigned (1 nodes)" in text, (rc, out, text))
 
     print(f"\nAll {PASSED} module-map checks passed")
 
