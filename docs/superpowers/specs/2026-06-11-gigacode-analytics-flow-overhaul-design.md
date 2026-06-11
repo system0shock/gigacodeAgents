@@ -183,7 +183,7 @@ and the linkage between a bootstrap run and its outputs:
   "feature": "bonus-accrual",
   "run_date": "2026-06-11",
   "code_commit": "<sha>",
-  "status": "draft|confirmed|complete",
+  "status": "scoping|draft|confirmed|complete",
   "scope": {"included": "...", "excluded": "...", "sources": ["code", "user"]},
   "capability": "bonus-accrual",
   "produced": {
@@ -258,9 +258,12 @@ Gate inventory:
   same semantics as dev-flow `gate_lint`/`gate_build`. Offline gates stay
   stdlib-only (no PyYAML), so YAML validity beyond naming/placement is
   delegated to configured commands.
-- `validate_run_output` — Stop gate: if a manifest with `status: draft|confirmed`
-  exists, checks required files, spec validation, and manifest completeness;
-  subject to the Stop budget.
+- `validate_run_output` — Stop gate: for every run manifest, checks
+  stage-appropriate completeness (`scoping`: nothing, so the mandatory
+  scope-confirmation stop is never blocked; `draft`: the 5 technical docs;
+  `confirmed`: plus the capability spec; `complete`: plus every `produced`
+  file) and runs spec validation via the configured command; subject to the
+  Stop budget.
 
 Testing mirrors dev-flow: offline `scripts/test_router.py` and
 `scripts/test_gates.py` analogs inside the module, wired into both smoke
