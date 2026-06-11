@@ -307,6 +307,15 @@ def test_build():
         check("build_broken_command_note",
               result["decision"] == "allow" and "additionalContext" in result, result)
 
+        # hanging build -> timeout note, allow (costs ~1 s: timeout clamps to 1)
+        with open(os.path.join(fix, "hang.py"), "w", encoding="utf-8") as handle:
+            handle.write("import time\ntime.sleep(30)\n")
+        write_qg(fix, {"build": {"command": "python hang.py", "timeout_seconds": 0}})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": pr_message})
+        check("build_timeout_note",
+              result["decision"] == "allow"
+              and "таймаут" in result.get("additionalContext", ""), result)
+
 
 def main():
     test_lib()

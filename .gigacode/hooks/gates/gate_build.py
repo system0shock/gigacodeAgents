@@ -20,9 +20,19 @@ def run(event):
     config = _lib.load_quality_gates().get("build") or {}
     command = (config.get("command") or "").strip()
     if not command:
-        _lib.journal_skip("gate_build", "build command not configured")
+        # shipped default is an empty command: allow silently (same as lint)
         return {"decision": "allow"}
-    rc, tail = _lib.run_command(command, config.get("timeout_seconds", 600))
+    timeout = config.get("timeout_seconds", 600)
+    timeout = max(1, timeout) if isinstance(timeout, (int, float)) else 600
+    # ceiling below the 630s Stop hook timeout: past it the harness kills the
+    # router mid-build and the gate would block instead of advising
+    timeout = min(timeout, 620)
+    rc, tail = _lib.run_command(command, timeout)
+    if rc == -2:
+        _lib.journal_skip("gate_build", f"{command}: timed out")
+        return {"decision": "allow", "additionalContext": (
+            f"gate_build: сборка '{command}' превысила таймаут {timeout}s. "
+            "Зафиксируй пропуск в verification.md.")}
     if rc < 0:
         _lib.journal_skip("gate_build", f"{command}: {tail}")
         return {"decision": "allow", "additionalContext": (
