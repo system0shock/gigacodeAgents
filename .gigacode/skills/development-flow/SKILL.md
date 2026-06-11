@@ -67,6 +67,11 @@ If a matching symbol is found:
 If no match is found, record that in `journal.md` and proceed with new implementation.
 This rule applies in both plan-only and implement modes.
 
+Карта модулей: на старте сессии хук инжектит `.gigacode/context/module-map.md`
+(если файл есть). После заметных изменений архитектуры перегенерируй её:
+`python scripts/build_module_map.py` (требует готовый `graphify-out/graph.json`,
+см. README «Карта модулей»).
+
 ## Git Safety
 
 Before source edits in implement mode:
