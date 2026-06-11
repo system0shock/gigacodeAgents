@@ -106,8 +106,27 @@ def test_git_guard():
           gate.run({"tool_input": {"command": "tee openspec/specs/cap/spec.md"}})["decision"] == "block")
 
 
+def test_context_inject():
+    gate = load_gate("gate_context_inject")
+    with fixture_root() as tmp:
+        result = gate.run({"hook_event_name": "SessionStart"})
+        ctx = result.get("additionalContext", "")
+        check("ci_session_rules", "reverse-analysis" in ctx, ctx[:200])
+        check("ci_session_caps_none", "none" in ctx, ctx[-200:])
+        os.makedirs(os.path.join(tmp, "openspec", "specs", "cap-a"))
+        ctx2 = gate.run({"hook_event_name": "SessionStart"}).get("additionalContext", "")
+        check("ci_session_caps_listed", "cap-a" in ctx2, ctx2[-200:])
+        sub = gate.run({"hook_event_name": "SubagentStart", "agent_type": "documentation"})
+        check("ci_subagent_search", "find_symbol" in sub.get("additionalContext", ""))
+        cmd = gate.run({"hook_event_name": "UserPromptSubmit", "prompt": "/reverse-analysis card"})
+        check("ci_command_bootstrap", "bootstrap" in cmd.get("additionalContext", "").lower())
+        other = gate.run({"hook_event_name": "UserPromptSubmit", "prompt": "привет"})
+        check("ci_other_prompt_silent", "additionalContext" not in other)
+
+
 def main():
     test_git_guard()
+    test_context_inject()
     print(f"All {PASSED} gate checks passed")
 
 
