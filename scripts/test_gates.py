@@ -251,6 +251,16 @@ def test_lint():
         check("lint_broken_command_note",
               result["decision"] == "allow" and "additionalContext" in result, result)
 
+        # hanging linter -> timeout note, allow (costs ~1 s: timeout clamps to 1)
+        with open(os.path.join(fix, "hang.py"), "w", encoding="utf-8") as handle:
+            handle.write("import time\ntime.sleep(30)\n")
+        write_qg(fix, {"lint": {"command": "python hang.py", "applies_to": ["**/*.kt"],
+                                "timeout_seconds": 0}})
+        result = gate.run(event)
+        check("lint_timeout_note",
+              result["decision"] == "allow"
+              and "таймаут" in result.get("additionalContext", ""), result)
+
         # list form: kotlin + java linters side by side
         write_script(fix, "fail2.py", 2)
         write_qg(fix, {"lint": [
