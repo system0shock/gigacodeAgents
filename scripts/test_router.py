@@ -294,11 +294,19 @@ def main():
                         "tool_input": {"command": "echo x > .github/workflows/deploy.yml"}})
     check("guard_shell_ci_ask", result["decision"] in ("ask", "block"), result)
 
-    # 19. WriteFile/Edit to enforcement-owned paths MUST block (self-protection)
+    # 19. WriteFile/Edit to enforcement-owned paths MUST block (self-protection).
+    # The logs/* entries are the PRIMARY closure of the Stop-budget-seed and
+    # journal-tamper findings: if the agent cannot write router-state.json, it
+    # cannot pre-seed the budget counter regardless of load_state sanitizing.
     for p in (".gigacode/hooks/gates/git_guard.py", ".gigacode/hooks/router.config.json",
-              ".gigacode/quality-gates.json", ".gigacode/settings.json"):
+              ".gigacode/quality-gates.json", ".gigacode/settings.json",
+              ".gigacode/logs/router-state.json", ".gigacode/logs/decisions.jsonl"):
         result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": p}})
         check(f"guard_self::{p[-24:]}", result["decision"] == "block", (p, result))
+    # and via shell redirection (the no-file_path channel)
+    result = run_router("PreToolUse", {"tool_name": "Bash",
+                        "tool_input": {"command": "echo {} > .gigacode/logs/router-state.json"}})
+    check("guard_shell_state_block", result["decision"] == "block", result)
 
     # 20. Benign controls MUST still allow (no over-blocking regressions)
     GUARD_ALLOW = [
