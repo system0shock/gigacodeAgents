@@ -85,7 +85,8 @@ def build_lines(data, graph_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Render graphify graph.json into .gigacode/context/module-map.md")
+        description="Render graphify graph.json into .gigacode/context/module-map.md. "
+                    "Run from the repo root: the default paths are relative.")
     parser.add_argument("--graph", default=os.path.join("graphify-out", "graph.json"))
     parser.add_argument("--out",
                         default=os.path.join(".gigacode", "context", "module-map.md"))
