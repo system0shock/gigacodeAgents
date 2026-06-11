@@ -232,7 +232,7 @@ Routes (`router.config.json`):
 | `SubagentStart` (`^(code-mapping\|documentation)$`) | `gate_context_inject` | |
 | `PreToolUse` (`^(Bash\|Shell)$`) | `git_guard` | safety-critical |
 | `PreToolUse` (`^(WriteFile\|Edit)$`) | `git_guard` | safety-critical |
-| `PreToolUse` (`^(WriteFile\|Edit)$`) | `gate_spec_bootstrap` | bootstrap rule for `openspec/specs/` |
+| `PreToolUse` (`^(WriteFile\|Edit)$`) | `gate_spec_bootstrap` | bootstrap rule for `openspec/specs/`; safety-critical (fail-closed) |
 | `PostToolUse` (`^(WriteFile\|Edit)$`) | `gate_techdocs`, `gate_final_format` | each gate self-filters by path |
 | `Stop` | `validate_run_output` | manifest- and repo-state-driven |
 
@@ -245,6 +245,9 @@ Gate inventory:
 - `gate_spec_bootstrap` — blocks writes to an **existing**
   `openspec/specs/<capability>/spec.md`; allows creation. Advisory warning for
   `analytics/functional-requirements/` writes with no spec write in the run.
+  Its route is safety-critical (crash = block): in the analytics module
+  `git_guard` blocks `openspec/specs/` only on the shell channel, so this gate
+  is the sole file-tool protection and must fail closed.
 - `gate_techdocs` — for `docs/features/**/*.adoc`: AsciiDoc title, no Markdown
   fences/headings, Russian content, metadata header present (feature, run
   date, code commit; links to final artifacts are appended at close, so the

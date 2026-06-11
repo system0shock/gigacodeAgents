@@ -1444,7 +1444,8 @@ git commit -m "Add run-output Stop gate"
     {
       "event": "PreToolUse",
       "tool_pattern": "^(WriteFile|Edit)$",
-      "gates": ["gate_spec_bootstrap"]
+      "gates": ["gate_spec_bootstrap"],
+      "safety_critical": true
     },
     {
       "event": "PostToolUse",
