@@ -18,6 +18,8 @@ ALLOW_GATE = "def run(event):\n    return {'decision': 'allow'}\n"
 BLOCK_GATE = "def run(event):\n    return {'decision': 'block', 'reason': 'fixture block'}\n"
 CRASH_GATE = "def run(event):\n    raise RuntimeError('boom')\n"
 BAD_GATE = "def run(event):\n    return ['nope']\n"
+CONTEXT_GATE = ("def run(event):\n"
+                "    return {'decision': 'allow', 'additionalContext': 'ctx-marker'}\n")
 
 
 def check(name, condition, detail=""):
@@ -55,9 +57,12 @@ class Sandbox:
 
     def run(self, payload, args=()):
         raw = payload if isinstance(payload, bytes) else json.dumps(payload).encode("utf-8")
-        proc = subprocess.run(
-            [sys.executable, os.path.join(self.hooks, "router.py"), *args],
-            input=raw, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+        try:
+            proc = subprocess.run(
+                [sys.executable, os.path.join(self.hooks, "router.py"), *args],
+                input=raw, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+        except subprocess.TimeoutExpired:
+            raise SystemExit("FAIL harness: router timed out (>60s)")
         out = proc.stdout.decode("utf-8", errors="replace").strip()
         if proc.returncode != 0:
             raise SystemExit(f"router exit {proc.returncode}: {proc.stderr.decode(errors='replace')}")
@@ -95,8 +100,10 @@ def test_routing():
             {"event": "PreToolUse", "tool_pattern": "^(WriteFile|Edit)$",
              "gates": ["fixture_block"]},
             {"event": "SubagentStart", "agent_pattern": "^(code-mapping|documentation)$",
-             "gates": ["fixture_block"]}]})
+             "gates": ["fixture_block"]},
+            {"event": "SessionStart", "gates": ["fixture_context"]}]})
         sb.gate("fixture_block", BLOCK_GATE)
+        sb.gate("fixture_context", CONTEXT_GATE)
         check("rt_tool_match", sb.run({"hook_event_name": "PreToolUse",
                                        "tool_name": "Edit"})["decision"] == "block")
         check("rt_tool_anchored", sb.run({"hook_event_name": "PreToolUse",
@@ -105,6 +112,10 @@ def test_routing():
                                         "agent_type": "documentation"})["decision"] == "block")
         check("rt_agent_missing_skips",
               sb.run({"hook_event_name": "SubagentStart"})["decision"] == "allow")
+        ctx = sb.run({"hook_event_name": "SessionStart"})
+        check("rt_context_passthrough",
+              ctx["decision"] == "allow" and ctx.get("additionalContext") == "ctx-marker",
+              repr(ctx))
 
 
 def test_gate_failures():
