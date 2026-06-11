@@ -27,7 +27,9 @@ $required = @(
   ".gigacode/hooks/gates/gate_build.py",
   ".gigacode/hooks/gates/gate_clean_code.py",
   ".gigacode/hooks/gates/gate_existing_code.py",
-  ".gigacode/quality-gates.json"
+  ".gigacode/quality-gates.json",
+  "scripts/build_module_map.py",
+  "scripts/test_module_map.py"
 )
 
 foreach ($path in $required) {
@@ -105,6 +107,11 @@ if ($LASTEXITCODE -ne 0) {
 python scripts/test_gates.py
 if ($LASTEXITCODE -ne 0) {
   throw "gate tests failed"
+}
+
+python scripts/test_module_map.py
+if ($LASTEXITCODE -ne 0) {
+  throw "module-map tests failed"
 }
 
 if (Get-Command openspec -ErrorAction SilentlyContinue) {

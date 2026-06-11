@@ -29,6 +29,8 @@ required=(
   ".gigacode/hooks/gates/gate_clean_code.py"
   ".gigacode/hooks/gates/gate_existing_code.py"
   ".gigacode/quality-gates.json"
+  "scripts/build_module_map.py"
+  "scripts/test_module_map.py"
 )
 
 for path in "${required[@]}"; do
@@ -85,6 +87,7 @@ printf '%s' "$missing" | grep -q '"decision": "block"'
 "$python_cmd" scripts/test_router.py
 "$python_cmd" -m json.tool .gigacode/quality-gates.json >/dev/null
 "$python_cmd" scripts/test_gates.py
+"$python_cmd" scripts/test_module_map.py
 
 if command -v openspec >/dev/null 2>&1; then
   # Use 'list --specs' not 'validate --strict': validate requires --type change

@@ -162,6 +162,10 @@
     "serena": {
       "command": "serena",
       "args": ["start-mcp-server", "--context", "ide", "--project-from-cwd"]
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
     }
   }
 }
