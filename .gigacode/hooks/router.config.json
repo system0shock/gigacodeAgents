@@ -33,6 +33,11 @@
       "gates": ["gate_spec_structure"]
     },
     {
+      "event": "PreToolUse",
+      "tool_pattern": "^(WriteFile|Edit)$",
+      "gates": ["gate_existing_code"]
+    },
+    {
       "event": "PostToolUse",
       "tool_pattern": "^(WriteFile|Edit)$",
       "gates": ["gate_spec_structure", "gate_lint", "gate_clean_code"]

@@ -381,6 +381,47 @@ def test_clean_code():
         check("cc_marker_string_fallback", "additionalContext" not in result, result)
 
 
+def init_git(root_dir):
+    subprocess.run(["git", "init", "-q"], cwd=root_dir, check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(["git", "add", "-A"], cwd=root_dir, check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def test_existing_code():
+    gate = load_gate("gate_existing_code")
+    with fixture_root() as fix:
+        src = os.path.join(fix, "src")
+        os.makedirs(src)
+        with open(os.path.join(src, "Existing.kt"), "w", encoding="utf-8") as handle:
+            handle.write('class PaymentService(\n    @KafkaListener(topics = ["payment-events"])\n)\n')
+        init_git(fix)
+
+        # duplicate class name -> advisory context naming the existing file
+        result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": "src/new/PaymentService2.kt",
+                                          "content": "class PaymentService { }"}})
+        check("ec_duplicate_symbol_warn", "Existing.kt" in result.get("additionalContext", ""), result)
+        check("ec_advisory_allow", result["decision"] == "allow", result)
+
+        # duplicate Kafka topic literal -> advisory context
+        result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": "src/new/AnotherConsumer.kt",
+                                          "content": '@KafkaListener(topics = ["payment-events"])\nclass AnotherConsumer { }'}})
+        check("ec_topic_warn", "payment-events" in result.get("additionalContext", ""), result)
+
+        # no declarations in content -> silent allow
+        result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": "src/notes.txt", "content": "x = 1"}})
+        check("ec_no_symbols_silent", "additionalContext" not in result, result)
+
+        # Edit of an existing file is skipped
+        result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "Edit",
+                           "tool_input": {"file_path": os.path.join(src, "Existing.kt"),
+                                          "new_string": "class PaymentService { }"}})
+        check("ec_edit_existing_skip", "additionalContext" not in result, result)
+
+
 def main():
     test_lib()
     test_context_inject()
@@ -388,6 +429,7 @@ def main():
     test_lint()
     test_build()
     test_clean_code()
+    test_existing_code()
     print(f"\nAll {PASSED} gate checks passed")
 
 
