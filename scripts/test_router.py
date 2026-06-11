@@ -242,6 +242,7 @@ def main():
         "git push -f",
         "git push -f origin main",
         "git push origin +main",
+        "git push origin +main:main",
         # uncovered destructive subcommands
         "git update-ref -d refs/heads/main",
         "git reflog expire --expire=now --all",
@@ -287,7 +288,7 @@ def main():
         "git add .", "git commit -m wip", "git push origin feature/x",
         "git checkout -b feature/new", "git checkout main", "git switch main",
         "git restore --staged file.kt", "git stash", "git stash pop",
-        "git reset --soft HEAD~1", "git reset file.kt", "git clean -n",
+        "git reset --soft HEAD~1", "git reset file.kt", "git clean -n", "git clean -fn",
         "echo hello", "ls -la", "cat README.md", "cp a.txt b.txt", "rm build/tmp.o",
     ]
     for cmd in GUARD_ALLOW:

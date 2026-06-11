@@ -143,11 +143,11 @@ def git_destructive(sub,rest):
     if sub=="reset" and "--hard" in rest: return "Blocked `git reset --hard`."
     if sub=="clean":
         combined="".join(t.lstrip("-") for t in rest if t.startswith("-"))
-        if "f" in combined: return "Blocked destructive `git clean -f`."
+        if "f" in combined and "n" not in combined: return "Blocked destructive `git clean -f`."
     if sub=="push":
         if any(t=="-f" or t.startswith("--force") for t in rest): return "Blocked force push."
         if "--delete" in rest or "--mirror" in rest: return "Blocked remote ref deletion/mirror push."
-        if any(re.match(r"^[+:][^:\s]+$",t) for t in rest): return "Blocked force/delete by refspec."
+        if any(re.match(r"^\+[^\s]+$",t) or re.match(r"^:[^:\s]+$",t) for t in rest): return "Blocked force/delete by refspec."
     if sub=="branch" and any(t in("-d","-D","--delete") for t in rest): return "Blocked local branch deletion."
     if sub=="remote" and rest[:1]==["set-url"]: return "Blocked remote URL change."
     if sub in DESTRUCTIVE_SUBCMDS: return f"Blocked potentially irreversible `git {sub}`."
