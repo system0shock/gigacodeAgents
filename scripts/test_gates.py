@@ -210,10 +210,63 @@ def test_spec_structure():
             print("SKIP: openspec CLI not on PATH; live validation tests skipped")
 
 
+def test_lint():
+    gate = load_gate("gate_lint")
+    with fixture_root() as fix:
+        event = {"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                 "tool_input": {"file_path": "src/Main.kt"}}
+
+        # unconfigured -> silent allow (journal-only skip)
+        write_qg(fix, {"lint": {"command": "", "applies_to": ["**/*.kt"]}})
+        result = gate.run(event)
+        check("lint_unconfigured_allow",
+              result["decision"] == "allow" and "additionalContext" not in result, result)
+
+        # failing linter blocks
+        write_script(fix, "fail.py", 1)
+        write_qg(fix, {"lint": {"command": "python fail.py", "applies_to": ["**/*.kt"],
+                                "timeout_seconds": 30}})
+        result = gate.run(event)
+        check("lint_fail_block", result["decision"] == "block", result)
+        check("lint_fail_reason", "exit 1" in result.get("reason", ""), result)
+
+        # passing linter allows
+        write_script(fix, "pass.py", 0)
+        write_qg(fix, {"lint": {"command": "python pass.py", "applies_to": ["**/*.kt"],
+                                "timeout_seconds": 30}})
+        result = gate.run(event)
+        check("lint_pass_allow", result["decision"] == "allow", result)
+
+        # non-matching file skipped even with a failing command
+        write_qg(fix, {"lint": {"command": "python fail.py", "applies_to": ["**/*.kt"],
+                                "timeout_seconds": 30}})
+        result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": "README.md"}})
+        check("lint_nonmatching_skip", result["decision"] == "allow", result)
+
+        # configured-but-broken command -> allow with anomaly note
+        write_qg(fix, {"lint": {"command": "definitely-missing-tool-xyz",
+                                "applies_to": ["**/*.kt"], "timeout_seconds": 30}})
+        result = gate.run(event)
+        check("lint_broken_command_note",
+              result["decision"] == "allow" and "additionalContext" in result, result)
+
+        # list form: kotlin + java linters side by side
+        write_script(fix, "fail2.py", 2)
+        write_qg(fix, {"lint": [
+            {"command": "python pass.py", "applies_to": ["**/*.kt"], "timeout_seconds": 30},
+            {"command": "python fail2.py", "applies_to": ["**/*.java"], "timeout_seconds": 30},
+        ]})
+        result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": "src/Main.java"}})
+        check("lint_list_java_block", result["decision"] == "block", result)
+
+
 def main():
     test_lib()
     test_context_inject()
     test_spec_structure()
+    test_lint()
     print(f"\nAll {PASSED} gate checks passed")
 
 
