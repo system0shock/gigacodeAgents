@@ -46,6 +46,11 @@ OPENSPEC_TRUTH_RE = re.compile(r"(^|/)openspec/(specs|changes/archive)/", re.IGN
 # Wrappers that prefix another command (the real command is their tail).
 PREFIX_WRAPPERS = {"env", "nice", "ionice", "time", "stdbuf", "nohup",
                    "sudo", "doas", "timeout", "xargs"}
+# Wrapper short/long flags that consume a separate WORD value (e.g. `sudo -u
+# root`, `env -u NAME`). Numeric values (`nice -n 10`, `timeout 30`) are caught
+# generically by the isdigit() skip in peel(), so only word-valued flags are
+# listed here to avoid swallowing the real command after a boolean flag.
+WRAPPER_VALUE_FLAGS = {"-u", "-g", "-U", "--user", "--group"}
 # Wrappers that take the command as a -c / -Command / /c string argument.
 DASH_C_WRAPPERS = {"bash", "sh", "zsh", "dash", "ash", "ksh",
                    "cmd", "command", "powershell", "pwsh"}
@@ -61,7 +66,9 @@ GIT_GLOBAL_VALUE_FLAGS = {"-c", "-C", "--git-dir", "--work-tree", "--namespace",
                           "--super-prefix", "--exec-path", "--config-env",
                           "--attr-source", "--list-cmds"}
 # git subcommands that are inherently irreversible / history-destroying.
-DESTRUCTIVE_SUBCMDS = {"update-ref", "reflog", "gc", "filter-branch", "filter-repo"}
+# (reflog and gc are handled with action/flag granularity in git_destructive so
+# read-only `git reflog show` and routine `git gc --auto` are not blocked.)
+DESTRUCTIVE_SUBCMDS = {"update-ref", "filter-branch", "filter-repo"}
 
 
 def run_git(args):
@@ -135,6 +142,13 @@ def _prog(tok):
     return base[:-4] if base.endswith(".exe") else base
 
 
+def _is_dash_c(tok):
+    """True for a -c / -ce / -lc / -Command / /c 'run this string' flag — i.e.
+    a short-flag cluster containing 'c', or the long/cmd spellings."""
+    t = tok.lower()
+    return t in ("-command", "/c") or bool(re.match(r"^-[a-z]*c", t))
+
+
 def _tokenize(s):
     # posix=True removes quotes during tokenization (matching the real shell),
     # so quoted flags like "--hard" are compared as --hard, not '"--hard"'.
@@ -195,16 +209,31 @@ def peel(tokens):
             i += 1
             continue
         prog = _prog(tok)
-        if prog in PREFIX_WRAPPERS:  # env / nice / sudo ... drop the wrapper + its flags
+        if prog in PREFIX_WRAPPERS:  # env / nice / sudo / timeout ... drop wrapper + flags/values
             i += 1
-            while i < len(tokens) and tokens[i].startswith("-"):
-                i += 1
+            while i < len(tokens):
+                t = tokens[i]
+                if t.startswith("-"):
+                    i += 1
+                    # skip a value belonging to this flag: a word value of a
+                    # known value-flag (`sudo -u root`) or any numeric value
+                    # (`nice -n 10`, `stdbuf -o 0`)
+                    if (i < len(tokens) and not tokens[i].startswith("-")
+                            and (t.lower() in WRAPPER_VALUE_FLAGS or tokens[i].isdigit())):
+                        i += 1
+                elif t.isdigit():  # positional numeric value, e.g. `timeout 30 ...`
+                    i += 1
+                else:
+                    break  # first real command token
             continue
-        if prog in DASH_C_WRAPPERS:  # bash -c "..." / cmd /c ...
+        if prog in DASH_C_WRAPPERS:  # bash -c "..." / bash -ce "..." / cmd /c ...
             k = i + 1
-            while k < len(tokens) and tokens[k].lower() not in ("-c", "-command", "/c"):
+            while k < len(tokens) and not _is_dash_c(tokens[k]):
                 k += 1
             rest = tokens[k + 1:] if k < len(tokens) else []
+            # No -c found (e.g. `bash script.sh`): the command is in a file we
+            # cannot inspect here, so peel yields nothing and the write is left
+            # to the file-path gates.
             if len(rest) == 1 and " " in rest[0]:
                 return to_leaves(rest[0])      # quoted single-string command
             inner = " ".join(rest)
@@ -258,6 +287,10 @@ def git_destructive(sub, rest):
         return "Blocked local branch deletion."
     if sub == "remote" and rest[:1] == ["set-url"]:
         return "Blocked remote URL change."
+    if sub == "reflog" and rest[:1] in (["expire"], ["delete"], ["drop"]):
+        return f"Blocked potentially irreversible `git reflog {rest[0]}`."
+    if sub == "gc" and any(t.startswith("--prune") and t != "--prune=never" for t in rest):
+        return "Blocked `git gc --prune` (drops dangling-commit recovery)."
     if sub in DESTRUCTIVE_SUBCMDS:
         return f"Blocked potentially irreversible `git {sub}`."
     if sub == "checkout" and "--" in rest:

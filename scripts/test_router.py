@@ -251,6 +251,16 @@ def main():
         "git push -f origin main",
         "git push origin +main",
         "git push origin +main:main",
+        # wrappers with value-arguments (flag-value or positional) must still block
+        "timeout 30 git reset --hard",
+        "nice -n 10 git reset --hard",
+        "sudo -u root git reset --hard",
+        "ionice -c 2 git reset --hard",
+        "stdbuf -o 0 git reset --hard",
+        "nice -n 10 rm -rf .git",
+        # combined -c flag wrappers
+        "bash -ce \"git reset --hard\"",
+        "sh -ec \"git clean -fd\"",
         # uncovered destructive subcommands
         "git update-ref -d refs/heads/main",
         "git reflog expire --expire=now --all",
@@ -297,6 +307,8 @@ def main():
         "git checkout -b feature/new", "git checkout main", "git switch main",
         "git restore --staged file.kt", "git stash", "git stash pop",
         "git reset --soft HEAD~1", "git reset file.kt", "git clean -n", "git clean -fn",
+        "timeout 30 git status", "nice -n 5 git diff", "sudo -i git status",
+        "git reflog", "git reflog show", "git gc --auto", "git gc",
         "echo hello", "ls -la", "cat README.md", "cp a.txt b.txt", "rm build/tmp.o",
     ]
     for cmd in GUARD_ALLOW:
