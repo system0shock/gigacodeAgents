@@ -40,7 +40,11 @@
       "Bash(git remote set-url*)",
       "Bash(rm -rf *)",
       "Bash(del /s *)",
-      "Bash(format *)"
+      "Bash(format *)",
+      "Edit(.gigacode/**)",
+      "Write(.gigacode/**)",
+      "Edit(.gigacode/settings.json)",
+      "Edit(.gigacode/quality-gates.json)"
     ]
   },
   "hooks": {

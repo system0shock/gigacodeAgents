@@ -91,6 +91,19 @@ def test_lib():
             line = handle.read()
         check("lib_journal_skip", '"gate_test"' in line and '"skip"' in line, line)
 
+    # Task 3: run_command exe-resolution hardening
+    with fixture_root() as fix:
+        # (a) planted repo-root script must NOT be auto-resolved as a bare command
+        with open(os.path.join(fix, "gradlew.bat"), "w", encoding="utf-8") as h:
+            h.write("@echo off\nexit /b 0\n")
+        rc, tail = lib.run_command("gradlew", 5)
+        check("lib_no_reporoot_exe", rc == -1, (rc, tail))
+        # (b) explicit relative path still resolves and runs
+        with open(os.path.join(fix, "ok.bat"), "w", encoding="utf-8") as h:
+            h.write("@echo off\nexit /b 0\n")
+        rc, tail = lib.run_command("./ok.bat", 5)
+        check("lib_explicit_relpath_runs", rc == 0, (rc, tail))
+
 
 def test_context_inject():
     gate = load_gate("gate_context_inject")

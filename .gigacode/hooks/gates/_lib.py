@@ -123,13 +123,27 @@ def run_command(command, timeout, extra_args=None):
               and token[0] in "\"'" else token for token in tokens]
     if not tokens:
         return -1, "empty command"
-    exe = shutil.which(tokens[0]) or shutil.which(tokens[0], path=root())
+    name = tokens[0]
+    # Detect whether the token is an explicit path (starts with . / \ or contains a
+    # path separator, or is absolute).  Only explicit paths are resolved relative to
+    # root() — bare names like "gradlew" or "mvnw" are resolved ONLY against the
+    # trusted system PATH (shutil.which) so a planted file at the repo root cannot
+    # be elevated to an executable inside the gate process.
+    is_explicit = (
+        name.startswith((".", "/", "\\"))
+        or os.path.isabs(name)
+        or ("/" in name)
+        or ("\\" in name)
+    )
+    if is_explicit:
+        # explicit path: resolve relative to root(), fall back to PATH
+        candidate = name if os.path.isabs(name) else os.path.join(root(), name)
+        exe = candidate if os.path.exists(candidate) else shutil.which(name)
+    else:
+        # bare name: ONLY the trusted system PATH — never the repo root
+        exe = shutil.which(name)
     if not exe:
-        candidate = os.path.join(root(), tokens[0])
-        if os.path.exists(candidate):
-            exe = candidate
-        else:
-            return -1, f"command not found: {tokens[0]}"
+        return -1, f"command not found: {name}"
     try:
         proc = subprocess.run(
             [exe] + tokens[1:] + list(extra_args or []),
