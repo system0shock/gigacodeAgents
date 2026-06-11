@@ -24,8 +24,13 @@
     {
       "event": "PreToolUse",
       "tool_pattern": "^(WriteFile|Edit)$",
-      "gates": ["git_guard", "gate_spec_structure"],
+      "gates": ["git_guard"],
       "safety_critical": true
+    },
+    {
+      "event": "PreToolUse",
+      "tool_pattern": "^(WriteFile|Edit)$",
+      "gates": ["gate_spec_structure"]
     },
     {
       "event": "PostToolUse",

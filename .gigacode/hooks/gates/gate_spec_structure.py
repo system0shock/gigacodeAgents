@@ -83,7 +83,7 @@ def run(event):
             return {"decision": "allow"}
         if change_complete(change_id):
             return {"decision": "block", "reason": (
-                f"openspec validate {change_id} --strict failed:\n{detail}")}
+                f"openspec validate {change_id} --type change --strict failed:\n{detail}")}
         return {"decision": "allow", "additionalContext": (
             f"gate_spec_structure: change '{change_id}' ещё не проходит strict-валидацию "
             f"(артефакты не завершены):\n{detail}")}

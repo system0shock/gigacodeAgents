@@ -175,6 +175,12 @@ def test_spec_structure():
         result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "hello"})
         check("ss_stop_no_mention_allow", result["decision"] == "allow", result)
 
+        # PostToolUse on a non-openspec path: fast allow, no CLI spawn
+        result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": "src/main/kotlin/Main.kt"}})
+        check("ss_post_non_openspec_allow",
+              result["decision"] == "allow" and "additionalContext" not in result, result)
+
         if shutil.which("openspec"):
             # PostToolUse: complete but invalid change -> block
             result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
