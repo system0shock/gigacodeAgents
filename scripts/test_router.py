@@ -222,6 +222,81 @@ def main():
                                                       "content": "x"}})
     check("spec_truth_write_block", result["decision"] == "block", result)
 
+    # 17. git_guard hardening — destructive git through wrappers/chaining/quoting MUST block
+    GUARD_BLOCK = [
+        # chaining / wrappers / env-prefix / abs-path / .exe (finding C1)
+        "cd repo && git reset --hard",
+        "true; git reset --hard",
+        "(git reset --hard)",
+        "env GIT_DIR=.git git reset --hard",
+        "GIT_DIR=x git push --force origin main",
+        "bash -c \"git reset --hard\"",
+        "/usr/bin/git reset --hard",
+        "git.exe reset --hard",
+        # quoting (posix=False kept quote chars)
+        "git reset \"--hard\"",
+        "git \"reset\" --hard",
+        "git push \"--force\"",
+        "git clean \"-f\" \"-d\"",
+        # short force flag + plus-refspec
+        "git push -f",
+        "git push -f origin main",
+        "git push origin +main",
+        # uncovered destructive subcommands
+        "git update-ref -d refs/heads/main",
+        "git reflog expire --expire=now --all",
+        "git gc --prune=now",
+        "git checkout -- src/",
+        "git restore --worktree .",
+        "git push origin --mirror",
+        "git worktree remove --force wt",
+        "git stash clear",
+        "git filter-branch --force --all",
+        # non-git repo destruction (Windows-primary)
+        "Remove-Item -Recurse -Force .git",
+        "rm -r .git",
+        "cmd /c rmdir /s /q .git",
+    ]
+    for cmd in GUARD_BLOCK:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"guard_block::{cmd[:38]}", result["decision"] == "block", (cmd, result))
+
+    # 18. Shell writes to protected / openspec-truth / enforcement paths
+    result = run_router("PreToolUse", {"tool_name": "Bash",
+                        "tool_input": {"command": "echo x > .gigacode/hooks/gates/git_guard.py"}})
+    check("guard_shell_self_block", result["decision"] == "block", result)
+    result = run_router("PreToolUse", {"tool_name": "Bash",
+                        "tool_input": {"command": "cp evil openspec/specs/auth/spec.md"}})
+    check("guard_shell_openspec_block", result["decision"] == "block", result)
+    result = run_router("PreToolUse", {"tool_name": "Bash",
+                        "tool_input": {"command": "printf x >> .env"}})
+    check("guard_shell_protected_ask", result["decision"] in ("ask", "block"), result)
+    result = run_router("PreToolUse", {"tool_name": "Bash",
+                        "tool_input": {"command": "echo x > .github/workflows/deploy.yml"}})
+    check("guard_shell_ci_ask", result["decision"] in ("ask", "block"), result)
+
+    # 19. WriteFile/Edit to enforcement-owned paths MUST block (self-protection)
+    for p in (".gigacode/hooks/gates/git_guard.py", ".gigacode/hooks/router.config.json",
+              ".gigacode/quality-gates.json", ".gigacode/settings.json"):
+        result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": p}})
+        check(f"guard_self::{p[-24:]}", result["decision"] == "block", (p, result))
+
+    # 20. Benign controls MUST still allow (no over-blocking regressions)
+    GUARD_ALLOW = [
+        "git status --short", "git diff", "git log --oneline -5", "git fetch origin",
+        "git add .", "git commit -m wip", "git push origin feature/x",
+        "git checkout -b feature/new", "git checkout main", "git switch main",
+        "git restore --staged file.kt", "git stash", "git stash pop",
+        "git reset --soft HEAD~1", "git reset file.kt", "git clean -n",
+        "echo hello", "ls -la", "cat README.md", "cp a.txt b.txt", "rm build/tmp.o",
+    ]
+    for cmd in GUARD_ALLOW:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"guard_allow::{cmd[:38]}", result["decision"] == "allow", (cmd, result))
+    # benign source write still allowed
+    result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": "src/Foo.kt"}})
+    check("guard_allow_src_write", result["decision"] == "allow", result)
+
     print(f"\nAll {PASSED} router checks passed")
 
 

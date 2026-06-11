@@ -74,6 +74,15 @@ if ($configBypass -notmatch '"decision":\s*"block"') {
   throw "git_guard did not block git clean behind global -c flag"
 }
 
+$wrapBypass = '{"tool_input":{"command":"cd . && git reset --hard HEAD~5"}}' | python .gigacode/hooks/gates/git_guard.py
+if ($wrapBypass -notmatch '"decision":\s*"block"') {
+  throw "git_guard did not block chained git reset --hard"
+}
+$selfEdit = '{"tool_name":"WriteFile","tool_input":{"file_path":".gigacode/hooks/gates/git_guard.py"}}' | python .gigacode/hooks/gates/git_guard.py
+if ($selfEdit -notmatch '"decision":\s*"block"') {
+  throw "git_guard did not block self-edit of enforcement file"
+}
+
 $ask = '{"path":".github/workflows/deploy.yml"}' | python .gigacode/hooks/gates/git_guard.py
 if ($ask -notmatch '"decision":\s*"ask"') {
   throw "git_guard did not ask on protected path"
