@@ -58,6 +58,7 @@ def run(event):
         return {"decision": "allow",
                 "additionalContext": "\n\n".join(part for part in parts if part)}
     if name == "UserPromptSubmit":
+        # lstrip: a slash command preceded by accidental whitespace still counts
         prompt = str(event.get("prompt", "")).lstrip()
         if prompt.startswith(("/develop-feature", "/fix-bug")):
             return {"decision": "allow", "additionalContext": changes_line() + (

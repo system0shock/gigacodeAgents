@@ -12,7 +12,7 @@
     },
     {
       "event": "SubagentStart",
-      "agent_pattern": "coder",
+      "agent_pattern": "^coder$",
       "gates": ["gate_context_inject"]
     },
     {

@@ -96,10 +96,15 @@ def test_context_inject():
     gate = load_gate("gate_context_inject")
     with fixture_root() as fix:
         os.makedirs(os.path.join(fix, "openspec", "changes", "add-sample"))
+        os.makedirs(os.path.join(fix, ".gigacode", "context"))
+        map_path = os.path.join(fix, ".gigacode", "context", "module-map.md")
+        with open(map_path, "w", encoding="utf-8") as handle:
+            handle.write("# Module Map\npayments: core/payments\n")
         result = gate.run({"hook_event_name": "SessionStart"})
         ctx = result.get("additionalContext", "")
         check("ci_session_decision", result["decision"] == "allow", result)
         check("ci_session_rules", "Development Flow Rules" in ctx, ctx[:200])
+        check("ci_session_module_map", "Module Map" in ctx, ctx[-400:])
         check("ci_session_changes", "add-sample" in ctx, ctx[-200:])
 
         result = gate.run({"hook_event_name": "SubagentStart", "agent_type": "coder"})
@@ -111,6 +116,11 @@ def test_context_inject():
                            "prompt": "/develop-feature implement payment retry"})
         ctx = result.get("additionalContext", "")
         check("ci_prompt_changes", "add-sample" in ctx, result)
+
+        result = gate.run({"hook_event_name": "UserPromptSubmit",
+                           "prompt": "/fix-bug payment NPE on empty cart"})
+        check("ci_fix_bug_changes",
+              "add-sample" in result.get("additionalContext", ""), result)
 
         result = gate.run({"hook_event_name": "UserPromptSubmit", "prompt": "привет"})
         check("ci_plain_prompt_silent", "additionalContext" not in result, result)
