@@ -115,10 +115,12 @@ smoke-проверок.
 
 ```json
 {
-  "lint":  { "command": "./gradlew ktlintCheck detekt", "applies_to": ["**/*.kt"] },
-  "lint_java": { "command": "./gradlew checkstyleMain", "applies_to": ["**/*.java"] },
+  "lint": [
+    { "command": "./gradlew ktlintCheck detekt", "applies_to": ["**/*.kt"] },
+    { "command": "./gradlew checkstyleMain", "applies_to": ["**/*.java"] }
+  ],
   "build": { "command": "./gradlew compileKotlin compileTestKotlin" },
-  "test":  { "command": "./gradlew test --tests <scope>" },
+  "test":  { "command": "./gradlew test" },
   "clean_code": { "max_file_lines": 400, "max_function_lines": 60 }
 }
 ```
@@ -134,8 +136,8 @@ smoke-проверок.
 3. **verifier + clean_code**: анти-паттерны асинхронных тестов —
    `Thread.sleep` в тестах (предупреждение, требовать Awaitility), отсутствие
    таймаутов у корутин/фьюч, интеграционные Kafka-тесты без Testcontainers.
-   Это эвристики уровня advisory, конкретный список правил — настройка в
-   `quality-gates.json`.
+   Это эвристики уровня advisory: `Thread.sleep` в тестовых файлах ловит
+   `gate_clean_code`, остальное — зона `verifier`.
 
 **Честные ограничения:** Kotlin-поддержка Serena требует проверки на реальном
 коде (Java — надёжно); гейты не докажут корректность асинхронной логики — они

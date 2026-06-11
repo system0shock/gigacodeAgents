@@ -163,3 +163,37 @@ Serena предоставляет семантическую навигацию 
 Serena **не является обязательным условием**. Если `serena` недоступен,
 агенты переключаются на поиск через `rg`, а smoke-проверки завершаются
 успешно без него.
+
+## Quality gates (Phase 4)
+
+Шесть гейтов качества работают через hook router (`.gigacode/hooks/router.py`)
+и настраиваются одним файлом `.gigacode/quality-gates.json` — языковая
+специфика живёт в конфиге, не в коде гейтов.
+
+| Гейт | Событие | Режим |
+|---|---|---|
+| `gate_context_inject` | SessionStart, SubagentStart(coder), UserPromptSubmit | инъекция правил и активных OpenSpec changes |
+| `gate_spec_structure` | PreToolUse, PostToolUse, Stop | блок: запись в `openspec/specs/`, провал `openspec validate --strict` |
+| `gate_lint` | PostToolUse (изменённый файл) | блок при ненулевом exit code линтера |
+| `gate_build` | Stop (момент готовности PR) | блок при провале сборки |
+| `gate_clean_code` | PostToolUse | advisory: размер файла/функции, TODO/FIXME, Thread.sleep в тестах |
+| `gate_existing_code` | PreToolUse (новые файлы) | advisory: дубликаты символов и Kafka-топиков (rg → git grep) |
+
+Пример настройки для Kotlin/Java + Gradle:
+
+```json
+{
+  "lint": [
+    { "command": "gradlew.bat ktlintCheck", "applies_to": ["**/*.kt", "**/*.kts"], "timeout_seconds": 300 },
+    { "command": "gradlew.bat checkstyleMain", "applies_to": ["**/*.java"], "timeout_seconds": 300 }
+  ],
+  "build": { "command": "gradlew.bat compileKotlin compileTestKotlin", "timeout_seconds": 600 },
+  "test": { "command": "gradlew.bat test" },
+  "clean_code": { "max_file_lines": 400, "max_function_lines": 60, "placeholder_markers": ["TODO", "FIXME", "XXX"] }
+}
+```
+
+Пустая `command` = гейт пропускается без записи в журнал (silent allow);
+смоук-чеки и работа в репозитории без настроенных команд не блокируются.
+`test.command` использует агент `verifier` (гейты тесты не гоняют).
+На Linux/macOS указывайте `./gradlew ...`.

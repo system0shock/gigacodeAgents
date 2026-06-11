@@ -47,3 +47,13 @@ When Serena MCP is available (`mcp__serena__find_symbol` tool is present):
 When Serena is unavailable:
 - Fall back to `rg` symbol search as documented in the `development-flow` skill.
 - Record that Serena was unavailable in `journal.md`.
+
+## Quality Gates
+
+Гейты качества (`.gigacode/hooks/gates/`) работают автоматически через hook
+router. Команды линтера/сборки/тестов настраиваются в
+`.gigacode/quality-gates.json`. Если команда не настроена, проверка
+пропускается без записи в журнал (silent allow) — зафиксируй такой
+пропуск в `verification.md`. Advisory-предупреждения гейтов (existing_code,
+clean_code) не блокируют, но требуют явной реакции: переиспользовать найденное
+или обосновать в journal.md, почему создаётся новое.

@@ -19,6 +19,8 @@ For plan-only mode:
 For implement mode:
 
 - Run targeted tests first, then broader checks proportionate to risk.
+- Команда тестов берётся из `.gigacode/quality-gates.json` (`test.command`);
+  если она пуста — определи команду по проекту и зафиксируй её в verification.md.
 - Investigate failures before summarizing.
 - Record skipped checks with reasons.
 

@@ -139,3 +139,13 @@ dialogue, and the plan lives in the OpenSpec change (`proposal.md`, `design.md`,
 `tasks.md`), not in a separate planning artifact.
 
 Each agent file and role description must remain below 10,000 characters.
+
+## Quality Gates
+
+Hook-гейты сопровождают весь цикл: контекст инъецируется на старте сессии и
+сабагентов (`^coder$`); записи в `openspec/specs/` и
+`openspec/changes/archive/` заблокированы (только `openspec archive`); после
+каждой записи файла запускаются линтер и advisory-эвристики; на Stop в момент
+готовности PR — strict-валидация changes и сборка. Команды настраиваются в
+`.gigacode/quality-gates.json`; ненастроенная команда = silent allow (без
+записи в журнал).
