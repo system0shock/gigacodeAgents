@@ -421,6 +421,27 @@ def test_existing_code():
                                           "new_string": "class PaymentService { }"}})
         check("ec_edit_existing_skip", "additionalContext" not in result, result)
 
+        # WriteFile-overwrite of an existing file is skipped too
+        result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": os.path.join(src, "Existing.kt"),
+                                          "content": "class PaymentService { }"}})
+        check("ec_overwrite_existing_skip", "additionalContext" not in result, result)
+
+        # enum class: the enum's NAME is the symbol, not the keyword 'class'
+        # (keyword capture would make every repo class a false hit)
+        with open(os.path.join(src, "Status.kt"), "w", encoding="utf-8") as handle:
+            handle.write("enum class PaymentStatus { PENDING, DONE }\n")
+        subprocess.run(["git", "add", "-A"], cwd=fix, check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": "src/new/States.kt",
+                                          "content": "enum class PaymentStatus { X }"}})
+        check("ec_enum_class_warn", "Status.kt" in result.get("additionalContext", ""), result)
+        result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
+                           "tool_input": {"file_path": "src/new/Fresh.kt",
+                                          "content": "enum class TotallyFreshEnum { X }"}})
+        check("ec_enum_unique_silent", "additionalContext" not in result, result)
+
 
 def main():
     test_lib()

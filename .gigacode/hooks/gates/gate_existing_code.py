@@ -16,7 +16,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _lib
 
 DECL_KEYWORDS = "class|interface|object|enum|fun|def|function"
-SYMBOL_RE = re.compile(r"\b(?:" + DECL_KEYWORDS + r")\s+([A-Za-z_][A-Za-z0-9_]{2,})")
+# 'enum\s+class' must come first as one token — otherwise 'enum class Foo'
+# captures the keyword 'class' as the symbol and Foo is never checked
+SYMBOL_RE = re.compile(
+    r"\b(?:enum\s+class|" + DECL_KEYWORDS + r")\s+([A-Za-z_][A-Za-z0-9_]{2,})")
 TOPIC_RE = re.compile(r"topics?\s*=\s*[\[{]?\s*\"([^\"]+)\"")
 EXCLUDED = ("build", "target", "out", "dist", "node_modules")
 
@@ -59,8 +62,9 @@ def run(event):
     content = _lib.content_from_event(event)
     if not content:
         return {"decision": "allow"}
-    if tool == "Edit" and path and os.path.exists(resolve(path)):
-        return {"decision": "allow"}  # only new files are checked
+    if path and os.path.exists(resolve(path)):
+        # only new files are checked: Edit and WriteFile-overwrite both skip
+        return {"decision": "allow"}
 
     boundary = "(^|[^A-Za-z0-9_])"
     patterns = []
@@ -80,15 +84,25 @@ def run(event):
     if not patterns:
         return {"decision": "allow"}
 
-    normalized = (path or "").replace("\\", "/").lstrip("./")
-    hits = []
-    for pattern in patterns:
-        lines, skip = search(pattern)
-        if skip:
-            _lib.journal_skip("gate_existing_code", skip)
-            return {"decision": "allow"}
-        hits.extend(line for line in lines
-                    if normalized and normalized not in line.replace("\\", "/"))
+    normalized = (path or "").replace("\\", "/")
+    normalized = normalized[2:] if normalized.startswith("./") else normalized
+    # one combined search: PreToolUse fires per write and each subprocess
+    # spawn costs ~50-100ms on Windows. Plain groups: git grep -E is POSIX
+    # ERE, which has no (?:...).
+    lines, skip = search("|".join("(" + p + ")" for p in patterns))
+    if skip:
+        _lib.journal_skip("gate_existing_code", skip)
+        return {"decision": "allow"}
+
+    def noise(line):
+        norm = line.replace("\\", "/")
+        # self-hit, or generated output dirs git grep's :!name pathspec only
+        # excludes at the repo root (nested module/build/ leaks through)
+        return ((normalized and normalized in norm)
+                or any(f"/{ex}/" in norm or norm.startswith(f"{ex}/")
+                       for ex in EXCLUDED))
+
+    hits = [line for line in lines if not noise(line)]
     if not hits:
         return {"decision": "allow"}
     return {"decision": "allow", "additionalContext": (
