@@ -136,6 +136,22 @@ def test_git_guard():
     check("gg_subst_reset",
           gate.run({"tool_input": {"command": "x=$(git reset --hard)"}})["decision"] == "block")
 
+    # --- Phase 4: git-semantics fixes ---
+    check("gg_clean_exclude_blocks",
+          gate.run({"tool_input": {"command": "git clean -fd --exclude=node_modules"}})["decision"] == "block")
+    check("gg_clean_dryrun_allows",
+          gate.run({"tool_input": {"command": "git clean -fdn"}})["decision"] == "allow")
+    check("gg_tee_multi_output",
+          gate.run({"tool_input": {"command": "tee .gigacode/hooks/router.py /tmp/out"}})["decision"] == "block")
+    check("gg_restore_default_blocks",
+          gate.run({"tool_input": {"command": "git restore README.md"}})["decision"] == "block")
+    check("gg_restore_staged_allows",
+          gate.run({"tool_input": {"command": "git restore --staged README.md"}})["decision"] == "allow")
+    check("gg_checkout_force_blocks",
+          gate.run({"tool_input": {"command": "git checkout -f main"}})["decision"] == "block")
+    check("gg_checkout_plain_allows",
+          gate.run({"tool_input": {"command": "git checkout my-feature"}})["decision"] == "allow")
+
 
 def test_context_inject():
     gate = load_gate("gate_context_inject")

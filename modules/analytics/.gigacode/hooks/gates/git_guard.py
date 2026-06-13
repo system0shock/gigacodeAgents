@@ -356,9 +356,14 @@ def git_destructive(sub, rest):
     if sub == "reset" and "--hard" in rest:
         return "Blocked `git reset --hard`."
     if sub == "clean":
-        combined = "".join(t.lstrip("-") for t in rest if t.startswith("-"))
-        # -n (dry-run) overrides force: previewing what -f would delete is safe.
-        if "f" in combined and "n" not in combined:
+        # Parse flags exactly: short clusters are single-dash alpha runs; long
+        # flags whole. An option VALUE (--exclude=node_modules) must not leak its
+        # letters into flag detection. -n (dry-run) overrides -f (preview is safe).
+        short = "".join(t[1:] for t in rest if re.match(r"^-[A-Za-z]+$", t))
+        longs = [t for t in rest if t.startswith("--")]
+        dry = ("n" in short) or ("--dry-run" in longs)
+        force = ("f" in short) or ("--force" in longs)
+        if force and not dry:
             return "Blocked destructive `git clean -f`."
     if sub == "push":
         if any(t == "-f" or t.startswith("--force") for t in rest):
@@ -378,13 +383,22 @@ def git_destructive(sub, rest):
         return "Blocked `git gc --prune` (drops dangling-commit recovery)."
     if sub in DESTRUCTIVE_SUBCMDS:
         return f"Blocked potentially irreversible `git {sub}`."
-    if sub == "checkout" and "--" in rest:
-        return "Blocked `git checkout --` (discards working-tree edits)."
-    if sub == "restore" and ("--worktree" in rest or "--staged" not in rest):
-        # --worktree is git restore's DEFAULT, so `git restore .` / `git restore
-        # <path>` discard working-tree edits even without the flag. Only the
-        # index-only form (`--staged` without `--worktree`) is non-destructive.
-        return "Blocked `git restore` (discards working-tree edits; use --staged to unstage)."
+    if sub == "checkout":
+        if "--" in rest:
+            return "Blocked `git checkout --` (discards working-tree edits)."
+        if "--force" in rest or any(
+                re.match(r"^-[A-Za-z]*f[A-Za-z]*$", t) and not t.startswith("--") for t in rest):
+            return "Blocked `git checkout -f/--force` (discards working-tree edits)."
+    if sub == "restore":
+        # restore touches the working tree by default; only --staged/-S WITHOUT
+        # --worktree/-W leaves the worktree intact.
+        def _short(ch):  # case-sensitive short flag inside a cluster, e.g. -S / -SW
+            return any(re.match(r"^-[A-Za-z]*" + ch + r"[A-Za-z]*$", t)
+                       and not t.startswith("--") for t in rest)
+        staged = ("--staged" in rest) or _short("S")
+        worktree = ("--worktree" in rest) or _short("W")
+        if worktree or not staged:
+            return "Blocked `git restore` (discards working-tree edits)."
     if sub == "worktree" and rest[:1] == ["remove"]:
         return "Blocked `git worktree remove`."
     if sub == "stash" and rest[:1] == ["clear"]:
@@ -470,8 +484,10 @@ def write_targets(tokens):
     positionals, targets = _split_redirects(tokens)
     rest = positionals[1:]                       # arguments after the program
     nonflag = [a for a in rest if not a.startswith("-")]
-    if prog in WRITE_VERBS and nonflag:
-        targets.append(nonflag[-1])              # cp/mv/tee/install dest = last
+    if prog == "tee":
+        targets.extend(nonflag)                  # tee writes EVERY file operand
+    elif prog in WRITE_VERBS and nonflag:
+        targets.append(nonflag[-1])              # cp/mv/install dest = last
     elif prog in PS_WRITE_VERBS:
         dest = _ps_dest(rest)
         if dest:
@@ -522,7 +538,7 @@ def inspect_command(command):
             idx = git_sub_idx(leaf)
             if idx >= 0:
                 sub = _sq(leaf[idx]).lower()
-                rest = [_sq(t).lower() for t in leaf[idx + 1:]]
+                rest = [_sq(t) for t in leaf[idx + 1:]]  # original case: -S != -s, -W != -w
                 reason = git_destructive(sub, rest)
                 if reason:
                     return "block", reason
