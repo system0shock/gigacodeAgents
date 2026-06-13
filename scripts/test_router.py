@@ -269,11 +269,12 @@ def main():
           result)
     shutil.rmtree(tmp3, ignore_errors=True)
 
-    # 16. Spec truth is write-protected through the full router path
+    # 16. Spec-truth write now ASKs (the legitimate /opsx:sync /opsx:archive
+    # lifecycle writes it; a direct edit still needs human confirmation)
     result = run_router("PreToolUse", {"tool_name": "WriteFile",
                                        "tool_input": {"file_path": "openspec/specs/payments/spec.md",
                                                       "content": "x"}})
-    check("spec_truth_write_block", result["decision"] == "block", result)
+    check("spec_truth_write_ask", result["decision"] == "ask", result)
 
     # 17. git_guard hardening — destructive git through wrappers/chaining/quoting MUST block
     GUARD_BLOCK = [
@@ -331,7 +332,7 @@ def main():
     check("guard_shell_self_block", result["decision"] == "block", result)
     result = run_router("PreToolUse", {"tool_name": "Bash",
                         "tool_input": {"command": "cp evil openspec/specs/auth/spec.md"}})
-    check("guard_shell_openspec_block", result["decision"] == "block", result)
+    check("guard_shell_openspec_ask", result["decision"] == "ask", result)
     result = run_router("PreToolUse", {"tool_name": "Bash",
                         "tool_input": {"command": "printf x >> .env"}})
     check("guard_shell_protected_ask", result["decision"] == "ask", result)
@@ -410,10 +411,9 @@ def main():
         "echo x > .git/config", "cp evil .git/config", "echo x | tee .git/config",
         # #4 deletion of the enforcement tree / openspec truth; find -delete
         "rm -rf .gigacode", "find .git -delete", "find .gigacode -delete",
-        # #6 PowerShell write-cmdlets to self / openspec truth
+        # #6 PowerShell write-cmdlets to self-protect (.gigacode)
         "Set-Content .gigacode/settings.json x", "Out-File .gigacode/settings.json",
         "Add-Content .gigacode/hooks/gates/git_guard.py x",
-        "Set-Content openspec/specs/auth/spec.md x",
         # #7 fd-prefixed / clobber redirects + writer programs
         "echo x 1> .gigacode/settings.json",
         "dd if=/tmp/evil of=.gigacode/hooks/router.py",
@@ -441,7 +441,10 @@ def main():
 
     # protected paths via the new write channels MUST ask
     R2_ASK = ["Set-Content .env x", "echo x 1> .github/workflows/deploy.yml",
-              "Out-File secrets/key.pem"]
+              "Out-File secrets/key.pem",
+              # openspec truth now ASKs (the /opsx sync/archive lifecycle writes it)
+              "Set-Content openspec/specs/auth/spec.md x",
+              "cp evil openspec/changes/archive/x/spec.md"]
     for cmd in R2_ASK:
         result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
         check(f"r2_ask::{cmd[:32]}", result["decision"] == "ask", (cmd, result))

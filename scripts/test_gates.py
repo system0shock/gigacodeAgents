@@ -173,24 +173,28 @@ def test_spec_structure():
     gate = load_gate("gate_spec_structure")
     with fixture_root() as fix:
         # PreToolUse: spec truth and archive are write-protected
+        # spec truth ASKs (not block): the /opsx:sync /opsx:archive lifecycle
+        # writes it; a direct edit still needs human confirmation
         result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
                            "tool_input": {"file_path": "openspec/specs/payments/spec.md"}})
-        check("ss_pre_specs_block", result["decision"] == "block", result)
+        check("ss_pre_specs_ask", result["decision"] == "ask", result)
         result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
                            "tool_input": {"file_path": "openspec/changes/archive/old/proposal.md"}})
-        check("ss_pre_archive_block", result["decision"] == "block", result)
+        check("ss_pre_archive_ask", result["decision"] == "ask", result)
         result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
                            "tool_input": {"file_path": "openspec/changes/my-change/proposal.md"}})
         check("ss_pre_change_allow", result["decision"] == "allow", result)
 
-        # Path normalization & case-insensitivity: all variants must BLOCK
+        # Path normalization & case-insensitivity: every variant must still be
+        # caught (now ASK, not block) — the matcher must not be dodged by case,
+        # redundant separators, dot-dot traversal, or a leading ./
         for variant in ("OpenSpec/Specs/payments/spec.md",
                         "openspec//specs/payments/spec.md",
                         "openspec/changes/../specs/payments/spec.md",
                         "./openspec/specs/payments/spec.md"):
             result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
                                "tool_input": {"file_path": variant}})
-            check(f"ss_pre_variant::{variant[:30]}", result["decision"] == "block", (variant, result))
+            check(f"ss_pre_variant::{variant[:30]}", result["decision"] == "ask", (variant, result))
         # benign nearby path still allowed
         result = gate.run({"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
                            "tool_input": {"file_path": "openspec/changes/my-change/proposal.md"}})

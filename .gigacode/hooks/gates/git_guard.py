@@ -387,13 +387,18 @@ def git_destructive(sub, rest):
 
 
 def classify_path(path):
-    """'block' for enforcement/.git/openspec-truth paths, 'ask' for protected,
-    else ''. The block tier is matched component-wise (regex) so an absolute
-    path cannot slip past a start-anchored glob."""
+    """'block' for enforcement (.gigacode) / .git paths, 'ask' for openspec truth
+    and other protected paths, else ''. The block tier is matched component-wise
+    (regex) so an absolute path cannot slip past a start-anchored glob.
+
+    OpenSpec truth (openspec/specs, openspec/changes/archive) is ASK, not block,
+    so the legitimate sync/archive lifecycle (`/opsx:sync`, `/opsx:archive`) can
+    write it with a human confirm while a direct fabrication still surfaces;
+    .gigacode and .git stay block (the agent must never edit/destroy those)."""
     p = _norm(path)
-    if SELF_PROTECT_RE.search(p) or GIT_DIR_RE.search(p) or OPENSPEC_TRUTH_RE.search(p):
+    if SELF_PROTECT_RE.search(p) or GIT_DIR_RE.search(p):
         return "block"
-    if any(fnmatch.fnmatch(p, pat) for pat in PROTECTED_PATHS):
+    if OPENSPEC_TRUTH_RE.search(p) or any(fnmatch.fnmatch(p, pat) for pat in PROTECTED_PATHS):
         return "ask"
     return ""
 
@@ -512,9 +517,9 @@ def inspect_command(command):
         for tgt in write_targets(leaf):
             c = classify_path(tgt)
             if c == "block":
-                return "block", f"Blocked shell write to enforcement/openspec path '{tgt}'."
+                return "block", f"Blocked shell write to enforcement/.git path '{tgt}'."
             if c == "ask":
-                pending_ask = "Shell write to a protected path requires explicit confirmation."
+                pending_ask = "Shell write to a protected/openspec-truth path requires explicit confirmation."
     if pending_ask:
         return "ask", pending_ask
     return "", ""

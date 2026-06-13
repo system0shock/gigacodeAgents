@@ -63,9 +63,12 @@ def run(event):
 
     if name == "PreToolUse":
         if path and DENY_RE.search(path):
-            return {"decision": "block", "reason": (
-                f"Запись в '{path}' запрещена: openspec/specs/ и openspec/changes/archive/ "
-                "обновляются только командой `openspec archive` (см. rules/openspec.md).")}
+            return {"decision": "ask", "reason": (
+                f"Запись в '{path}' меняет авторитетную истину спеки (openspec/specs/ "
+                "или openspec/changes/archive/). Это допустимо только в рамках "
+                "OpenSpec-lifecycle (`/opsx:sync`, `/opsx:archive`) — подтверди, что "
+                "это легитимная синхронизация/архивация, а не прямая правка "
+                "(см. rules/openspec.md).")}
         return {"decision": "allow"}
 
     if name == "PostToolUse":

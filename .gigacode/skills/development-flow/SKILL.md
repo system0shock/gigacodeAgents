@@ -149,7 +149,8 @@ Each agent file and role description must remain below 10,000 characters.
 
 Hook-гейты сопровождают весь цикл: контекст инъецируется на старте сессии и
 сабагентов (`^coder$`); записи в `openspec/specs/` и
-`openspec/changes/archive/` заблокированы (только `openspec archive`); после
+`openspec/changes/archive/` требуют подтверждения (ask) — легитимны в рамках
+`/opsx:sync` / `/opsx:archive`, прямая правка всплывает человеку; после
 каждой записи файла запускаются линтер и advisory-эвристики; на Stop в момент
 готовности PR — strict-валидация changes и сборка. Команды настраиваются в
 `.gigacode/quality-gates.json`; ненастроенная команда = silent allow (без

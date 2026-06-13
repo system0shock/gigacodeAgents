@@ -177,7 +177,7 @@ Serena **не является обязательным условием**. Ес
 | Гейт | Событие | Режим |
 |---|---|---|
 | `gate_context_inject` | SessionStart, SubagentStart(coder), UserPromptSubmit | инъекция правил и активных OpenSpec changes |
-| `gate_spec_structure` | PreToolUse, PostToolUse, Stop | блок: запись в `openspec/specs/`, провал `openspec validate --strict` |
+| `gate_spec_structure` | PreToolUse, PostToolUse, Stop | ask: запись в `openspec/specs/` (легитимна в `/opsx:sync`/`archive`); блок: провал `openspec validate --strict` |
 | `gate_lint` | PostToolUse (изменённый файл) | блок при ненулевом exit code линтера |
 | `gate_build` | Stop (момент готовности PR) | блок при провале сборки |
 | `gate_clean_code` | PostToolUse | advisory: размер файла/функции, TODO/FIXME, Thread.sleep в тестах |
