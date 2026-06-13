@@ -39,8 +39,9 @@ def check(name, condition, detail=""):
 def make_fixture():
     tmp = tempfile.mkdtemp(prefix="agates-")
     os.makedirs(os.path.join(tmp, "rules"))
-    shutil.copy(os.path.join(ROOT, "rules", "reverse-analysis.md"),
-                os.path.join(tmp, "rules"))
+    for rule in ("reverse-analysis.md", "openspec.md"):
+        shutil.copy(os.path.join(ROOT, "rules", rule),
+                    os.path.join(tmp, "rules"))
     os.makedirs(os.path.join(tmp, ".gigacode", "logs"))
     os.makedirs(os.path.join(tmp, "openspec", "specs"))
     os.makedirs(os.path.join(tmp, "docs", "features"))
@@ -115,6 +116,7 @@ def test_context_inject():
         result = gate.run({"hook_event_name": "SessionStart"})
         ctx = result.get("additionalContext", "")
         check("ci_session_rules", "reverse-analysis" in ctx, ctx[:200])
+        check("ci_session_openspec", "create-once" in ctx, ctx[:400])
         check("ci_session_caps_none", "none" in ctx, ctx[-200:])
         os.makedirs(os.path.join(tmp, "openspec", "specs", "cap-a"))
         ctx2 = gate.run({"hook_event_name": "SessionStart"}).get("additionalContext", "")
