@@ -45,11 +45,12 @@ def run(event):
 
 
 def main():
-    event = _lib.stdin_event()
-    # Write UTF-8 bytes directly: sys.stdout may use a legacy console code page
+    # Match the router's idiom: sys.stdout may use a legacy console code page
     # (e.g. cp1251 on Windows) that cannot encode the Cyrillic reason strings.
-    sys.stdout.buffer.write(
-        json.dumps(run(event or {}), ensure_ascii=False).encode("utf-8"))
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    event = _lib.stdin_event()
+    print(json.dumps(run(event or {}), ensure_ascii=False))
 
 
 if __name__ == "__main__":
