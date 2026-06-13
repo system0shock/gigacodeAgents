@@ -143,11 +143,11 @@ def main():
     check("missing_gate_noncritical_allow", result["decision"] == "allow", result)
     shutil.rmtree(tmp, ignore_errors=True)
 
-    # 11. Stop budget: third consecutive block degrades to warning.
-    # Budget state is isolated in the temp hooks copy (STATE_PATH follows the
-    # router's own dir, NOT GIGACODE_ROOT); the block trigger comes from a
-    # fixture repo with changed code and no OpenSpec change. The two concerns
-    # are orthogonal, which is what makes this deterministic.
+    # 11. Stop blocks are PERSISTENT (no auto-degrade): consecutive blocks keep
+    # blocking. Budget state is isolated in the temp hooks copy (STATE_PATH
+    # follows the router's own dir, NOT GIGACODE_ROOT); the block trigger comes
+    # from a fixture repo with changed code and no OpenSpec change. The two
+    # concerns are orthogonal, which is what makes this deterministic.
     tmp, tmp_router, tmp_config = temp_hooks_copy()
     code_fix = make_code_fixture()
     code_env = {"GIGACODE_ROOT": code_fix}
@@ -155,16 +155,20 @@ def main():
     first = run_router("Stop", payload, router=tmp_router, env=code_env)
     second = run_router("Stop", payload, router=tmp_router, env=code_env)
     third = run_router("Stop", payload, router=tmp_router, env=code_env)
+    fourth = run_router("Stop", payload, router=tmp_router, env=code_env)
     check("stop_budget_first_block", first["decision"] == "block", first)
     check("stop_budget_second_block", second["decision"] == "block", second)
-    check("stop_budget_third_degrades", third["decision"] == "allow" and "systemMessage" in third, third)
+    # No degrade-to-allow: the third (and every later) consecutive block blocks.
+    check("stop_budget_third_still_blocks",
+          third["decision"] == "block" and "systemMessage" not in third, third)
+    check("stop_budget_fourth_still_blocks", fourth["decision"] == "block", fourth)
 
-    # FIX 4: stop-budget reset — an allow-Stop clears the counter; next block
-    # restarts the budget. A clean fixture (no changed code) makes the gates allow.
+    # stop-budget reset — an allow-Stop clears the counter (the clamp + counter
+    # still track consecutive blocks for journaling/reset). A clean fixture (no
+    # changed code) makes the gates allow.
     clean_fix = make_clean_fixture()
     reset_result = run_router("Stop", payload, router=tmp_router, env={"GIGACODE_ROOT": clean_fix})
     check("stop_budget_reset_allow", reset_result["decision"] == "allow", reset_result)
-    # After reset, the blocking fixture must block again (not degrade)
     restart_first = run_router("Stop", payload, router=tmp_router, env=code_env)
     check("stop_budget_restart_blocks", restart_first["decision"] == "block", restart_first)
 
@@ -330,10 +334,10 @@ def main():
     check("guard_shell_openspec_block", result["decision"] == "block", result)
     result = run_router("PreToolUse", {"tool_name": "Bash",
                         "tool_input": {"command": "printf x >> .env"}})
-    check("guard_shell_protected_ask", result["decision"] in ("ask", "block"), result)
+    check("guard_shell_protected_ask", result["decision"] == "ask", result)
     result = run_router("PreToolUse", {"tool_name": "Bash",
                         "tool_input": {"command": "echo x > .github/workflows/deploy.yml"}})
-    check("guard_shell_ci_ask", result["decision"] in ("ask", "block"), result)
+    check("guard_shell_ci_ask", result["decision"] == "ask", result)
 
     # 19. WriteFile/Edit to enforcement-owned paths MUST block (self-protection).
     # The logs/* entries are the PRIMARY closure of the Stop-budget-seed and
@@ -348,6 +352,15 @@ def main():
     result = run_router("PreToolUse", {"tool_name": "Bash",
                         "tool_input": {"command": "echo {} > .gigacode/logs/router-state.json"}})
     check("guard_shell_state_block", result["decision"] == "block", result)
+    # #11 the REAL Claude Code write tools must route to git_guard too (superset
+    # matcher), not just the Qwen-fork WriteFile/Edit names.
+    for tool in ("Write", "MultiEdit", "NotebookEdit"):
+        result = run_router("PreToolUse", {"tool_name": tool,
+                            "tool_input": {"file_path": ".gigacode/hooks/router.py"}})
+        check(f"route_self::{tool}", result["decision"] == "block", (tool, result))
+        result = run_router("PreToolUse", {"tool_name": tool,
+                            "tool_input": {"file_path": "src/Foo.kt"}})
+        check(f"route_allow::{tool}", result["decision"] == "allow", (tool, result))
 
     # 20. Benign controls MUST still allow (no over-blocking regressions)
     GUARD_ALLOW = [
@@ -367,19 +380,82 @@ def main():
     result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": "src/Foo.kt"}})
     check("guard_allow_src_write", result["decision"] == "allow", result)
 
-    # 21. Pre-seeded budget counter must NOT pre-exhaust the budget
+    # 21. A pre-seeded budget counter must NOT pre-exhaust the budget. The clamp
+    # min(prior, budget-1)+1 keeps the first block a block for ANY seed value,
+    # including the boundary range [budget, 10] that load_state's 0..10 window
+    # admits (99 is dropped by load_state; 2/5/10 are clamped). No degrade path.
     # STATE_PATH in router.py: LOGS_DIR = hooks/../logs  =>  tmp/logs/router-state.json
     tmp4, tmp_router4, _ = temp_hooks_copy()
     state_path = os.path.join(tmp4, "logs", "router-state.json")
     os.makedirs(os.path.dirname(state_path), exist_ok=True)
-    with open(state_path, "w", encoding="utf-8") as handle:
-        json.dump({"stop:t-seed": 99}, handle)
     code_fix = make_code_fixture()
-    payload = {"last_assistant_message": "Done.", "session_id": "t-seed"}
-    result = run_router("Stop", payload, router=tmp_router4, env={"GIGACODE_ROOT": code_fix})
-    check("budget_preseed_still_blocks", result["decision"] == "block", result)
+    for seed in (2, 5, 10, 99):
+        with open(state_path, "w", encoding="utf-8") as handle:
+            json.dump({"stop:t-seed": seed}, handle)
+        payload = {"last_assistant_message": "Done.", "session_id": "t-seed"}
+        result = run_router("Stop", payload, router=tmp_router4, env={"GIGACODE_ROOT": code_fix})
+        check(f"budget_preseed_still_blocks::{seed}",
+              result["decision"] == "block" and "systemMessage" not in result, (seed, result))
     shutil.rmtree(tmp4, ignore_errors=True)
     shutil.rmtree(code_fix, ignore_errors=True)
+
+    # 22. Round-2 hardening (T6 review): wrapper / redirect / deletion /
+    # substitution bypasses that MUST now block.
+    R2_BLOCK = [
+        # #1 `command` builtin was a universal kill-switch
+        "command git reset --hard", "command rm -rf .git",
+        # #2 writes that corrupt the .git repo
+        "echo x > .git/config", "cp evil .git/config", "echo x | tee .git/config",
+        # #4 deletion of the enforcement tree / openspec truth; find -delete
+        "rm -rf .gigacode", "find .git -delete", "find .gigacode -delete",
+        # #6 PowerShell write-cmdlets to self / openspec truth
+        "Set-Content .gigacode/settings.json x", "Out-File .gigacode/settings.json",
+        "Add-Content .gigacode/hooks/gates/git_guard.py x",
+        "Set-Content openspec/specs/auth/spec.md x",
+        # #7 fd-prefixed / clobber redirects + writer programs
+        "echo x 1> .gigacode/settings.json",
+        "dd if=/tmp/evil of=.gigacode/hooks/router.py",
+        "sed -i s/a/b/ .gigacode/hooks/router.py",
+        "cat evil >| .gigacode/hooks/gates/git_guard.py",
+        # #8 WRITE_VERB destination spoofed by a trailing / stdin redirect
+        "cp evil.txt .gigacode/settings.json 2>/dev/null",
+        "tee .gigacode/hooks/gates/git_guard.py < /tmp/evil",
+        # #9 eval / command-substitution / env -S hiding a destructive git
+        'eval "git reset --hard"', "x=$(git reset --hard)",
+        "echo `git reset --hard`", "env -S 'git reset --hard'",
+        # #12 NBSP separators (PowerShell primary platform)
+        "git reset --hard",
+    ]
+    for cmd in R2_BLOCK:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r2_block::{cmd[:32]}", result["decision"] == "block", (cmd, result))
+
+    # #3 absolute-path writes to enforcement-owned paths MUST block (component-
+    # aware, not start-anchored). Claude Code passes absolute file_path by default.
+    for p in ("C:/proj/.worktrees/x/.gigacode/settings.json",
+              "/home/u/proj/.gigacode/hooks/router.py", "C:/proj/.git/config"):
+        result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": p}})
+        check(f"r2_self_abs::{p[-20:]}", result["decision"] == "block", (p, result))
+
+    # protected paths via the new write channels MUST ask
+    R2_ASK = ["Set-Content .env x", "echo x 1> .github/workflows/deploy.yml",
+              "Out-File secrets/key.pem"]
+    for cmd in R2_ASK:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r2_ask::{cmd[:32]}", result["decision"] == "ask", (cmd, result))
+
+    # benign controls MUST still allow (no over-block from the new parsing)
+    R2_ALLOW = [
+        "command ls", "command -v git", "exec ls -la", "eval ls",
+        "Set-Content notes.txt hello", "Out-File build/log.txt",
+        "dd if=a.img of=b.img", "sed -i s/a/b/ src/Foo.kt",
+        "find . -name Foo.kt", "find src -type f",
+        "echo x > out.txt", "cp a.txt b.txt 2>/dev/null",
+        "git status", "tee out.log < in.txt",
+    ]
+    for cmd in R2_ALLOW:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r2_allow::{cmd[:32]}", result["decision"] == "allow", (cmd, result))
 
     print(f"\nAll {PASSED} router checks passed")
 

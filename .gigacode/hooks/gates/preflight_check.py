@@ -40,6 +40,13 @@ def run(event):
 
 
 def main():
+    # UTF-8 stdout so the Russian reason survives a cp1251 console when this gate
+    # is run standalone or piped in smoke-check.
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except (ValueError, OSError):
+            pass
     try:
         # utf-8-sig: PowerShell pipes may prepend a UTF-8 BOM that breaks json.load
         event = json.loads(sys.stdin.buffer.read().decode("utf-8-sig", errors="replace"))

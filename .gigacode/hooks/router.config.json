@@ -23,23 +23,23 @@
     },
     {
       "event": "PreToolUse",
-      "tool_pattern": "^(WriteFile|Edit)$",
+      "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
       "gates": ["git_guard"],
       "safety_critical": true
     },
     {
       "event": "PreToolUse",
-      "tool_pattern": "^(WriteFile|Edit)$",
+      "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
       "gates": ["gate_spec_structure"]
     },
     {
       "event": "PreToolUse",
-      "tool_pattern": "^(WriteFile|Edit)$",
+      "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
       "gates": ["gate_existing_code"]
     },
     {
       "event": "PostToolUse",
-      "tool_pattern": "^(WriteFile|Edit)$",
+      "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
       "gates": ["gate_spec_structure", "gate_lint", "gate_clean_code"]
     },
     {

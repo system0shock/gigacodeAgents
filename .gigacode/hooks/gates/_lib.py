@@ -164,13 +164,24 @@ def git_changed_paths():
     Stop gates derive their trigger from the real working tree here instead of
     the agent's final message, which is attacker-controlled and was the root of
     the red-team "flow theater" bypass: omitting a path from the message used to
-    silently unlock every Stop guarantee."""
+    silently unlock every Stop guarantee.
+
+    core.quotepath=false keeps non-ASCII bytes (e.g. Cyrillic filenames) literal
+    instead of octal-escaping them inside quotes, so the returned paths are
+    real, usable paths rather than `\\320\\242...`-style mojibake."""
     try:
         proc = subprocess.run(
-            ["git", "status", "--porcelain", "--untracked-files=all"],
+            ["git", "-c", "core.quotepath=false", "status", "--porcelain",
+             "--untracked-files=all"],
             cwd=root(), text=True, encoding="utf-8", errors="replace",
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10)
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        journal_skip("git_changed_paths", f"git status could not run: {exc}")
+        return []
+    if proc.returncode != 0:
+        # not a git repository (or a git error): the working-tree Stop guarantees
+        # cannot fire — make "no repo => no enforcement" visible, not silent.
+        journal_skip("git_changed_paths", "git status returned non-zero (no git repo?)")
         return []
     paths = []
     for line in proc.stdout.splitlines():
@@ -184,9 +195,18 @@ def git_changed_paths():
 
 
 # Production-code suffixes whose change should engage the development flow.
-# Markup/spec/enforcement files are excluded by prefix in changed_code_files.
-CODE_SUFFIXES = (".kt", ".kts", ".java", ".py", ".ts", ".tsx", ".js", ".jsx",
-                 ".go", ".rs", ".cs", ".scala")
+# Broad on purpose (red-team #13: a narrow list let whole languages ship with
+# every Stop gate green). Markup/data/config (.md/.json/.yaml/.xml) is excluded
+# so routine config edits do not force the full flow; enforcement/spec/doc trees
+# are excluded by prefix in changed_code_files.
+CODE_SUFFIXES = (
+    ".kt", ".kts", ".java", ".scala", ".groovy", ".gradle",
+    ".py", ".rb", ".php",
+    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte",
+    ".go", ".rs", ".cs",
+    ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".m", ".mm", ".swift",
+    ".sh", ".bash", ".ps1", ".sql", ".tf",
+)
 
 
 def changed_code_files():
@@ -204,3 +224,19 @@ def stdin_event():
     except json.JSONDecodeError:
         return None
     return event if isinstance(event, dict) else None
+
+
+def emit(result):
+    """CLI exit helper: print a decision dict as one UTF-8 JSON line.
+
+    Reconfigures stdout to UTF-8 so Russian reason strings (and chars like U+2717
+    in openspec output) survive a non-UTF-8 Windows console codepage when a gate
+    is run standalone (`echo ... | python gate.py`, the smoke-check pipes, any
+    direct consumer). The router reconfigures its own stdout; this covers the
+    gate CLIs the router never reaches."""
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except (ValueError, OSError):
+            pass
+    print(json.dumps(result, ensure_ascii=False))

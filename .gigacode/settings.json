@@ -44,7 +44,11 @@
       "Edit(.gigacode/**)",
       "Write(.gigacode/**)",
       "Edit(.gigacode/settings.json)",
-      "Edit(.gigacode/quality-gates.json)"
+      "Edit(.gigacode/quality-gates.json)",
+      "MultiEdit(.gigacode/**)",
+      "NotebookEdit(.gigacode/**)",
+      "Bash(Remove-Item *)",
+      "Bash(rmdir *)"
     ]
   },
   "hooks": {
@@ -61,7 +65,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "^(Bash|Shell|WriteFile|Edit)$",
+        "matcher": "^(Bash|Shell|Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
         "hooks": [
           {
             "type": "command",
@@ -94,7 +98,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "^(WriteFile|Edit)$",
+        "matcher": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
         "hooks": [
           {
             "type": "command",

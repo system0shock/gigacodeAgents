@@ -63,7 +63,7 @@ def run(event):
 
 def main():
     event = _lib.stdin_event()
-    print(json.dumps(run(event or {}), ensure_ascii=False))
+    _lib.emit(run(event or {}))
 
 
 if __name__ == "__main__":

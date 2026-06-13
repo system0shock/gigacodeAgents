@@ -7,7 +7,6 @@ the message is attacker-controlled and omitting `docs/development/` used to
 unlock the gate entirely (red-team "flow theater"). The gate fires when a
 development task dir exists on disk OR production code changed; it then requires
 each task dir to carry complete, placeholder-free, evidence-backed artifacts."""
-import json
 import os
 import re
 import sys
@@ -33,14 +32,22 @@ def last_message(event):
 
 
 def discovered_task_dirs():
-    """Every docs/development/<slug>/ directory on disk (absolute paths)."""
+    """docs/development/<slug>/ dirs that are part of the CURRENT change.
+
+    Only dirs with an uncommitted change under them are validated. A stale or
+    already-completed task's artifacts (e.g. a legacy dir whose prose contains
+    TODO) must not block every future Stop in the repo — scanning ALL dirs on
+    disk was a false-block + protection-budget burn (red-team #15)."""
     base = os.path.join(_lib.root(), "docs", "development")
-    try:
-        names = sorted(os.listdir(base))
-    except OSError:
-        return []
-    return [os.path.join(base, name) for name in names
-            if os.path.isdir(os.path.join(base, name))]
+    slugs, seen = [], set()
+    for p in _lib.git_changed_paths():
+        norm = p.replace("\\", "/")
+        if norm.startswith("docs/development/"):
+            slug = norm[len("docs/development/"):].split("/", 1)[0]
+            if slug and slug not in seen and os.path.isdir(os.path.join(base, slug)):
+                seen.add(slug)
+                slugs.append(slug)
+    return [os.path.join(base, slug) for slug in slugs]
 
 
 def _rel(path):
@@ -90,13 +97,11 @@ def run(event):
 
 
 def main():
-    try:
-        # utf-8-sig: PowerShell pipes may prepend a UTF-8 BOM that breaks json.load
-        event = json.loads(sys.stdin.buffer.read().decode("utf-8-sig", errors="replace"))
-    except json.JSONDecodeError:
-        print(json.dumps({"decision": "allow"}, ensure_ascii=False))
+    event = _lib.stdin_event()
+    if event is None:  # parse error / non-dict stdin -> fail open
+        _lib.emit({"decision": "allow"})
         return
-    print(json.dumps(run(event), ensure_ascii=False))
+    _lib.emit(run(event))
 
 
 if __name__ == "__main__":

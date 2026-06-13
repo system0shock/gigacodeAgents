@@ -506,36 +506,60 @@ def test_flow_integrity():
         init_git(fix)  # git repo, no code change, no active change
         result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "Done."})
         check("fi_no_change_allows", result["decision"] == "allow", result)
+    with fixture_root() as fix:
+        # a docs-only change is NOT production code -> Stop must allow (the
+        # openspec/ docs/ .gigacode/ exclusion must not regress into an over-block)
+        os.makedirs(os.path.join(fix, "docs"))
+        with open(os.path.join(fix, "docs", "notes.md"), "w", encoding="utf-8") as handle:
+            handle.write("notes\n")
+        init_git(fix)
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "Done."})
+        check("fi_docs_only_allows", result["decision"] == "allow", result)
+
+
+def commit_all(root_dir):
+    """git init + add + commit so a dir is 'committed' (not a working-tree
+    change) — used to make a dev dir stale relative to the current change."""
+    init_git(root_dir)
+    subprocess.run(["git", "-c", "user.email=t@t.invalid", "-c", "user.name=t",
+                    "commit", "-q", "-m", "init"], cwd=root_dir, check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def test_validate_output():
-    """validate_development_output triggers from disk (a docs/development/<slug>/
-    dir or changed code), not the message text."""
+    """validate_development_output triggers from the working tree and validates
+    only docs/development/<slug>/ dirs that are part of the CURRENT change."""
     gate = load_gate("validate_development_output")
-    # (a) a dev dir with missing required artifacts -> block
+    stop = {"hook_event_name": "Stop", "last_assistant_message": "done"}
+
+    # (a) a CHANGED dev dir missing required artifacts -> block
     with fixture_root() as fix:
-        write_dev_dir(fix, "sample", {})
-        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
+        write_dev_dir(fix, "sample", {"journal.md": "did work\n"})  # partial
+        init_git(fix)  # the partial dir is a tracked change
+        result = gate.run(stop)
         check("vdo_missing_artifacts_block", result["decision"] == "block", result)
-    # (b) a complete dev dir with evidence -> allow
+    # (b) a CHANGED complete dev dir with evidence -> allow
     with fixture_root() as fix:
         write_dev_dir(fix, "sample", {
             "journal.md": "did work\n",
             "verification.md": "ran command X\nexit 0\n",
             "pr-summary.md": "summary\n"})
-        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
+        init_git(fix)
+        result = gate.run(stop)
         check("vdo_complete_allow", result["decision"] == "allow", result)
-    # (c) a placeholder marker in an artifact -> block
+    # (c) a CHANGED dev dir with a placeholder marker -> block
     with fixture_root() as fix:
         write_dev_dir(fix, "sample", {
             "journal.md": "TODO finish\n",
             "verification.md": "ran command X\nexit 0\n",
             "pr-summary.md": "summary\n"})
-        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
+        init_git(fix)
+        result = gate.run(stop)
         check("vdo_placeholder_block", result["decision"] == "block", result)
     # (d) nothing changed, no dev dir -> allow (no false block)
     with fixture_root() as fix:
-        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
+        init_git(fix)
+        result = gate.run(stop)
         check("vdo_nothing_allow", result["decision"] == "allow", result)
     # (e) production code changed but no dev dir at all -> block
     with fixture_root() as fix:
@@ -544,8 +568,59 @@ def test_validate_output():
         with open(os.path.join(srcdir, "Foo.kt"), "w", encoding="utf-8") as handle:
             handle.write("class Foo\n")
         init_git(fix)
-        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
+        result = gate.run(stop)
         check("vdo_code_no_dir_block", result["decision"] == "block", result)
+    # (f) #15: a STALE (committed, unchanged) dev dir with a TODO must NOT block
+    # the current Stop — only dirs in the current change are validated.
+    with fixture_root() as fix:
+        write_dev_dir(fix, "old-feature", {
+            "journal.md": "TODO leftover\n",
+            "verification.md": "ran command X\nexit 0\n",
+            "pr-summary.md": "summary\n"})
+        commit_all(fix)  # committed -> not a working-tree change
+        result = gate.run(stop)
+        check("vdo_stale_dir_no_block", result["decision"] == "allow", result)
+    # (g) claims "passed" but verification.md carries no command/exit evidence
+    with fixture_root() as fix:
+        write_dev_dir(fix, "sample", {
+            "journal.md": "did work\n",
+            "verification.md": "looks good\n",   # no command / exit evidence
+            "pr-summary.md": "summary\n"})
+        init_git(fix)
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "all tests passed"})
+        check("vdo_passed_no_evidence_block", result["decision"] == "block", result)
+
+
+def test_cyrillic():
+    """Cyrillic-named code is detected with its real UTF-8 path (not git's
+    octal-escaped mojibake), and gate CLIs emit valid UTF-8 JSON."""
+    lib = load_gate("_lib")
+    with fixture_root() as fix:
+        srcdir = os.path.join(fix, "src")
+        os.makedirs(srcdir)
+        with open(os.path.join(srcdir, "Главный.kt"), "w", encoding="utf-8") as handle:
+            handle.write("class Main\n")
+        init_git(fix)
+        changed = lib.changed_code_files()
+        # the real path survives (octal mangling would keep .kt but lose the stem)
+        check("cyr_real_path", any(p.endswith("Главный.kt") for p in changed), changed)
+
+    # a gate CLI must emit valid UTF-8 JSON for a Russian reason (defect 2)
+    gate_path = os.path.join(GATES_DIR, "validate_development_output.py")
+    with fixture_root() as fix:
+        write_dev_dir(fix, "sample", {"journal.md": "x\n"})  # partial -> Russian reason
+        init_git(fix)
+        env = dict(os.environ)
+        env["GIGACODE_ROOT"] = fix
+        proc = subprocess.run(
+            [sys.executable, gate_path],
+            input=b'{"hook_event_name":"Stop","last_assistant_message":"done"}',
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+        text = proc.stdout.decode("utf-8")  # raises if the gate emitted cp1251 bytes
+        obj = json.loads(text)
+        check("cyr_cli_utf8",
+              obj["decision"] == "block" and "development" in obj.get("reason", ""),
+              (text, obj))
 
 
 def main():
@@ -558,6 +633,7 @@ def main():
     test_existing_code()
     test_flow_integrity()
     test_validate_output()
+    test_cyrillic()
     print(f"\nAll {PASSED} gate checks passed")
 
 

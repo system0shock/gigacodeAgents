@@ -102,6 +102,20 @@ def aggregate(results):
 
 
 def apply_stop_budget(event_name, final, config, event):
+    """Track consecutive Stop-blocks per session.
+
+    The prior count is clamped into [0, budget-1] before incrementing, so
+    `min(prior, budget-1) + 1 <= budget`: a block always stays a block. A
+    pre-seeded counter in [budget, 10] (which load_state's 0..10 window would
+    otherwise admit) therefore cannot skip the first genuine block.
+
+    There is NO auto-degrade-to-allow: a single persisted integer cannot be both
+    seed-proof and degrade-after-N (the clamp that defeats a seed also caps the
+    count below the degrade threshold). The earlier degrade was itself a soft
+    bypass — Stop blocks are agent-fixable, so they now persist until fixed; a
+    genuinely stuck/buggy gate is resolved by the human disableAllHooks escape
+    hatch, not by the agent outwaiting the budget. git_guard additionally
+    write-protects the state file, so seeding requires a separate write bypass."""
     if event_name != "Stop":
         return final
     # sessions without session_id share one budget key — acceptable v1 tradeoff
@@ -113,18 +127,10 @@ def apply_stop_budget(event_name, final, config, event):
             save_state(state)
         return final
     budget = config.get("stop_block_budget", 2)
-    # Prior count is already sanitized by load_state (0..10), so a pre-seeded
-    # large value is dropped and treated as 0.  Use normal accumulation so
-    # genuine degradation after the configured budget is preserved.
-    count = state.get(key, 0) + 1
+    count = min(max(state.get(key, 0), 0), max(budget - 1, 0)) + 1
     state[key] = count
     save_state(state)
-    if count > budget:
-        journal({"kind": "stop_budget_exhausted", "session": key, "count": count})
-        return {
-            "decision": "allow",
-            "systemMessage": f"Stop gate blocked {count} times; degraded to a warning. Unresolved: {final.get('reason', '')}",
-        }
+    journal({"kind": "stop_block", "session": key, "count": count, "budget": budget})
     return final
 
 
