@@ -13,6 +13,9 @@ required=(
   "openspec/config.yaml"
   "openspec/specs/.gitkeep"
   "docs/templates/manifest.json"
+  "scripts/build_module_map.py"
+  "scripts/test_module_map.py"
+  ".serena/project.yml"
   ".gigacode/hooks/router.py"
   ".gigacode/hooks/router.config.json"
   ".gigacode/hooks/hook_probe.py"
@@ -95,6 +98,10 @@ if grep -rIli 'repomix' .gigacode/agents rules >/dev/null 2>&1; then
   echo "repomix must not appear in agents or rules" >&2
   exit 1
 fi
+if grep -qi 'repomix' README.md; then
+  echo "repomix must not appear in README" >&2
+  exit 1
+fi
 
 for d in architecture analytics/use-case "analytics/integration/nfr and contact" analytics/db/data-model; do
   if [[ ! -f "$d/.gitkeep" ]]; then
@@ -105,5 +112,6 @@ done
 
 python scripts/test_router.py
 python scripts/test_gates.py
+python scripts/test_module_map.py
 
 echo "Analytics module smoke check passed."

@@ -12,6 +12,9 @@ $required = @(
   "openspec/config.yaml",
   "openspec/specs/.gitkeep",
   "docs/templates/manifest.json",
+  "scripts/build_module_map.py",
+  "scripts/test_module_map.py",
+  ".serena/project.yml",
   ".gigacode/hooks/router.py",
   ".gigacode/hooks/router.config.json",
   ".gigacode/hooks/hook_probe.py",
@@ -78,6 +81,9 @@ $repomix = Get-ChildItem -Recurse -File ".gigacode/agents", "rules" |
 if ($repomix) {
   throw "repomix must not appear in agents or rules"
 }
+if (Select-String -Path "README.md" -Pattern 'repomix' -SimpleMatch -Quiet) {
+  throw "repomix must not appear in README"
+}
 
 foreach ($d in @("architecture", "analytics/use-case", "analytics/integration/nfr and contact", "analytics/db/data-model")) {
   if (-not (Test-Path (Join-Path $d ".gitkeep"))) {
@@ -89,5 +95,7 @@ python scripts/test_router.py
 if ($LASTEXITCODE -ne 0) { throw "test_router.py failed" }
 python scripts/test_gates.py
 if ($LASTEXITCODE -ne 0) { throw "test_gates.py failed" }
+python scripts/test_module_map.py
+if ($LASTEXITCODE -ne 0) { throw "test_module_map.py failed" }
 
 Write-Host "Analytics module smoke check passed."
