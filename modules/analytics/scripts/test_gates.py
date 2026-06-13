@@ -186,12 +186,52 @@ def test_techdocs():
               gate.run(file_event("docs/features/card-blocking/journal.md"))["decision"] == "allow")
 
 
+def test_final_format():
+    gate = load_gate("gate_final_format")
+    with fixture_root() as tmp:
+        rel = "analytics/use-case/CardBlocking.adoc"
+        write_file(tmp, rel, GOOD_FINAL_ADOC)
+        check("ff_good_adoc", gate.run(file_event(rel))["decision"] == "allow")
+        bad = "analytics/use-case/cardBlocking.adoc"
+        write_file(tmp, bad, GOOD_FINAL_ADOC)
+        check("ff_lower_name", gate.run(file_event(bad))["decision"] == "block")
+        check("ff_puml_misplaced",
+              gate.run(file_event("analytics/use-case/Diagram.puml"))["decision"] == "block")
+        write_file(tmp, "architecture/Context.puml", "@startuml\nA -> B\n@enduml\n")
+        check("ff_puml_ok", gate.run(file_event("architecture/Context.puml"))["decision"] == "allow")
+        write_file(tmp, "architecture/Broken.puml", "@startuml\nA -> B\n")
+        check("ff_puml_tags", gate.run(file_event("architecture/Broken.puml"))["decision"] == "block")
+        check("ff_sql_misplaced",
+              gate.run(file_event("analytics/db/data-model/Init.sql"))["decision"] == "block")
+        write_file(tmp, "analytics/db/data-model/Model.dbml", "Table users { id int }\n")
+        check("ff_dbml_ok",
+              gate.run(file_event("analytics/db/data-model/Model.dbml"))["decision"] == "allow")
+        write_file(tmp, "analytics/api/event/CardEvent.json", "{broken")
+        check("ff_bad_json",
+              gate.run(file_event("analytics/api/event/CardEvent.json"))["decision"] == "block")
+        check("ff_gitkeep",
+              gate.run(file_event("analytics/use-case/.gitkeep"))["decision"] == "allow")
+        fail_script = write_file(tmp, "fail.py", "import sys\nsys.exit(1)\n")
+        write_qg(tmp, {"final_validators": [
+            {"name": "always-fail", "command": f'python "{fail_script}"',
+             "applies_to": ["analytics/use-case/**"], "timeout": 30}]})
+        check("ff_validator_fail", gate.run(file_event(rel))["decision"] == "block")
+        write_qg(tmp, {"final_validators": [
+            {"name": "ghost", "command": "no-such-binary-xyz",
+             "applies_to": ["analytics/**"], "timeout": 5}]})
+        check("ff_validator_missing", gate.run(file_event(rel))["decision"] == "allow")
+        write_qg(tmp, {"final_validators": [
+            {"name": "off", "command": "", "applies_to": ["**"]}]})
+        check("ff_validator_unconfigured", gate.run(file_event(rel))["decision"] == "allow")
+
+
 def main():
     test_git_guard()
     test_context_inject()
     test_preflight()
     test_spec_bootstrap()
     test_techdocs()
+    test_final_format()
     print(f"All {PASSED} gate checks passed")
 
 

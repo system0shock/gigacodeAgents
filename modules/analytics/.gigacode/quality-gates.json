@@ -1,0 +1,26 @@
+{
+  "final_validators": [
+    {
+      "name": "openapi-rest",
+      "command": "",
+      "applies_to": ["analytics/api/rest/**/*.yaml", "analytics/api/rest/**/*.yml", "analytics/integration/rest/**/*.yaml", "analytics/integration/rest/**/*.yml"],
+      "timeout": 60
+    },
+    {
+      "name": "asyncapi-event",
+      "command": "",
+      "applies_to": ["analytics/api/event/**/*.yaml", "analytics/api/event/**/*.yml", "analytics/integration/event/**/*.yaml", "analytics/integration/event/**/*.yml"],
+      "timeout": 60
+    },
+    {
+      "name": "plantuml",
+      "command": "",
+      "applies_to": ["architecture/**/*.puml"],
+      "timeout": 60
+    }
+  ],
+  "openspec_validate": {
+    "command": "openspec validate --specs --strict",
+    "timeout": 120
+  }
+}
