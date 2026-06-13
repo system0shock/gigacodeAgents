@@ -49,6 +49,13 @@
         "hooks": [
           {"type": "command", "command": "python .gigacode/hooks/router.py --event=SessionStart"}
         ]
+      },
+      {
+        "matcher": "",
+        "async": true,
+        "hooks": [
+          {"type": "command", "command": "serena-hooks activate --client=claude-code", "timeout": 10000}
+        ]
       }
     ],
     "SubagentStart": [
@@ -64,6 +71,20 @@
         "matcher": "^(Bash|Shell|WriteFile|Edit)$",
         "hooks": [
           {"type": "command", "command": "python .gigacode/hooks/router.py --event=PreToolUse"}
+        ]
+      },
+      {
+        "matcher": "",
+        "async": true,
+        "hooks": [
+          {"type": "command", "command": "serena-hooks remind --client=claude-code", "timeout": 5000}
+        ]
+      },
+      {
+        "matcher": "mcp__serena__*",
+        "async": true,
+        "hooks": [
+          {"type": "command", "command": "serena-hooks auto-approve --client=claude-code", "timeout": 5000}
         ]
       }
     ],
@@ -82,6 +103,21 @@
           {"type": "command", "command": "python .gigacode/hooks/router.py --event=Stop"}
         ]
       }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "async": true,
+        "hooks": [
+          {"type": "command", "command": "serena-hooks cleanup --client=claude-code", "timeout": 5000}
+        ]
+      }
     ]
+  },
+  "mcpServers": {
+    "serena": {
+      "command": "serena",
+      "args": ["start-mcp-server", "--context", "ide", "--project-from-cwd"]
+    }
   }
 }
