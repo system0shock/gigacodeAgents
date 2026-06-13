@@ -84,15 +84,16 @@ intake (главная сессия) → repo-context → OpenSpec propose
 |---|---|---|
 | `SessionStart`, `SubagentStart(coder)` | context_inject | инъекция правил + индекса символов |
 | `UserPromptSubmit` | preflight | блок невалидного запроса |
-| `PreToolUse(Bash)` | git_guard | блок: защищённые ветки, `reset --hard`, force-push и т.п. |
+| `PreToolUse(Bash/Shell, Write/Edit)` | git_guard | блок: защищённые ветки, деструктивный git, разрушение/правка репозитория, `.gigacode` и `openspec/specs` — сквозь обёртки, перенаправления и подстановки |
 | `PreToolUse(Write/Edit)` | spec_structure | блок записи в `openspec/specs|archive` (остальные пути гейт пропускает сам) |
 | `PreToolUse(Write/Edit)` | existing_code | **advisory**: «похожий символ уже есть в X» (только новые файлы) |
 | `PostToolUse(Write/Edit)` | spec_structure, lint, clean_code | strict-валидация change + блок по линтеру; эвристики — предупреждение |
-| `Stop` | validate_output, spec_structure, build | блок до полных артефактов, валидных changes и зелёного билда; максимум 2 ретрая |
+| `Stop` | validate_output, spec_structure, build | блок (триггер по рабочему дереву) до полных артефактов, валидных changes и зелёного билда; блоки постоянны — чинятся самим агентом |
 
-Предохранители: лимит ретраев против бесконечных циклов на Stop,
-latency-бюджет ≤ 200 мс на pre-проверку, при падении гейта — внятная причина и
-escape hatch, журналирование всех решений.
+Предохранители: latency-бюджет ≤ 200 мс на pre-проверку, при падении гейта —
+внятная причина и escape hatch (`disableAllHooks`), журналирование всех решений.
+Stop-блоки постоянны (без автодеградации): застрявший/багнутый гейт
+разруливается человеком через escape hatch, а не пропуском после N попыток.
 
 Принцип: **блокируем детерминированное (git, валидатор, билд), эвристики
 только предупреждают.**
