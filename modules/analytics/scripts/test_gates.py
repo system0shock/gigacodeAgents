@@ -170,11 +170,28 @@ def test_spec_bootstrap():
         check("sb_notebook_block", gate.run(nb)["decision"] == "block")
 
 
+def test_techdocs():
+    gate = load_gate("gate_techdocs")
+    with fixture_root() as tmp:
+        rel = "docs/features/card-blocking/overview.adoc"
+        write_file(tmp, rel, GOOD_TECHDOC)
+        check("td_good", gate.run(file_event(rel))["decision"] == "allow")
+        write_file(tmp, rel, "= Обзор\n\nБез атрибутов.\n")
+        check("td_missing_attrs", gate.run(file_event(rel))["decision"] == "block")
+        write_file(tmp, rel, GOOD_TECHDOC + "\n```code```\n")
+        check("td_markdown", gate.run(file_event(rel))["decision"] == "block")
+        write_file(tmp, rel, "= Overview\n:feature: x\n:run-date: d\n:code-commit: c\n\nEnglish only.\n")
+        check("td_non_russian", gate.run(file_event(rel))["decision"] == "block")
+        check("td_other_path",
+              gate.run(file_event("docs/features/card-blocking/journal.md"))["decision"] == "allow")
+
+
 def main():
     test_git_guard()
     test_context_inject()
     test_preflight()
     test_spec_bootstrap()
+    test_techdocs()
     print(f"All {PASSED} gate checks passed")
 
 
