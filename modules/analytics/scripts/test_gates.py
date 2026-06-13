@@ -109,6 +109,33 @@ def test_git_guard():
     check("gg_notebook_gigacode",
           gate.run({"tool_input": {"notebook_path": ".gigacode/hooks/router.py"}})["decision"] == "block")
 
+    # --- Phase 4: engine hardening (ported from dev-flow) ---
+    # CRITICAL regression: file-tool write to openspec/specs stays ALLOWED
+    # (create-once split — governed by gate_spec_bootstrap, not git_guard).
+    check("gg_file_specs_allowed_p4",
+          gate.run({"tool_input": {"file_path": "openspec/specs/new-cap/spec.md"}})["decision"] == "allow")
+    # shell write to specs still blocks
+    check("gg_shell_specs_block_p4",
+          gate.run({"tool_input": {"command": "echo x > openspec/specs/cap/spec.md"}})["decision"] == "block")
+    # absolute / nested .gigacode (component-regex, not start-anchored glob)
+    check("gg_abs_gigacode",
+          gate.run({"tool_input": {"file_path": "/workspace/proj/modules/analytics/.gigacode/hooks/router.py"}})["decision"] == "block")
+    # .git deletion by absolute and traversal path
+    check("gg_rm_abs_dotgit",
+          gate.run({"tool_input": {"command": "rm -rf /workspace/proj/.git"}})["decision"] == "block")
+    check("gg_rm_traversal_dotgit",
+          gate.run({"tool_input": {"command": "rm -rf ../../.git"}})["decision"] == "block")
+    # fd-prefixed and argument-glued redirections to an enforcement path
+    check("gg_fd_redirect",
+          gate.run({"tool_input": {"command": "printf err 2>.gigacode/settings.json"}})["decision"] == "block")
+    check("gg_glued_redirect",
+          gate.run({"tool_input": {"command": "echo x>.gigacode/settings.json"}})["decision"] == "block")
+    # unicode separator and command-substitution bypasses
+    check("gg_nbsp_reset",
+          gate.run({"tool_input": {"command": "git reset --hard"}})["decision"] == "block")
+    check("gg_subst_reset",
+          gate.run({"tool_input": {"command": "x=$(git reset --hard)"}})["decision"] == "block")
+
 
 def test_context_inject():
     gate = load_gate("gate_context_inject")

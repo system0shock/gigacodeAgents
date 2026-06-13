@@ -8,12 +8,9 @@ separators (`raw_segments`), env-assignments and wrappers (env/nice/bash -c/...)
 are peeled (`peel`), and the program is matched by basename (`_prog`) so
 `cd x && /usr/bin/git.exe reset --hard` is caught the same as `git reset --hard`.
 
-Path policy: shell writes to `openspec/specs/` and `openspec/changes/archive/`
-BLOCK; file-tool (WriteFile/Edit) writes to `openspec/specs/` are intentionally
-ALLOWED here — the create-once bootstrap rule for them lives in
-`gate_spec_bootstrap`, whose router route must stay `safety_critical: true` to
-remain fail-closed. `.gigacode/**` self-protect blocks on both channels; writes
-to PROTECTED_PATHS (CI/secrets/infra) ASK.
+Path policy: writes to enforcement-owned paths (`.gigacode/**`) and openspec
+truth BLOCK (fail-closed — the layer must not be editable by the agent it
+constrains); writes to PROTECTED_PATHS (CI/secrets/infra) ASK.
 
 This gate is self-contained (it does not import _lib) and runs on the
 safety-critical PreToolUse Bash/Shell and WriteFile/Edit routes.
@@ -25,6 +22,7 @@ import re
 import shlex
 import subprocess
 import sys
+import unicodedata
 
 PROTECTED_BRANCHES = [
     "main", "master", "develop", "development", "release", "release/*",
@@ -40,15 +38,26 @@ PROTECTED_PATHS = [
     "secrets/**", "**/secrets/**", "config/prod/**", "config/production/**",
     "config/staging/**", "config/uat/**",
 ]
-# Enforcement-owned paths: writes here BLOCK (fail-closed).
-SELF_PROTECT = [".gigacode/**", ".gigacode"]
-# specs/ blocked on the shell channel only; file-tool writes are governed by gate_spec_bootstrap (create-once).
-OPENSPEC_ARCHIVE_RE=re.compile(r"(^|/)openspec/changes/archive/",re.IGNORECASE)
-OPENSPEC_SPECS_RE=re.compile(r"(^|/)openspec/specs/",re.IGNORECASE)
+# Enforcement-owned paths and the .git repo: writes/deletes here BLOCK
+# (fail-closed). Matched as a path COMPONENT anywhere in the (possibly absolute)
+# path — a start-anchored fnmatch let an absolute path like F:/proj/.gigacode/...
+# slip past, and Claude Code passes absolute file_path by default.
+SELF_PROTECT_RE = re.compile(r"(^|/)\.gigacode(/|$)")
+GIT_DIR_RE = re.compile(r"(^|/)\.git(/|$)")
+# Analytics create-once split: openspec/specs is blocked on the SHELL channel
+# only — file-tool (WriteFile/Edit/NotebookEdit) writes to specs are ALLOWED here
+# and governed by gate_spec_bootstrap (create-once, fail-closed on its own route).
+# openspec/changes/archive is blocked on BOTH channels.
+OPENSPEC_ARCHIVE_RE = re.compile(r"(^|/)openspec/changes/archive/", re.IGNORECASE)
+OPENSPEC_SPECS_RE = re.compile(r"(^|/)openspec/specs/", re.IGNORECASE)
 
 # Wrappers that prefix another command (the real command is their tail).
+# `command`/`exec`/`builtin` run their argument as a program, so they are
+# transparent prefixes, NOT -c string wrappers — listing `command` under
+# DASH_C_WRAPPERS made `command git reset --hard` a universal kill-switch.
 PREFIX_WRAPPERS = {"env", "nice", "ionice", "time", "stdbuf", "nohup",
-                   "sudo", "doas", "timeout", "xargs"}
+                   "sudo", "doas", "timeout", "xargs", "command", "exec",
+                   "builtin"}
 # Wrapper short/long flags that consume a separate WORD value (e.g. `sudo -u
 # root`, `env -u NAME`). Numeric values (`nice -n 10`, `timeout 30`) are caught
 # generically by the isdigit() skip in peel(), so only word-valued flags are
@@ -56,14 +65,32 @@ PREFIX_WRAPPERS = {"env", "nice", "ionice", "time", "stdbuf", "nohup",
 WRAPPER_VALUE_FLAGS = {"-u", "-g", "-U", "--user", "--group"}
 # Wrappers that take the command as a -c / -Command / /c string argument.
 DASH_C_WRAPPERS = {"bash", "sh", "zsh", "dash", "ash", "ksh",
-                   "cmd", "command", "powershell", "pwsh"}
-# Non-git verbs that delete; flagged when they target the .git repo.
+                   "cmd", "powershell", "pwsh"}
+# `eval ...` concatenates its arguments and runs the result as a command.
+EVAL_WRAPPERS = {"eval"}
+# Non-git verbs that delete; flagged when they target a protected path. `find`
+# is delete-guarded in _destructive_target (only -delete / -exec rm counts).
 DESTRUCTIVE_VERBS = {"rm", "rmdir", "del", "erase", "remove-item", "ri", "rd",
-                     "truncate", "shred"}
+                     "truncate", "shred", "find"}
 # Verbs whose final positional argument is a write destination.
 WRITE_VERBS = {"cp", "mv", "copy", "move", "copy-item", "cpi", "move-item",
                "mi", "tee", "install", "rename-item", "rni"}
+# PowerShell write cmdlets: destination is -Path/-FilePath/-LiteralPath or the
+# FIRST positional (NOT the last) — Windows is the primary platform.
+PS_WRITE_VERBS = {"set-content", "add-content", "out-file", "tee-object",
+                  "sc", "ac"}
+# Writer programs with a non-positional / in-place destination.
+WRITER_PROGS = {"dd", "sed", "perl", "truncate", "ed"}
 ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+# A redirection token: optional fd digits, > >> < or <<, optional clobber |, and
+# an optional glued operand.  e.g.  >  >>  1>  2>>  >|  1>file  <  <file
+REDIR_RE = re.compile(r"^(\d*)(>{1,2}|<{1,2})(\|?)(.*)$")
+# Operator glued after a word (`arg>file`, `arg2>>file`): shlex keeps it as one
+# token because it is not a real shell. Capture the operand as a write target.
+EMBED_REDIR_RE = re.compile(r"(?P<op>>{1,2})(?P<clobber>\|?)(?P<operand>[^>]*)$")
+# Zero-width / format chars stripped before tokenizing (NBSP and other Zs spaces
+# are folded to a normal space by NFKC + the Zs check in _normalize_ws).
+ZERO_WIDTH = {"​", "‌", "‍", "⁠", "﻿"}
 # Global git flags that consume a following value token (git -C <path> ...).
 GIT_GLOBAL_VALUE_FLAGS = {"-c", "-C", "--git-dir", "--work-tree", "--namespace",
                           "--super-prefix", "--exec-path", "--config-env",
@@ -112,11 +139,6 @@ def _norm(path):
 
 
 def path_from_event(event):
-    # Deliberately a self-contained copy, not _lib.path_from_event: this one
-    # additionally normpath-canonicalizes via _norm (traversal defense). The
-    # extracted key set is kept in sync with _lib so neither channel can be
-    # addressed through a field the other guards — notebook_path included so a
-    # NotebookEdit write to a protected path is caught on the file-tool channel.
     for key in ("path", "file_path", "filename", "notebook_path"):
         v = event.get(key)
         if isinstance(v, str):
@@ -157,6 +179,19 @@ def _is_dash_c(tok):
     return t in ("-command", "/c") or bool(re.match(r"^-[a-z]*c", t))
 
 
+def _normalize_ws(s):
+    """NFKC-normalize, drop zero-width/format chars, and fold every Unicode
+    space (Zs) to a plain space. Closes the NBSP / zero-width separator bypass
+    (git<NBSP>reset<NBSP>--hard) on PowerShell, which splits on those."""
+    s = unicodedata.normalize("NFKC", s)
+    out = []
+    for ch in s:
+        if ch in ZERO_WIDTH:
+            continue
+        out.append(" " if unicodedata.category(ch) == "Zs" else ch)
+    return "".join(out)
+
+
 def _tokenize(s):
     # posix=True removes quotes during tokenization (matching the real shell),
     # so quoted flags like "--hard" are compared as --hard, not '"--hard"'.
@@ -193,6 +228,12 @@ def raw_segments(command):
                 i += 2
                 continue
             if c in (";", "|", "&", "\n"):
+                # `>|` (clobber) and `>&` (fd-dup) are redirections, not pipes —
+                # don't split, or the redirect target lands in its own segment.
+                if c in ("|", "&") and "".join(cur).rstrip().endswith(">"):
+                    cur.append(c)
+                    i += 1
+                    continue
                 parts.append("".join(cur).strip())
                 cur = []
                 i += 1
@@ -246,16 +287,52 @@ def peel(tokens):
                 return to_leaves(rest[0])      # quoted single-string command
             inner = " ".join(rest)
             return to_leaves(inner) if inner else []
+        if prog in EVAL_WRAPPERS:  # eval "cmd" / eval cmd — re-parse the rest
+            inner = " ".join(_sq(t) for t in tokens[i + 1:])
+            return to_leaves(inner) if inner else []
         break
     leaf = [t.strip("()") for t in tokens[i:] if t.strip("()")]
+    # A single quoted blob left by a wrapper that took the command as one WORD
+    # (e.g. `env -S 'git reset --hard'`): re-tokenize so it is inspected.
+    if len(leaf) == 1 and " " in leaf[0]:
+        return to_leaves(leaf[0])
     return [leaf] if leaf else []
 
 
+def extract_substitutions(command):
+    """Inner command strings of $(...) and `...` substitutions, so a destructive
+    command hidden inside one (x=$(git reset --hard)) is still inspected."""
+    inners = []
+    i = 0
+    while i < len(command) - 1:
+        if command[i] == "$" and command[i + 1] == "(":
+            depth, j = 1, i + 2
+            while j < len(command) and depth:
+                if command[j] == "(":
+                    depth += 1
+                elif command[j] == ")":
+                    depth -= 1
+                j += 1
+            inners.append(command[i + 2:j - 1])
+            i = j
+        else:
+            i += 1
+    parts = command.split("`")
+    for k in range(1, len(parts), 2):  # odd segments are backtick-quoted
+        inners.append(parts[k])
+    return [s for s in inners if s.strip()]
+
+
 def to_leaves(command):
-    """Full pipeline: a command string -> list of peeled leaf token-lists."""
+    """Full pipeline: a command string -> list of peeled leaf token-lists.
+    Normalizes Unicode separators, splits on shell separators, peels wrappers,
+    and recurses into command substitutions."""
+    command = _normalize_ws(command)
     leaves = []
     for seg in raw_segments(command):
         leaves.extend(peel(_tokenize(seg)))
+    for inner in extract_substitutions(command):
+        leaves.extend(to_leaves(inner))
     return leaves
 
 
@@ -303,8 +380,11 @@ def git_destructive(sub, rest):
         return f"Blocked potentially irreversible `git {sub}`."
     if sub == "checkout" and "--" in rest:
         return "Blocked `git checkout --` (discards working-tree edits)."
-    if sub == "restore" and "--worktree" in rest:
-        return "Blocked `git restore --worktree`."
+    if sub == "restore" and ("--worktree" in rest or "--staged" not in rest):
+        # --worktree is git restore's DEFAULT, so `git restore .` / `git restore
+        # <path>` discard working-tree edits even without the flag. Only the
+        # index-only form (`--staged` without `--worktree`) is non-destructive.
+        return "Blocked `git restore` (discards working-tree edits; use --staged to unstage)."
     if sub == "worktree" and rest[:1] == ["remove"]:
         return "Blocked `git worktree remove`."
     if sub == "stash" and rest[:1] == ["clear"]:
@@ -312,50 +392,128 @@ def git_destructive(sub, rest):
     return ""
 
 
-def classify_path(path,shell=False):
-    """'block' for enforcement/openspec-truth paths, 'ask' for protected, else ''."""
-    p=_norm(path)
-    if any(fnmatch.fnmatch(p,pat) or p==pat.rstrip("/*") for pat in SELF_PROTECT): return "block"
-    if OPENSPEC_ARCHIVE_RE.search(p): return "block"
-    if shell and OPENSPEC_SPECS_RE.search(p): return "block"
-    if any(fnmatch.fnmatch(p,pat) for pat in PROTECTED_PATHS): return "ask"
+def classify_path(path, shell=False):
+    """'block' for enforcement/.git paths and openspec/changes/archive (any
+    channel), plus openspec/specs on the SHELL channel; 'ask' for protected;
+    else ''. The block tier is matched component-wise (regex) so an absolute
+    path cannot slip past a start-anchored glob."""
+    p = _norm(path)
+    if SELF_PROTECT_RE.search(p) or GIT_DIR_RE.search(p) or OPENSPEC_ARCHIVE_RE.search(p):
+        return "block"
+    if shell and OPENSPEC_SPECS_RE.search(p):
+        return "block"
+    if any(fnmatch.fnmatch(p, pat) for pat in PROTECTED_PATHS):
+        return "ask"
+    return ""
+
+
+def _split_redirects(tokens):
+    """(positionals, out_targets): out_targets are files written via > >> n> >|
+    — leading-operator OR glued after a word (`x>file`). Input redirects
+    (< << n<) are consumed but never write-targets, so a stdin redirect cannot
+    masquerade as a copy/move destination."""
+    positionals, out_targets = [], []
+    i = 0
+    while i < len(tokens):
+        t = tokens[i]
+        m = REDIR_RE.match(t)
+        if m:  # token starts with [fd]> / >> / >| / <
+            operand = m.group(4)
+            if not operand and i + 1 < len(tokens):
+                operand = tokens[i + 1]
+                i += 1
+            if m.group(2).startswith(">") and operand:
+                out_targets.append(operand)
+            i += 1
+            continue
+        if ">" in t:  # operator glued after a word: `arg>file`
+            em = EMBED_REDIR_RE.search(t)
+            if em:
+                operand = em.group("operand")
+                if not operand and i + 1 < len(tokens):
+                    operand = tokens[i + 1]
+                    i += 1
+                if operand:
+                    out_targets.append(operand)
+                prefix = t[:em.start()].rstrip("0123456789")  # drop trailing fd digits
+                if prefix:
+                    positionals.append(prefix)
+                i += 1
+                continue
+        positionals.append(t)
+        i += 1
+    return positionals, out_targets
+
+
+def _ps_dest(args):
+    """Destination of a PowerShell write cmdlet: -Path/-FilePath/-LiteralPath
+    value, else the FIRST positional argument."""
+    i = 0
+    while i < len(args):
+        if args[i].lower() in ("-path", "-filepath", "-literalpath") and i + 1 < len(args):
+            return args[i + 1]
+        i += 1
+    for a in args:
+        if not a.startswith("-"):
+            return a
     return ""
 
 
 def write_targets(tokens):
-    """Paths a segment writes to: `>` / `>>` redirection targets and the
-    destination of a copy/move/tee verb."""
-    targets, i = [], 0
-    prog = _prog(tokens[0]) if tokens else ""
-    while i < len(tokens):
-        t = tokens[i]
-        if t in (">", ">>") and i + 1 < len(tokens):
-            targets.append(_sq(tokens[i + 1]))
-            i += 2
-            continue
-        if t.startswith(">") and len(t) > 1:  # `>file` glued
-            targets.append(_sq(t.lstrip(">")))
-            i += 1
-            continue
-        i += 1
-    if prog in WRITE_VERBS:
-        args = [a for a in tokens[1:] if not a.startswith("-")]
-        if args:
-            targets.append(_sq(args[-1]))  # destination = last positional
-    return [_norm(p) for p in targets if p]
+    """Every path a segment writes to: redirection targets (> >> n> >|, glued or
+    spaced), plus the destination of a copy/move/tee verb, a PowerShell write
+    cmdlet (first positional / -Path), or a writer program (dd of=, sed/perl -i,
+    truncate)."""
+    if not tokens:
+        return []
+    prog = _prog(tokens[0])
+    positionals, targets = _split_redirects(tokens)
+    rest = positionals[1:]                       # arguments after the program
+    nonflag = [a for a in rest if not a.startswith("-")]
+    if prog in WRITE_VERBS and nonflag:
+        targets.append(nonflag[-1])              # cp/mv/tee/install dest = last
+    elif prog in PS_WRITE_VERBS:
+        dest = _ps_dest(rest)
+        if dest:
+            targets.append(dest)
+    elif prog == "dd":
+        for a in rest:
+            if a.lower().startswith("of="):
+                targets.append(a[3:])
+    elif prog in ("sed", "perl"):
+        if any(a == "-i" or a.startswith(("-i", "--in-place")) for a in rest) and nonflag:
+            targets.append(nonflag[-1])          # the file edited in place
+    elif prog in ("truncate", "ed") and nonflag:
+        targets.append(nonflag[-1])
+    return [_norm(_sq(p)) for p in targets if p]
 
 
-def _git_in_args(leaf):
-    """True if a non-git destructive verb targets the .git repository."""
-    for t in leaf[1:]:
-        n = _norm(_sq(t))
-        if n == ".git" or n.startswith(".git/"):
-            return True
-    return False
+def _destructive_target(prog, leaf):
+    """For a deleting command, classify its path arguments: 'block' if it targets
+    the enforcement tree / .git / openspec truth, 'ask' for a protected path,
+    else ''. `find` only counts when it actually deletes (-delete / -exec rm)."""
+    args = leaf[1:]
+    if prog == "find":
+        low = [a.lower() for a in args]
+        deleting = "-delete" in low or (
+            "-exec" in low and any(_prog(a) in ("rm", "rmdir", "del") for a in args))
+        if not deleting:
+            return ""
+    worst = ""
+    for t in args:
+        if t.startswith("-"):
+            continue
+        c = classify_path(_sq(t), shell=True)
+        if c == "block":
+            return "block"
+        if c == "ask":
+            worst = "ask"
+    return worst
 
 
 def inspect_command(command):
     """Return (decision, reason) for a shell command: 'block'/'ask'/''."""
+    pending_ask = ""
     for leaf in to_leaves(command):
         if not leaf:
             continue
@@ -369,17 +527,19 @@ def inspect_command(command):
                 if reason:
                     return "block", reason
         elif prog in DESTRUCTIVE_VERBS:
-            if _git_in_args(leaf):
-                return "block", "Blocked deletion of the git repository (.git)."
-        worst = ""
+            d = _destructive_target(prog, leaf)
+            if d == "block":
+                return "block", "Blocked deletion of an enforcement/.git/openspec path."
+            if d == "ask":
+                pending_ask = "Deletion of a protected path requires explicit confirmation."
         for tgt in write_targets(leaf):
-            c=classify_path(tgt,shell=True)
+            c = classify_path(tgt, shell=True)
             if c == "block":
-                return "block", f"Blocked shell write to enforcement/openspec path '{tgt}'."
+                return "block", f"Blocked shell write to enforcement/.git path '{tgt}'."
             if c == "ask":
-                worst = "ask"
-        if worst == "ask":
-            return "ask", "Shell write to a protected path requires explicit confirmation."
+                pending_ask = "Shell write to a protected/openspec-truth path requires explicit confirmation."
+    if pending_ask:
+        return "ask", pending_ask
     return "", ""
 
 
@@ -418,6 +578,13 @@ def run(event):
 
 
 def main():
+    # UTF-8 stdout so a self-contained run (echo ... | python git_guard.py) emits
+    # any non-ASCII reason cleanly on a cp1251 Windows console.
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except (ValueError, OSError):
+            pass
     try:
         # utf-8-sig: PowerShell pipes may prepend a UTF-8 BOM that breaks json.load
         event = json.loads(sys.stdin.buffer.read().decode("utf-8-sig", errors="replace"))
