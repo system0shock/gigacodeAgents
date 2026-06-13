@@ -225,6 +225,47 @@ def test_final_format():
         check("ff_validator_unconfigured", gate.run(file_event(rel))["decision"] == "allow")
 
 
+def manifest(status, **extra):
+    data = {"feature": "card-blocking", "run_date": "2026-06-11",
+            "code_commit": "abc1234", "status": status,
+            "capability": "card-blocking",
+            "produced": {"technical": [], "spec": "", "final": []}}
+    data.update(extra)
+    return json.dumps(data, ensure_ascii=False)
+
+
+def write_techdocs(tmp):
+    for doc in ("overview", "flow", "integrations", "data", "questions"):
+        write_file(tmp, f"docs/features/card-blocking/{doc}.adoc", GOOD_TECHDOC)
+
+
+def test_validate_run_output():
+    gate = load_gate("validate_run_output")
+    with fixture_root() as tmp:
+        check("vr_no_runs", gate.run({"hook_event_name": "Stop"})["decision"] == "allow")
+        write_file(tmp, "docs/features/card-blocking/manifest.json", manifest("scoping"))
+        check("vr_scoping", gate.run({"hook_event_name": "Stop"})["decision"] == "allow")
+        write_file(tmp, "docs/features/card-blocking/manifest.json", manifest("draft"))
+        check("vr_draft_missing", gate.run({"hook_event_name": "Stop"})["decision"] == "block")
+        write_techdocs(tmp)
+        check("vr_draft_ready", gate.run({"hook_event_name": "Stop"})["decision"] == "allow")
+        write_file(tmp, "docs/features/card-blocking/manifest.json", manifest("confirmed"))
+        check("vr_confirmed_no_spec", gate.run({"hook_event_name": "Stop"})["decision"] == "block")
+        write_file(tmp, "openspec/specs/card-blocking/spec.md", "## Requirements\n")
+        check("vr_confirmed_ok", gate.run({"hook_event_name": "Stop"})["decision"] == "allow")
+        write_file(tmp, "docs/features/card-blocking/manifest.json",
+                   manifest("complete", produced={
+                       "technical": ["docs/features/card-blocking/overview.adoc"],
+                       "spec": "openspec/specs/card-blocking/spec.md",
+                       "final": ["analytics/use-case/CardBlocking.adoc"]}))
+        check("vr_complete_missing_final",
+              gate.run({"hook_event_name": "Stop"})["decision"] == "block")
+        write_file(tmp, "analytics/use-case/CardBlocking.adoc", GOOD_FINAL_ADOC)
+        check("vr_complete_ok", gate.run({"hook_event_name": "Stop"})["decision"] == "allow")
+        write_file(tmp, "docs/features/card-blocking/manifest.json", "{broken")
+        check("vr_bad_manifest", gate.run({"hook_event_name": "Stop"})["decision"] == "block")
+
+
 def main():
     test_git_guard()
     test_context_inject()
@@ -232,6 +273,7 @@ def main():
     test_spec_bootstrap()
     test_techdocs()
     test_final_format()
+    test_validate_run_output()
     print(f"All {PASSED} gate checks passed")
 
 
