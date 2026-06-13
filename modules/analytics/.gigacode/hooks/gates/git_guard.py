@@ -112,13 +112,18 @@ def _norm(path):
 
 
 def path_from_event(event):
-    for key in ("path", "file_path", "filename"):
+    # Deliberately a self-contained copy, not _lib.path_from_event: this one
+    # additionally normpath-canonicalizes via _norm (traversal defense). The
+    # extracted key set is kept in sync with _lib so neither channel can be
+    # addressed through a field the other guards — notebook_path included so a
+    # NotebookEdit write to a protected path is caught on the file-tool channel.
+    for key in ("path", "file_path", "filename", "notebook_path"):
         v = event.get(key)
         if isinstance(v, str):
             return _norm(v)
     ti = event.get("tool_input")
     if isinstance(ti, dict):
-        for key in ("path", "file_path", "filename"):
+        for key in ("path", "file_path", "filename", "notebook_path"):
             v = ti.get(key)
             if isinstance(v, str):
                 return _norm(v)

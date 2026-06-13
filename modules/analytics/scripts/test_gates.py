@@ -104,6 +104,9 @@ def test_git_guard():
           gate.run({"tool_input": {"file_path": "openspec/specs/../changes/archive/a.md"}})["decision"] == "block")
     check("gg_shell_tee_specs",
           gate.run({"tool_input": {"command": "tee openspec/specs/cap/spec.md"}})["decision"] == "block")
+    # symmetry with gate_spec_bootstrap: notebook_path is guarded on this channel too
+    check("gg_notebook_gigacode",
+          gate.run({"tool_input": {"notebook_path": ".gigacode/hooks/router.py"}})["decision"] == "block")
 
 
 def test_context_inject():
