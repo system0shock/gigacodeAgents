@@ -264,6 +264,11 @@ def test_validate_run_output():
         check("vr_complete_ok", gate.run({"hook_event_name": "Stop"})["decision"] == "allow")
         write_file(tmp, "docs/features/card-blocking/manifest.json", "{broken")
         check("vr_bad_manifest", gate.run({"hook_event_name": "Stop"})["decision"] == "block")
+        # regression: a non-iterable produced.<group> must not crash run()
+        # (router would convert the crash to a fail-open allow on this non-safety route)
+        write_file(tmp, "docs/features/card-blocking/manifest.json",
+                   manifest("complete", produced={"technical": 7, "final": []}))
+        check("vr_produced_not_list", gate.run({"hook_event_name": "Stop"})["decision"] == "allow")
 
 
 def main():

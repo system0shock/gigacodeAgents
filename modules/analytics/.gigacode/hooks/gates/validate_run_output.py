@@ -22,6 +22,11 @@ def load_manifest(path):
 
 
 def missing_files(root_dir, paths):
+    # A malformed manifest may list a non-iterable here; treat it leniently
+    # (same as a non-dict `produced` → {}), never crash — a crash on this
+    # non-safety Stop route would be converted to a fail-open allow.
+    if not isinstance(paths, (list, tuple)):
+        return []
     missing = []
     for rel in paths:
         if not isinstance(rel, str) or not rel:
