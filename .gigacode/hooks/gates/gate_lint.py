@@ -42,7 +42,15 @@ def run(event):
         timeout = entry.get("timeout_seconds", 120)
         # non-numeric -> default; <=0 -> clamp (subprocess timeout must be >0)
         timeout = max(1, timeout) if isinstance(timeout, (int, float)) else 120
-        rc, tail = _lib.run_command(command, timeout, [path])
+        # Path passing is OPT-IN via a {file} placeholder. Blindly appending the
+        # path broke task-runner linters: `gradlew ktlintCheck` + `src/Foo.kt`
+        # becomes `gradlew ktlintCheck src/Foo.kt`, where Gradle reads the file as
+        # a (missing) task name and fails, blocking every edit. Commands without
+        # {file} run as-is (project-wide); file-scoped linters use {file}.
+        if "{file}" in command:
+            rc, tail = _lib.run_command(command.replace("{file}", path), timeout)
+        else:
+            rc, tail = _lib.run_command(command, timeout)
         if rc == -2:
             _lib.journal_skip("gate_lint", f"{command}: timed out")
             notes.append(f"gate_lint: линтер '{command}' превысил таймаут {timeout}s. "

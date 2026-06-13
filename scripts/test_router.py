@@ -404,6 +404,8 @@ def main():
     R2_BLOCK = [
         # #1 `command` builtin was a universal kill-switch
         "command git reset --hard", "command rm -rf .git",
+        # PR review P1: git restore defaults to --worktree (discards edits)
+        "git restore .", "git restore src/Foo.kt", "git restore --worktree .",
         # #2 writes that corrupt the .git repo
         "echo x > .git/config", "cp evil .git/config", "echo x | tee .git/config",
         # #4 deletion of the enforcement tree / openspec truth; find -delete

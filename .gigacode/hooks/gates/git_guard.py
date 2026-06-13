@@ -374,8 +374,11 @@ def git_destructive(sub, rest):
         return f"Blocked potentially irreversible `git {sub}`."
     if sub == "checkout" and "--" in rest:
         return "Blocked `git checkout --` (discards working-tree edits)."
-    if sub == "restore" and "--worktree" in rest:
-        return "Blocked `git restore --worktree`."
+    if sub == "restore" and ("--worktree" in rest or "--staged" not in rest):
+        # --worktree is git restore's DEFAULT, so `git restore .` / `git restore
+        # <path>` discard working-tree edits even without the flag. Only the
+        # index-only form (`--staged` without `--worktree`) is non-destructive.
+        return "Blocked `git restore` (discards working-tree edits; use --staged to unstage)."
     if sub == "worktree" and rest[:1] == ["remove"]:
         return "Blocked `git worktree remove`."
     if sub == "stash" and rest[:1] == ["clear"]:

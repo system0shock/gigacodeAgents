@@ -98,10 +98,20 @@ def test_lib():
             h.write("@echo off\nexit /b 0\n")
         rc, tail = lib.run_command("gradlew", 5)
         check("lib_no_reporoot_exe", rc == -1, (rc, tail))
-        # (b) explicit relative path still resolves and runs
-        with open(os.path.join(fix, "ok.bat"), "w", encoding="utf-8") as h:
-            h.write("@echo off\nexit /b 0\n")
-        rc, tail = lib.run_command("./ok.bat", 5)
+        # (b) explicit relative path still resolves and runs — use a
+        # platform-appropriate executable so smoke-check.sh passes on POSIX too
+        # (a .bat is not executable on Linux/macOS).
+        if os.name == "nt":
+            rel = "ok.bat"
+            with open(os.path.join(fix, rel), "w", encoding="utf-8") as h:
+                h.write("@echo off\nexit /b 0\n")
+        else:
+            rel = "ok.sh"
+            script = os.path.join(fix, rel)
+            with open(script, "w", encoding="utf-8") as h:
+                h.write("#!/bin/sh\nexit 0\n")
+            os.chmod(script, 0o755)
+        rc, tail = lib.run_command("./" + rel, 5)
         check("lib_explicit_relpath_runs", rc == 0, (rc, tail))
 
 
@@ -264,6 +274,22 @@ def test_lint():
                                 "timeout_seconds": 30}})
         result = gate.run(event)
         check("lint_pass_allow", result["decision"] == "allow", result)
+
+        # PR review P2: the file path is passed ONLY via a {file} placeholder,
+        # never blindly appended (appending breaks Gradle-style task runners).
+        with open(os.path.join(fix, "wantfile.py"), "w", encoding="utf-8") as handle:
+            handle.write("import sys\nsys.exit(0 if any('Main.kt' in a for a in sys.argv[1:]) else 7)\n")
+        write_qg(fix, {"lint": {"command": "python wantfile.py {file}",
+                                "applies_to": ["**/*.kt"], "timeout_seconds": 30}})
+        result = gate.run(event)
+        check("lint_file_placeholder", result["decision"] == "allow", result)
+
+        with open(os.path.join(fix, "noargs.py"), "w", encoding="utf-8") as handle:
+            handle.write("import sys\nsys.exit(7 if len(sys.argv) > 1 else 0)\n")
+        write_qg(fix, {"lint": {"command": "python noargs.py",
+                                "applies_to": ["**/*.kt"], "timeout_seconds": 30}})
+        result = gate.run(event)
+        check("lint_no_blind_append", result["decision"] == "allow", result)
 
         # non-matching file skipped even with a failing command
         write_qg(fix, {"lint": {"command": "python fail.py", "applies_to": ["**/*.kt"],
