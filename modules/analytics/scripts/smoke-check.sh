@@ -6,10 +6,20 @@ cd "$ROOT"
 
 required=(
   ".gigacode/settings.json"
+  ".gigacode/quality-gates.json"
   ".gigacode/skills/reverse-analysis/SKILL.md"
   ".gigacode/commands/reverse-analysis.md"
-  ".gigacode/hooks/preflight_check.py"
-  ".gigacode/hooks/validate_output.py"
+  ".gigacode/hooks/router.py"
+  ".gigacode/hooks/router.config.json"
+  ".gigacode/hooks/hook_probe.py"
+  ".gigacode/hooks/gates/_lib.py"
+  ".gigacode/hooks/gates/git_guard.py"
+  ".gigacode/hooks/gates/gate_context_inject.py"
+  ".gigacode/hooks/gates/preflight_check.py"
+  ".gigacode/hooks/gates/gate_spec_bootstrap.py"
+  ".gigacode/hooks/gates/gate_techdocs.py"
+  ".gigacode/hooks/gates/gate_final_format.py"
+  ".gigacode/hooks/gates/validate_run_output.py"
   "docs/templates/feature-analysis.adoc"
   "rules/reverse-analysis.md"
   "rules/branch-naming.md"
@@ -24,6 +34,8 @@ for path in "${required[@]}"; do
 done
 
 python -m json.tool .gigacode/settings.json >/dev/null
+python -m json.tool .gigacode/hooks/router.config.json >/dev/null
+python -m json.tool .gigacode/quality-gates.json >/dev/null
 
 agent_count="$(find .gigacode/agents -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')"
 if [[ "$agent_count" != "5" ]]; then
@@ -45,32 +57,22 @@ for agent in .gigacode/agents/*.md; do
 done
 
 decision="$(
-  printf '%s' '{"prompt":"reverse-analysis feature Card Blocking jira ABC-123"}' |
-    python .gigacode/hooks/preflight_check.py |
+  printf '%s' '{"hook_event_name":"SessionStart"}' |
+    python .gigacode/hooks/router.py --event=SessionStart |
     python -c 'import json,sys; print(json.load(sys.stdin)["decision"])'
 )"
 if [[ "$decision" != "allow" ]]; then
-  echo "Expected complete preflight sample to allow, got $decision" >&2
+  echo "Expected SessionStart routing to allow, got $decision" >&2
   exit 1
 fi
 
 decision="$(
-  printf '%s' '{"prompt":"hello"}' |
-    python .gigacode/hooks/preflight_check.py |
-    python -c 'import json,sys; print(json.load(sys.stdin)["decision"])'
-)"
-if [[ "$decision" != "allow" ]]; then
-  echo "Expected unrelated prompt to allow, got $decision" >&2
-  exit 1
-fi
-
-decision="$(
-  printf '%s' '{"last_assistant_message":"Reverse analysis complete in docs/features/card-blocking/"}' |
-    python .gigacode/hooks/validate_output.py |
+  printf '%s' '{"hook_event_name":"UserPromptSubmit","prompt":"reverse-analysis missing info"}' |
+    python .gigacode/hooks/router.py --event=UserPromptSubmit |
     python -c 'import json,sys; print(json.load(sys.stdin)["decision"])'
 )"
 if [[ "$decision" != "block" ]]; then
-  echo "Expected missing output validation sample to block, got $decision" >&2
+  echo "Expected incomplete reverse-analysis prompt to block, got $decision" >&2
   exit 1
 fi
 
@@ -78,5 +80,8 @@ if ! grep -q '^=' docs/templates/feature-analysis.adoc; then
   echo "AsciiDoc template must contain a document title" >&2
   exit 1
 fi
+
+python scripts/test_router.py
+python scripts/test_gates.py
 
 echo "Analytics module smoke check passed."

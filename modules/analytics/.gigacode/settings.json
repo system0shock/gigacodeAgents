@@ -11,10 +11,15 @@
       "Bash(git status*)",
       "Bash(git branch*)",
       "Bash(git diff*)",
-      "Bash(repomix*)",
+      "Bash(git log*)",
+      "Bash(rg *)",
       "Bash(graphify*)",
       "Bash(python .gigacode/hooks/*)",
-      "Edit(docs/features/**)"
+      "Bash(python scripts/*)",
+      "Edit(docs/features/**)",
+      "Edit(openspec/specs/**)",
+      "Edit(analytics/**)",
+      "Edit(architecture/**)"
     ],
     "ask": [
       "Edit",
@@ -34,10 +39,39 @@
       {
         "matcher": "",
         "hooks": [
-          {
-            "type": "command",
-            "command": "python .gigacode/hooks/preflight_check.py"
-          }
+          {"type": "command", "command": "python .gigacode/hooks/router.py --event=UserPromptSubmit"}
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type": "command", "command": "python .gigacode/hooks/router.py --event=SessionStart"}
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "code-mapping|documentation",
+        "hooks": [
+          {"type": "command", "command": "python .gigacode/hooks/router.py --event=SubagentStart"}
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|Shell|WriteFile|Edit)$",
+        "hooks": [
+          {"type": "command", "command": "python .gigacode/hooks/router.py --event=PreToolUse"}
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(WriteFile|Edit)$",
+        "hooks": [
+          {"type": "command", "command": "python .gigacode/hooks/router.py --event=PostToolUse"}
         ]
       }
     ],
@@ -45,10 +79,7 @@
       {
         "matcher": "",
         "hooks": [
-          {
-            "type": "command",
-            "command": "python .gigacode/hooks/validate_output.py"
-          }
+          {"type": "command", "command": "python .gigacode/hooks/router.py --event=Stop"}
         ]
       }
     ]

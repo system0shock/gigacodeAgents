@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "stop_block_budget": 2,
+  "routes": [
+    {
+      "event": "UserPromptSubmit",
+      "gates": ["preflight_check", "gate_context_inject"]
+    },
+    {
+      "event": "SessionStart",
+      "gates": ["gate_context_inject"]
+    },
+    {
+      "event": "SubagentStart",
+      "agent_pattern": "^(code-mapping|documentation)$",
+      "gates": ["gate_context_inject"]
+    },
+    {
+      "event": "PreToolUse",
+      "tool_pattern": "^(Bash|Shell)$",
+      "gates": ["git_guard"],
+      "safety_critical": true
+    },
+    {
+      "event": "PreToolUse",
+      "tool_pattern": "^(WriteFile|Edit)$",
+      "gates": ["git_guard"],
+      "safety_critical": true
+    },
+    {
+      "event": "PreToolUse",
+      "tool_pattern": "^(WriteFile|Edit)$",
+      "gates": ["gate_spec_bootstrap"],
+      "safety_critical": true
+    },
+    {
+      "event": "PostToolUse",
+      "tool_pattern": "^(WriteFile|Edit)$",
+      "gates": ["gate_techdocs", "gate_final_format"]
+    },
+    {
+      "event": "Stop",
+      "gates": ["validate_run_output"]
+    }
+  ]
+}
