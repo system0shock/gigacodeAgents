@@ -73,7 +73,7 @@ if (-not (Select-String -Path "openspec/config.yaml" -Pattern '^schema:' -Quiet)
   throw "openspec/config.yaml must declare a schema"
 }
 
-$repomix = Get-ChildItem ".gigacode/agents/*.md", "rules/*.md" |
+$repomix = Get-ChildItem -Recurse -File ".gigacode/agents", "rules" |
   Select-String -Pattern 'repomix' -SimpleMatch
 if ($repomix) {
   throw "repomix must not appear in agents or rules"
