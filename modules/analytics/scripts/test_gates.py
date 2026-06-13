@@ -146,10 +146,26 @@ def test_preflight():
     check("pf_cli_bom", data["decision"] == "block", repr(data))
 
 
+def test_spec_bootstrap():
+    gate = load_gate("gate_spec_bootstrap")
+    with fixture_root() as tmp:
+        ev = {"hook_event_name": "PreToolUse", "tool_name": "WriteFile",
+              "tool_input": {"file_path": "openspec/specs/new-cap/spec.md"}}
+        check("sb_new_allow", gate.run(ev)["decision"] == "allow")
+        write_file(tmp, "openspec/specs/new-cap/spec.md", "# Spec\n")
+        check("sb_existing_block", gate.run(ev)["decision"] == "block")
+        other = {"tool_input": {"file_path": "openspec/specs/notes.md"}}
+        check("sb_other_block", gate.run(other)["decision"] == "block")
+        fr = gate.run({"tool_input": {"file_path": "analytics/functional-requirements/Card.adoc"}})
+        check("sb_fr_advisory", fr["decision"] == "allow" and "additionalContext" in fr, repr(fr))
+        check("sb_unrelated", gate.run({"tool_input": {"file_path": "src/Main.kt"}})["decision"] == "allow")
+
+
 def main():
     test_git_guard()
     test_context_inject()
     test_preflight()
+    test_spec_bootstrap()
     print(f"All {PASSED} gate checks passed")
 
 
