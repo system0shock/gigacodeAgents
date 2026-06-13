@@ -2,6 +2,7 @@
 """Bootstrap rule for openspec/specs: create once, change via lifecycle."""
 import json
 import os
+import posixpath
 import re
 import sys
 
@@ -15,7 +16,13 @@ FR_RE = re.compile(r"(^|/)analytics/functional-requirements/", re.IGNORECASE)
 
 def _norm(path):
     p = path.replace("\\", "/")
-    return p[2:] if p.startswith("./") else p
+    if not p:
+        return ""
+    # Canonicalize (collapse //, resolve ./ and ../) so the matcher sees the
+    # same path the OS will open. Without this, "openspec//specs/<cap>/spec.md"
+    # matches neither regex yet the OS collapses // and writes the real file —
+    # a create-once bypass.
+    return posixpath.normpath(p)
 
 
 def run(event):

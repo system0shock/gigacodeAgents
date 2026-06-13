@@ -53,13 +53,13 @@ def load_quality_gates():
 
 
 def path_from_event(event):
-    for key in ("path", "file_path", "filename"):
+    for key in ("path", "file_path", "filename", "notebook_path"):
         value = event.get(key)
         if isinstance(value, str):
             return value.replace("\\", "/")
     tool_input = event.get("tool_input")
     if isinstance(tool_input, dict):
-        for key in ("path", "file_path", "filename"):
+        for key in ("path", "file_path", "filename", "notebook_path"):
             value = tool_input.get(key)
             if isinstance(value, str):
                 return value.replace("\\", "/")

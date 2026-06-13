@@ -159,6 +159,15 @@ def test_spec_bootstrap():
         fr = gate.run({"tool_input": {"file_path": "analytics/functional-requirements/Card.adoc"}})
         check("sb_fr_advisory", fr["decision"] == "allow" and "additionalContext" in fr, repr(fr))
         check("sb_unrelated", gate.run({"tool_input": {"file_path": "src/Main.kt"}})["decision"] == "allow")
+        # regression: a // that the OS collapses must not slip past create-once
+        check("sb_double_slash_existing",
+              gate.run({"tool_input": {"file_path": "openspec//specs/new-cap/spec.md"}})["decision"] == "block")
+        # canonicalization must still ALLOW a genuinely new cap reached via //
+        check("sb_double_slash_new",
+              gate.run({"tool_input": {"file_path": "openspec//specs/fresh-cap/spec.md"}})["decision"] == "allow")
+        # regression: NotebookEdit's notebook_path field must be guarded too
+        nb = {"tool_name": "NotebookEdit", "tool_input": {"notebook_path": "openspec/specs/new-cap/spec.md"}}
+        check("sb_notebook_block", gate.run(nb)["decision"] == "block")
 
 
 def main():
