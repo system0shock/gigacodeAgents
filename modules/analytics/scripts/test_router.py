@@ -97,7 +97,7 @@ def test_config_failclosed():
 def test_routing():
     with Sandbox() as sb:
         sb.config({"version": 1, "routes": [
-            {"event": "PreToolUse", "tool_pattern": "^(WriteFile|Edit)$",
+            {"event": "PreToolUse", "tool_pattern": "^(WriteFile|Edit|NotebookEdit)$",
              "gates": ["fixture_block"]},
             {"event": "SubagentStart", "agent_pattern": "^(code-mapping|documentation)$",
              "gates": ["fixture_block"]},
@@ -108,6 +108,9 @@ def test_routing():
                                        "tool_name": "Edit"})["decision"] == "block")
         check("rt_tool_anchored", sb.run({"hook_event_name": "PreToolUse",
                                           "tool_name": "MyEdit"})["decision"] == "allow")
+        check("rt_notebookedit_routes",
+              sb.run({"hook_event_name": "PreToolUse",
+                      "tool_name": "NotebookEdit"})["decision"] == "block")
         check("rt_agent_match", sb.run({"hook_event_name": "SubagentStart",
                                         "agent_type": "documentation"})["decision"] == "block")
         check("rt_agent_missing_skips",
@@ -162,6 +165,14 @@ def test_real_config():
             for gate in route.get("gates", []):
                 check(f"rt_gate_exists:{gate}",
                       os.path.exists(os.path.join(HOOKS_SRC, "gates", gate + ".py")))
+        pre_file_routes = [r for r in config.get("routes", [])
+                           if r.get("event") == "PreToolUse"
+                           and set(r.get("gates", [])) & {"git_guard", "gate_spec_bootstrap"}
+                           and "WriteFile" in (r.get("tool_pattern") or "")]
+        for r in pre_file_routes:
+            check(f"rt_notebookedit_wired:{','.join(r['gates'])}",
+                  "NotebookEdit" in (r.get("tool_pattern") or ""),
+                  r.get("tool_pattern"))
     else:
         print("skip: router.config.json not wired yet")
 

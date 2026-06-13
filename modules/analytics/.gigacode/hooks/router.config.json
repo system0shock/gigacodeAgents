@@ -23,13 +23,13 @@
     },
     {
       "event": "PreToolUse",
-      "tool_pattern": "^(WriteFile|Edit)$",
+      "tool_pattern": "^(WriteFile|Edit|NotebookEdit)$",
       "gates": ["git_guard"],
       "safety_critical": true
     },
     {
       "event": "PreToolUse",
-      "tool_pattern": "^(WriteFile|Edit)$",
+      "tool_pattern": "^(WriteFile|Edit|NotebookEdit)$",
       "gates": ["gate_spec_bootstrap"],
       "safety_critical": true
     },

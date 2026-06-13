@@ -68,7 +68,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "^(Bash|Shell|WriteFile|Edit)$",
+        "matcher": "^(Bash|Shell|WriteFile|Edit|NotebookEdit)$",
         "hooks": [
           {"type": "command", "command": "python .gigacode/hooks/router.py --event=PreToolUse"}
         ]
