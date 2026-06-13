@@ -122,6 +122,9 @@ def test_context_inject():
         check("ci_command_bootstrap", "bootstrap" in cmd.get("additionalContext", "").lower())
         other = gate.run({"hook_event_name": "UserPromptSubmit", "prompt": "привет"})
         check("ci_other_prompt_silent", "additionalContext" not in other)
+        ws = gate.run({"hook_event_name": "UserPromptSubmit", "prompt": "  /reverse-analysis x"})
+        check("ci_command_whitespace", "bootstrap" in ws.get("additionalContext", "").lower())
+        check("ci_empty_event", gate.run({}) == {"decision": "allow"})
 
 
 def main():
