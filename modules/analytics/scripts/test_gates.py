@@ -310,12 +310,23 @@ def test_validate_run_output():
               gate.run({"hook_event_name": "Stop"})["decision"] == "block")
         write_file(tmp, "analytics/use-case/CardBlocking.adoc", GOOD_FINAL_ADOC)
         check("vr_complete_ok", gate.run({"hook_event_name": "Stop"})["decision"] == "allow")
+        # complete with empty produced.final must NOT pass (finals required)
+        write_file(tmp, "docs/features/card-blocking/manifest.json",
+                   manifest("complete", produced={
+                       "technical": ["docs/features/card-blocking/overview.adoc"],
+                       "spec": "openspec/specs/card-blocking/spec.md",
+                       "final": []}))
+        check("vr_complete_empty_final",
+              gate.run({"hook_event_name": "Stop"})["decision"] == "block")
         write_file(tmp, "docs/features/card-blocking/manifest.json", "{broken")
         check("vr_bad_manifest", gate.run({"hook_event_name": "Stop"})["decision"] == "block")
         # regression: a non-iterable produced.<group> must not crash run()
-        # (router would convert the crash to a fail-open allow on this non-safety route)
+        # (router would convert the crash to a fail-open allow on this non-safety
+        # route). final is a non-empty existing file so the complete-rule is met;
+        # technical stays non-iterable (7) — the crash-safety case under test.
         write_file(tmp, "docs/features/card-blocking/manifest.json",
-                   manifest("complete", produced={"technical": 7, "final": []}))
+                   manifest("complete", produced={"technical": 7,
+                                                  "final": ["analytics/use-case/CardBlocking.adoc"]}))
         check("vr_produced_not_list", gate.run({"hook_event_name": "Stop"})["decision"] == "allow")
 
 

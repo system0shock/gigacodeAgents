@@ -56,6 +56,11 @@ def check_feature(root_dir, feature_dir, manifest):
         produced = manifest.get("produced", {})
         if not isinstance(produced, dict):
             produced = {}
+        final = produced.get("final", [])
+        if not (isinstance(final, (list, tuple))
+                and any(isinstance(x, str) and x for x in final)):
+            issues.append(f"{name}: статус complete, но produced.final пуст "
+                          "(финальное дерево не сгенерировано/не записано)")
         for group in ("technical", "final"):
             for rel in missing_files(root_dir, produced.get(group, []) or []):
                 issues.append(f"{name}: заявленный файл отсутствует: {rel}")
