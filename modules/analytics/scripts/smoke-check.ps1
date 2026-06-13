@@ -8,6 +8,10 @@ $required = @(
   ".gigacode/quality-gates.json",
   ".gigacode/skills/reverse-analysis/SKILL.md",
   ".gigacode/commands/reverse-analysis.md",
+  "rules/openspec.md",
+  "openspec/config.yaml",
+  "openspec/specs/.gitkeep",
+  "docs/templates/manifest.json",
   ".gigacode/hooks/router.py",
   ".gigacode/hooks/router.config.json",
   ".gigacode/hooks/hook_probe.py",
@@ -31,13 +35,13 @@ foreach ($path in $required) {
   }
 }
 
-foreach ($jsonFile in @(".gigacode/settings.json", ".gigacode/hooks/router.config.json", ".gigacode/quality-gates.json")) {
+foreach ($jsonFile in @(".gigacode/settings.json", ".gigacode/hooks/router.config.json", ".gigacode/quality-gates.json", "docs/templates/manifest.json")) {
   Get-Content $jsonFile -Raw | ConvertFrom-Json | Out-Null
 }
 
 $agents = Get-ChildItem ".gigacode/agents/*.md"
-if ($agents.Count -ne 5) {
-  throw "Expected 5 agent files, found $($agents.Count)"
+if ($agents.Count -ne 3) {
+  throw "Expected 3 agent files, found $($agents.Count)"
 }
 
 foreach ($agent in $agents) {
@@ -63,6 +67,22 @@ if ($incomplete.decision -ne "block") {
 $template = Get-Content "docs/templates/feature-analysis.adoc" -Raw
 if (-not $template.TrimStart().StartsWith("=")) {
   throw "AsciiDoc template must start with a document title"
+}
+
+if (-not (Select-String -Path "openspec/config.yaml" -Pattern '^schema:' -Quiet)) {
+  throw "openspec/config.yaml must declare a schema"
+}
+
+$repomix = Get-ChildItem ".gigacode/agents/*.md", "rules/*.md" |
+  Select-String -Pattern 'repomix' -SimpleMatch
+if ($repomix) {
+  throw "repomix must not appear in agents or rules"
+}
+
+foreach ($d in @("architecture", "analytics/use-case", "analytics/integration/nfr and contact", "analytics/db/data-model")) {
+  if (-not (Test-Path (Join-Path $d ".gitkeep"))) {
+    throw "Missing final-tree skeleton dir: $d"
+  }
 }
 
 python scripts/test_router.py

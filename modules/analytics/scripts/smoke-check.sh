@@ -9,6 +9,10 @@ required=(
   ".gigacode/quality-gates.json"
   ".gigacode/skills/reverse-analysis/SKILL.md"
   ".gigacode/commands/reverse-analysis.md"
+  "rules/openspec.md"
+  "openspec/config.yaml"
+  "openspec/specs/.gitkeep"
+  "docs/templates/manifest.json"
   ".gigacode/hooks/router.py"
   ".gigacode/hooks/router.config.json"
   ".gigacode/hooks/hook_probe.py"
@@ -36,10 +40,11 @@ done
 python -m json.tool .gigacode/settings.json >/dev/null
 python -m json.tool .gigacode/hooks/router.config.json >/dev/null
 python -m json.tool .gigacode/quality-gates.json >/dev/null
+python -m json.tool docs/templates/manifest.json >/dev/null
 
 agent_count="$(find .gigacode/agents -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')"
-if [[ "$agent_count" != "5" ]]; then
-  echo "Expected 5 agent files, found $agent_count" >&2
+if [[ "$agent_count" != "3" ]]; then
+  echo "Expected 3 agent files, found $agent_count" >&2
   exit 1
 fi
 
@@ -80,6 +85,23 @@ if ! grep -q '^=' docs/templates/feature-analysis.adoc; then
   echo "AsciiDoc template must contain a document title" >&2
   exit 1
 fi
+
+if ! grep -q '^schema:' openspec/config.yaml; then
+  echo "openspec/config.yaml must declare a schema" >&2
+  exit 1
+fi
+
+if grep -rIli 'repomix' .gigacode/agents rules >/dev/null 2>&1; then
+  echo "repomix must not appear in agents or rules" >&2
+  exit 1
+fi
+
+for d in architecture analytics/use-case "analytics/integration/nfr and contact" analytics/db/data-model; do
+  if [[ ! -f "$d/.gitkeep" ]]; then
+    echo "Missing final-tree skeleton dir: $d" >&2
+    exit 1
+  fi
+done
 
 python scripts/test_router.py
 python scripts/test_gates.py
