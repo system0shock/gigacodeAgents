@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Build gate: run the configured build command on Stop, but only at
-PR-readiness moments (the message mentions task artifacts) — Stop fires on
-every assistant turn and a full build per turn is unacceptable.
+"""Build gate: run the configured build command on Stop, but only when
+production code actually changed in the working tree — Stop fires on every
+assistant turn and a full build per turn is unacceptable. Triggering off the
+working tree (not the agent's message) closes the red-team bypass where
+omitting a path from the final message silently skipped the build.
 
 Deterministic -> may block. The router's stop budget (2 blocks, then degrade)
 caps repeated failures."""
@@ -14,8 +16,7 @@ import _lib
 
 
 def run(event):
-    message = _lib.message_from_event(event).replace("\\", "/")
-    if "docs/development/" not in message and "openspec/changes" not in message:
+    if not _lib.changed_code_files():
         return {"decision": "allow"}
     config = _lib.load_quality_gates().get("build") or {}
     command = (config.get("command") or "").strip()

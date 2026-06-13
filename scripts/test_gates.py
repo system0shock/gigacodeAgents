@@ -186,6 +186,11 @@ def test_spec_structure():
                            "tool_input": {"file_path": "openspec/changes/my-change/proposal.md"}})
         check("ss_pre_change_still_allow", result["decision"] == "allow", result)
 
+        # Stop on a clean tree (no active change, no changed code) -> allow.
+        # Deterministic regardless of whether the openspec CLI is installed.
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
+        check("ss_stop_clean_allow", result["decision"] == "allow", result)
+
         # PostToolUse: CLI unavailable -> skip-with-record + advisory context
         write_change(fix, "my-change", complete=True, valid=False)
         os.environ["OPENSPEC_BIN"] = os.path.join(fix, "missing-openspec")
@@ -196,10 +201,6 @@ def test_spec_structure():
             os.environ.pop("OPENSPEC_BIN", None)
         check("ss_post_cli_missing_allow", result["decision"] == "allow", result)
         check("ss_post_cli_missing_note", "пропущена" in result.get("additionalContext", ""), result)
-
-        # Stop: no PR-readiness mention -> no validation at all
-        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "hello"})
-        check("ss_stop_no_mention_allow", result["decision"] == "allow", result)
 
         # PostToolUse on a non-openspec path: fast allow, no CLI spawn
         result = gate.run({"hook_event_name": "PostToolUse", "tool_name": "WriteFile",
@@ -220,9 +221,10 @@ def test_spec_structure():
             check("ss_post_incomplete_advisory",
                   result["decision"] == "allow" and "additionalContext" in result, result)
 
-            # Stop with PR-readiness mention and an invalid change -> block
+            # Stop with an active but invalid change -> block (message ignored;
+            # the active change on disk is the trigger, not the message text)
             result = gate.run({"hook_event_name": "Stop",
-                               "last_assistant_message": "Готово, см. openspec/changes/my-change/"})
+                               "last_assistant_message": "done"})
             check("ss_stop_invalid_block", result["decision"] == "block", result)
 
             # Valid change passes PostToolUse
@@ -300,36 +302,43 @@ def test_lint():
 
 def test_build():
     gate = load_gate("gate_build")
+    # (1) no changed code -> no build, even with a failing command configured
     with fixture_root() as fix:
+        write_script(fix, "fail.py", 1)
+        write_qg(fix, {"build": {"command": "python fail.py", "timeout_seconds": 30}})
+        # fixture is not a git repo -> changed_code_files() == [] -> allow
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "hi"})
+        check("build_no_code_change_allow", result["decision"] == "allow", result)
+
+    # (2..) production code changed -> the build runs; outcome follows the command
+    with fixture_root() as fix:
+        srcdir = os.path.join(fix, "src")
+        os.makedirs(srcdir)
+        with open(os.path.join(srcdir, "Foo.kt"), "w", encoding="utf-8") as handle:
+            handle.write("class Foo\n")
+        init_git(fix)  # Foo.kt is a changed code file -> the build is engaged
         write_script(fix, "fail.py", 1)
         write_script(fix, "pass.py", 0)
 
-        # not a PR-readiness moment -> no build even with a failing command
-        write_qg(fix, {"build": {"command": "python fail.py", "timeout_seconds": 30}})
-        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "hi"})
-        check("build_not_pr_moment", result["decision"] == "allow", result)
-
-        pr_message = "Готово: docs/development/sample-task/pr-summary.md"
-
         # unconfigured -> silent allow (journal-only skip)
         write_qg(fix, {"build": {"command": ""}})
-        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": pr_message})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
         check("build_unconfigured_allow",
               result["decision"] == "allow" and "additionalContext" not in result, result)
 
         # failing build blocks
         write_qg(fix, {"build": {"command": "python fail.py", "timeout_seconds": 30}})
-        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": pr_message})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
         check("build_fail_block", result["decision"] == "block", result)
 
         # passing build allows
         write_qg(fix, {"build": {"command": "python pass.py", "timeout_seconds": 30}})
-        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": pr_message})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
         check("build_pass_allow", result["decision"] == "allow", result)
 
         # configured-but-broken command -> allow with anomaly note
         write_qg(fix, {"build": {"command": "definitely-missing-tool-xyz"}})
-        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": pr_message})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
         check("build_broken_command_note",
               result["decision"] == "allow" and "additionalContext" in result, result)
 
@@ -337,7 +346,7 @@ def test_build():
         with open(os.path.join(fix, "hang.py"), "w", encoding="utf-8") as handle:
             handle.write("import time\ntime.sleep(30)\n")
         write_qg(fix, {"build": {"command": "python hang.py", "timeout_seconds": 0}})
-        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": pr_message})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
         check("build_timeout_note",
               result["decision"] == "allow"
               and "таймаут" in result.get("additionalContext", ""), result)
@@ -469,6 +478,76 @@ def test_existing_code():
         check("ec_enum_unique_silent", "additionalContext" not in result, result)
 
 
+def write_dev_dir(root_dir, slug, files):
+    """Create docs/development/<slug>/ with the given {name: content} files."""
+    path = os.path.join(root_dir, "docs", "development", slug)
+    os.makedirs(path)
+    for name, content in files.items():
+        with open(os.path.join(path, name), "w", encoding="utf-8") as handle:
+            handle.write(content)
+    return path
+
+
+def test_flow_integrity():
+    """gate_spec_structure Stop now triggers from the working tree, not the
+    agent's message: changed production code with no active OpenSpec change
+    must block regardless of what the final message says."""
+    gate = load_gate("gate_spec_structure")
+    with fixture_root() as fix:
+        srcdir = os.path.join(fix, "src")
+        os.makedirs(srcdir)
+        with open(os.path.join(srcdir, "Foo.kt"), "w", encoding="utf-8") as handle:
+            handle.write("class Foo\n")
+        init_git(fix)  # Foo.kt becomes a tracked change; no openspec/changes/<id>
+        # message deliberately omits the old trigger paths
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "Done."})
+        check("fi_code_without_change_blocks", result["decision"] == "block", result)
+    with fixture_root() as fix:
+        init_git(fix)  # git repo, no code change, no active change
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "Done."})
+        check("fi_no_change_allows", result["decision"] == "allow", result)
+
+
+def test_validate_output():
+    """validate_development_output triggers from disk (a docs/development/<slug>/
+    dir or changed code), not the message text."""
+    gate = load_gate("validate_development_output")
+    # (a) a dev dir with missing required artifacts -> block
+    with fixture_root() as fix:
+        write_dev_dir(fix, "sample", {})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
+        check("vdo_missing_artifacts_block", result["decision"] == "block", result)
+    # (b) a complete dev dir with evidence -> allow
+    with fixture_root() as fix:
+        write_dev_dir(fix, "sample", {
+            "journal.md": "did work\n",
+            "verification.md": "ran command X\nexit 0\n",
+            "pr-summary.md": "summary\n"})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
+        check("vdo_complete_allow", result["decision"] == "allow", result)
+    # (c) a placeholder marker in an artifact -> block
+    with fixture_root() as fix:
+        write_dev_dir(fix, "sample", {
+            "journal.md": "TODO finish\n",
+            "verification.md": "ran command X\nexit 0\n",
+            "pr-summary.md": "summary\n"})
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
+        check("vdo_placeholder_block", result["decision"] == "block", result)
+    # (d) nothing changed, no dev dir -> allow (no false block)
+    with fixture_root() as fix:
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
+        check("vdo_nothing_allow", result["decision"] == "allow", result)
+    # (e) production code changed but no dev dir at all -> block
+    with fixture_root() as fix:
+        srcdir = os.path.join(fix, "src")
+        os.makedirs(srcdir)
+        with open(os.path.join(srcdir, "Foo.kt"), "w", encoding="utf-8") as handle:
+            handle.write("class Foo\n")
+        init_git(fix)
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
+        check("vdo_code_no_dir_block", result["decision"] == "block", result)
+
+
 def main():
     test_lib()
     test_context_inject()
@@ -477,6 +556,8 @@ def main():
     test_build()
     test_clean_code()
     test_existing_code()
+    test_flow_integrity()
+    test_validate_output()
     print(f"\nAll {PASSED} gate checks passed")
 
 

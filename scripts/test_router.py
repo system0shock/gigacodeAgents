@@ -14,11 +14,13 @@ HOOKS_DIR = os.path.join(ROOT, ".gigacode", "hooks")
 PASSED = 0
 
 
-def run_router(event_name, payload, router=ROUTER, bom=False, raw=None, extra_args=None):
+def run_router(event_name, payload, router=ROUTER, bom=False, raw=None, extra_args=None, env=None):
     """Run the router subprocess.
 
     raw: if provided, send these bytes as stdin instead of json.dumps(payload).
     extra_args: optional list of extra CLI arguments appended after --event NAME.
+    env: optional dict merged over os.environ for the child — e.g. GIGACODE_ROOT
+         to point the gates' working-tree Stop triggers at a controlled fixture.
     """
     if raw is not None:
         data = raw
@@ -29,9 +31,14 @@ def run_router(event_name, payload, router=ROUTER, bom=False, raw=None, extra_ar
     cmd = [sys.executable, router, "--event", event_name]
     if extra_args:
         cmd.extend(extra_args)
+    child_env = None
+    if env:
+        child_env = dict(os.environ)
+        child_env.update(env)
     proc = subprocess.run(
         cmd,
         input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
+        env=child_env,
     )
     if proc.returncode != 0:
         raise SystemExit(f"router exited {proc.returncode}: {proc.stderr.decode()}")
@@ -51,6 +58,27 @@ def temp_hooks_copy():
     tmp = tempfile.mkdtemp(prefix="router-test-")
     shutil.copytree(HOOKS_DIR, os.path.join(tmp, "hooks"))
     return tmp, os.path.join(tmp, "hooks", "router.py"), os.path.join(tmp, "hooks", "router.config.json")
+
+
+def make_code_fixture():
+    """Temp git repo with a changed code file and NO openspec change, so the
+    Stop gates (gate_spec_structure / validate_development_output) block
+    deterministically. Point GIGACODE_ROOT here via run_router(env=...)."""
+    tmp = tempfile.mkdtemp(prefix="router-code-")
+    os.makedirs(os.path.join(tmp, "src"))
+    with open(os.path.join(tmp, "src", "Foo.kt"), "w", encoding="utf-8") as handle:
+        handle.write("class Foo\n")
+    subprocess.run(["git", "init", "-q"], cwd=tmp, check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(["git", "add", "-A"], cwd=tmp, check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return tmp
+
+
+def make_clean_fixture():
+    """Temp dir: no git repo, no changed code, no openspec change -> every Stop
+    gate allows. Used to verify the budget counter resets on an allow."""
+    return tempfile.mkdtemp(prefix="router-clean-")
 
 
 def main():
@@ -74,12 +102,16 @@ def main():
     result = run_router("UserPromptSubmit", {"prompt": "/develop-feature plan-only payment retry"})
     check("preflight_allow", result["decision"] == "allow", result)
 
-    # 6. Stop with missing artifacts blocks
+    # 6. Stop with changed code but no OpenSpec change blocks (working-tree trigger).
+    # GIGACODE_ROOT points the gates at a fixture repo; the message is irrelevant.
     # Unique session id: the stop budget counts consecutive blocks per session,
     # so reusing one id would degrade to allow on the third smoke run.
     session = f"t-main-{os.getpid()}-{int(time.time())}"
-    result = run_router("Stop", {"last_assistant_message": "Complete in docs/development/sample-task/", "session_id": session})
+    code_fix = make_code_fixture()
+    result = run_router("Stop", {"last_assistant_message": "Done.", "session_id": session},
+                        env={"GIGACODE_ROOT": code_fix})
     check("stop_missing_artifacts_block", result["decision"] == "block", result)
+    shutil.rmtree(code_fix, ignore_errors=True)
 
     # 7. Decisions journal is written
     journal = os.path.join(ROOT, ".gigacode", "logs", "decisions.jsonl")
@@ -111,25 +143,34 @@ def main():
     check("missing_gate_noncritical_allow", result["decision"] == "allow", result)
     shutil.rmtree(tmp, ignore_errors=True)
 
-    # 11. Stop budget: third consecutive block degrades to warning
+    # 11. Stop budget: third consecutive block degrades to warning.
+    # Budget state is isolated in the temp hooks copy (STATE_PATH follows the
+    # router's own dir, NOT GIGACODE_ROOT); the block trigger comes from a
+    # fixture repo with changed code and no OpenSpec change. The two concerns
+    # are orthogonal, which is what makes this deterministic.
     tmp, tmp_router, tmp_config = temp_hooks_copy()
-    payload = {"last_assistant_message": "Complete in docs/development/sample-task/", "session_id": "t-budget"}
-    first = run_router("Stop", payload, router=tmp_router)
-    second = run_router("Stop", payload, router=tmp_router)
-    third = run_router("Stop", payload, router=tmp_router)
+    code_fix = make_code_fixture()
+    code_env = {"GIGACODE_ROOT": code_fix}
+    payload = {"last_assistant_message": "Done.", "session_id": "t-budget"}
+    first = run_router("Stop", payload, router=tmp_router, env=code_env)
+    second = run_router("Stop", payload, router=tmp_router, env=code_env)
+    third = run_router("Stop", payload, router=tmp_router, env=code_env)
     check("stop_budget_first_block", first["decision"] == "block", first)
     check("stop_budget_second_block", second["decision"] == "block", second)
     check("stop_budget_third_degrades", third["decision"] == "allow" and "systemMessage" in third, third)
 
-    # FIX 4: stop-budget reset — an allow-Stop clears the counter; next block restarts budget
-    allow_payload = {"last_assistant_message": "hello", "session_id": "t-budget"}
-    reset_result = run_router("Stop", allow_payload, router=tmp_router)
+    # FIX 4: stop-budget reset — an allow-Stop clears the counter; next block
+    # restarts the budget. A clean fixture (no changed code) makes the gates allow.
+    clean_fix = make_clean_fixture()
+    reset_result = run_router("Stop", payload, router=tmp_router, env={"GIGACODE_ROOT": clean_fix})
     check("stop_budget_reset_allow", reset_result["decision"] == "allow", reset_result)
-    # After reset, same blocking payload must block again (not degrade)
-    restart_first = run_router("Stop", payload, router=tmp_router)
+    # After reset, the blocking fixture must block again (not degrade)
+    restart_first = run_router("Stop", payload, router=tmp_router, env=code_env)
     check("stop_budget_restart_blocks", restart_first["decision"] == "block", restart_first)
 
     shutil.rmtree(tmp, ignore_errors=True)
+    shutil.rmtree(code_fix, ignore_errors=True)
+    shutil.rmtree(clean_fix, ignore_errors=True)
 
     # 12. Latency: full router run on a benign PreToolUse sample
     start = time.monotonic()
@@ -333,10 +374,12 @@ def main():
     os.makedirs(os.path.dirname(state_path), exist_ok=True)
     with open(state_path, "w", encoding="utf-8") as handle:
         json.dump({"stop:t-seed": 99}, handle)
-    payload = {"last_assistant_message": "Complete in docs/development/sample-task/", "session_id": "t-seed"}
-    result = run_router("Stop", payload, router=tmp_router4)
+    code_fix = make_code_fixture()
+    payload = {"last_assistant_message": "Done.", "session_id": "t-seed"}
+    result = run_router("Stop", payload, router=tmp_router4, env={"GIGACODE_ROOT": code_fix})
     check("budget_preseed_still_blocks", result["decision"] == "block", result)
     shutil.rmtree(tmp4, ignore_errors=True)
+    shutil.rmtree(code_fix, ignore_errors=True)
 
     print(f"\nAll {PASSED} router checks passed")
 

@@ -80,7 +80,13 @@ printf '%s' "$ask" | grep -q '"decision": "ask"'
 feature="$(printf '%s' '{"prompt":"/develop-feature plan-only payment retry"}' | "$python_cmd" .gigacode/hooks/gates/preflight_check.py)"
 printf '%s' "$feature" | grep -q '"decision": "allow"'
 
-missing="$(printf '%s' '{"last_assistant_message":"Complete in docs/development/sample-task/"}' | "$python_cmd" .gigacode/hooks/gates/validate_development_output.py)"
+# validate_development_output now triggers from disk, not the message: a dev
+# task dir with missing artifacts must block. Use an isolated GIGACODE_ROOT
+# fixture so the check is deterministic regardless of this repo's tree state.
+vdo_root="$(mktemp -d)"
+mkdir -p "$vdo_root/docs/development/sample"
+missing="$(printf '%s' '{"hook_event_name":"Stop","last_assistant_message":"done"}' | GIGACODE_ROOT="$vdo_root" "$python_cmd" .gigacode/hooks/gates/validate_development_output.py)"
+rm -rf "$vdo_root"
 printf '%s' "$missing" | grep -q '"decision": "block"'
 
 "$python_cmd" -m json.tool .gigacode/hooks/router.config.json >/dev/null

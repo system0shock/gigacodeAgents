@@ -89,10 +89,18 @@ def run(event):
             f"(артефакты не завершены):\n{detail}")}
 
     if name == "Stop":
-        message = _lib.message_from_event(event).replace("\\", "/")
-        if "openspec/changes" not in message and "docs/development/" not in message:
-            return {"decision": "allow"}
-        if not active_changes():
+        # Trigger from the real working tree, not the agent's final message:
+        # the message is attacker-controlled and omitting a path used to unlock
+        # every Stop guarantee (red-team "flow theater"). If production code
+        # changed but no OpenSpec change exists, the flow was skipped -> block.
+        code_changed = bool(_lib.changed_code_files())
+        changes = active_changes()
+        if code_changed and not changes:
+            return {"decision": "block", "reason": (
+                "Stop заблокирован: изменён production-код, но нет активного "
+                "openspec/changes/<id>/. Создай и провалидируй OpenSpec change "
+                "перед завершением (см. rules/openspec.md).")}
+        if not changes:
             return {"decision": "allow"}
         ok, detail = openspec_validate(["--changes"])
         if ok is None:

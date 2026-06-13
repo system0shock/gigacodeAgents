@@ -158,6 +158,45 @@ def run_command(command, timeout, extra_args=None):
     return proc.returncode, tail
 
 
+def git_changed_paths():
+    """Tracked+untracked changed paths (forward-slash, repo-relative), or [].
+
+    Stop gates derive their trigger from the real working tree here instead of
+    the agent's final message, which is attacker-controlled and was the root of
+    the red-team "flow theater" bypass: omitting a path from the message used to
+    silently unlock every Stop guarantee."""
+    try:
+        proc = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            cwd=root(), text=True, encoding="utf-8", errors="replace",
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    paths = []
+    for line in proc.stdout.splitlines():
+        # porcelain v1: 2 status chars + 1 space, then the path
+        entry = line[3:].strip().strip('"')
+        if " -> " in entry:  # rename: keep the destination
+            entry = entry.split(" -> ", 1)[1].strip().strip('"')
+        if entry:
+            paths.append(entry.replace("\\", "/"))
+    return paths
+
+
+# Production-code suffixes whose change should engage the development flow.
+# Markup/spec/enforcement files are excluded by prefix in changed_code_files.
+CODE_SUFFIXES = (".kt", ".kts", ".java", ".py", ".ts", ".tsx", ".js", ".jsx",
+                 ".go", ".rs", ".cs", ".scala")
+
+
+def changed_code_files():
+    """Changed production-code files: code suffix, outside openspec/ docs/
+    .gigacode/ (those are spec/doc/enforcement edits, not shipped product code)."""
+    return [p for p in git_changed_paths()
+            if p.endswith(CODE_SUFFIXES)
+            and not p.startswith(("openspec/", "docs/", ".gigacode/"))]
+
+
 def stdin_event():
     """CLI entry helper: parse the hook event from stdin (BOM-safe)."""
     try:

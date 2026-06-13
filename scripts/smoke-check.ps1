@@ -93,9 +93,18 @@ if ($feature -notmatch '"decision":\s*"allow"') {
   throw "preflight did not allow complete plan-only feature prompt"
 }
 
-$missing = '{"last_assistant_message":"Complete in docs/development/sample-task/"}' | python .gigacode/hooks/gates/validate_development_output.py
+# validate_development_output now triggers from disk, not the message: a dev
+# task dir with missing artifacts must block. Use an isolated GIGACODE_ROOT
+# fixture so the check is deterministic regardless of this repo's tree state.
+$vdoRoot = Join-Path $env:TEMP "gigacode-smoke-vdo"
+Remove-Item -Recurse -Force $vdoRoot -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path (Join-Path $vdoRoot "docs/development/sample") | Out-Null
+$env:GIGACODE_ROOT = $vdoRoot
+$missing = '{"hook_event_name":"Stop","last_assistant_message":"done"}' | python .gigacode/hooks/gates/validate_development_output.py
+Remove-Item Env:\GIGACODE_ROOT
+Remove-Item -Recurse -Force $vdoRoot -ErrorAction SilentlyContinue
 if ($missing -notmatch '"decision":\s*"block"') {
-  throw "validate_development_output did not block missing artifacts"
+  throw "validate_development_output did not block a dev dir with missing artifacts"
 }
 
 python -m json.tool .gigacode/hooks/router.config.json | Out-Null
