@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .gigacode/logs/
 .gigacode/tmp/
+graphify-out/
