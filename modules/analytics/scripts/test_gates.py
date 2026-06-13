@@ -127,9 +127,29 @@ def test_context_inject():
         check("ci_empty_event", gate.run({}) == {"decision": "allow"})
 
 
+def test_preflight():
+    gate = load_gate("preflight_check")
+    check("pf_unrelated",
+          gate.run({"hook_event_name": "UserPromptSubmit", "prompt": "hello"})["decision"] == "allow")
+    check("pf_missing_feature",
+          gate.run({"hook_event_name": "UserPromptSubmit", "prompt": "сделай реверс-анализ"})["decision"] == "block")
+    complete = "reverse-analysis feature Card Blocking jira ABC-123"
+    check("pf_complete",
+          gate.run({"hook_event_name": "UserPromptSubmit", "prompt": complete})["decision"] == "allow")
+    check("pf_wrong_event",
+          gate.run({"hook_event_name": "PreToolUse", "prompt": "реверс"})["decision"] == "allow")
+    payload = b"\xef\xbb\xbf" + json.dumps(
+        {"hook_event_name": "UserPromptSubmit", "prompt": "сделай реверс-анализ"}).encode("utf-8")
+    proc = subprocess.run([sys.executable, os.path.join(GATES_DIR, "preflight_check.py")],
+                          input=payload, stdout=subprocess.PIPE, timeout=60)
+    data = json.loads(proc.stdout.decode("utf-8"))
+    check("pf_cli_bom", data["decision"] == "block", repr(data))
+
+
 def main():
     test_git_guard()
     test_context_inject()
+    test_preflight()
     print(f"All {PASSED} gate checks passed")
 
 
