@@ -99,6 +99,11 @@ EVAL_WRAPPERS = {"eval"}
 # is delete-guarded in _destructive_target (only -delete / -exec rm counts).
 DESTRUCTIVE_VERBS = {"rm", "rmdir", "del", "erase", "remove-item", "ri", "rd",
                      "truncate", "shred", "find"}
+# `find` actions that WRITE or EXECUTE (vs. a pure-read traversal). A find is NOT
+# treated as read-only when any of these is present, so `find . -fprintf
+# .gigacode/x` / `find . -exec rm {} ;` reach the self-protect catch-all.
+FIND_ACTION_FLAGS = {"-delete", "-exec", "-execdir", "-ok", "-okdir",
+                     "-fprintf", "-fprint", "-fprint0", "-fls"}
 # Verbs whose final positional argument is a write destination (ln/rsync create
 # the link/copy at their last operand).
 WRITE_VERBS = {"cp", "mv", "copy", "move", "copy-item", "cpi", "move-item",
@@ -117,7 +122,6 @@ READ_ONLY_PROGS = {
     "cat", "bat", "tac", "nl", "less", "more", "head", "tail", "view",
     "grep", "egrep", "fgrep", "rg", "ag", "ack", "git-grep",
     "ls", "dir", "tree", "stat", "file", "wc", "du", "df", "realpath",
-    "find",  # delete form (-delete / -exec rm) handled by _destructive_target
     "readlink", "basename", "dirname", "cksum", "md5sum", "sha1sum",
     "sha256sum", "diff", "cmp", "comm", "sort", "uniq", "cut", "column",
     "echo", "printf", "true", "false", "test", "[", "which", "type",
@@ -482,9 +486,14 @@ def git_destructive(sub, rest):
     if sub == "reset" and "--hard" in rest:
         return "Blocked `git reset --hard`."
     if sub == "clean":
-        combined = "".join(t.lstrip("-") for t in rest if t.startswith("-"))
-        # -n (dry-run) overrides force: previewing what -f would delete is safe.
-        if "f" in combined and "n" not in combined:
+        short = "".join(t[1:] for t in rest if re.match(r"^-[a-z]+$", t))
+        longs = [t for t in rest if t.startswith("--")]
+        force = "f" in short or "--force" in longs
+        # -n / --dry-run previews and is safe; `--no-dry-run` is the OPPOSITE
+        # (forces real deletion) and must NOT be read as dry-run — the old
+        # substring-`n` check matched the `n` inside "no-dry-run" and let it pass.
+        dry = "n" in short or "--dry-run" in longs
+        if force and not dry:
             return "Blocked destructive `git clean -f`."
     if sub == "push":
         if any(t == "-f" or t.startswith("--force") for t in rest):
@@ -527,6 +536,49 @@ def git_destructive(sub, rest):
     if sub == "stash" and rest[:1] in (["clear"], ["drop"]):
         return f"Blocked `git stash {rest[0]}` (discards stashed changes)."
     return ""
+
+
+def checkout_discards_path(args):
+    """True if a `git checkout` argument is a path that EXISTS on disk — git then
+    treats it as a pathspec and discards that file's working-tree edits (the `--`
+    separator is optional for an unambiguous file). Disk existence is git's own
+    branch-vs-path disambiguation, so `git checkout main` (no file `main`) stays a
+    branch switch while `git checkout src/Foo.kt` is blocked. (`.` / `--` / -f are
+    handled in git_destructive.) args must be ORIGINAL case (paths are
+    case-sensitive)."""
+    for t in args:
+        if t.startswith("-"):
+            continue
+        p = _sq(t)
+        if not p or p == "--":
+            continue
+        # A git ref name cannot contain : * ? [ (git check-ref-format), so an arg
+        # with one is a pathspec — incl. magic `:/`, `:(top)file`, and globs —
+        # which discards matching working-tree files.
+        if any(ch in p for ch in ":*?["):
+            return True
+        if os.path.exists(p):
+            return True
+    return False
+
+
+def git_external_config(leaf):
+    """True if a git leaf loads aliases/config from OUTSIDE the inspectable
+    command string: `--config-env=alias.*` (the expansion lives in an env var) or
+    `include.path=` / `includeIf.` (config pulled from a file). Their expansion
+    can't be read here, so a destructive subcommand can hide behind them
+    (`ALIAS='reset --hard' git --config-env=alias.x=ALIAS x`,
+    `git -c include.path=/tmp/cfg x`). These forms have no use in the agent flow,
+    so block the pattern (fail-closed). Scoped to the global-option region before
+    the subcommand to avoid matching a subcommand's own path arguments."""
+    idx = git_sub_idx(leaf)
+    region = leaf[1:idx] if idx > 0 else leaf[1:]
+    for t in region:
+        low = _sq(t).lower()
+        if (low.startswith("--config-env=alias.")
+                or "include.path=" in low or low.startswith("includeif.")):
+            return True
+    return False
 
 
 def push_dst_branch(refspec):
@@ -709,6 +761,10 @@ def _self_protect_catch_all(prog, leaf):
     helpers) — those are accepted residuals handled by settings.json + review."""
     if prog == "git" or prog in READ_ONLY_PROGS:
         return ""
+    # A pure-read `find` (no -delete/-exec/-fprintf/...) is read-only; one with a
+    # write/exec action is not, and falls through to the path scan below.
+    if prog == "find" and not any(a in FIND_ACTION_FLAGS for a in leaf[1:]):
+        return ""
     for tok in leaf[1:]:
         t = _sq(tok).replace("\\", "/")
         if SELF_PROTECT_LOOSE.search(t) or GIT_DIR_LOOSE.search(t):
@@ -721,11 +777,29 @@ def _self_protect_catch_all(prog, leaf):
 def inspect_command(command):
     """Return (decision, reason) for a shell command: 'block'/'ask'/''."""
     pending_ask = ""
+    # GIT_CONFIG_* env-vars (GIT_CONFIG_KEY_n/VALUE_n, GIT_CONFIG_GLOBAL/SYSTEM)
+    # inject config/aliases into the following git command from the environment.
+    # Their definitions live in env-assignment prefixes that peel() strips, so
+    # detect them on the raw segment and block a git command configured that way.
+    if "GIT_CONFIG" in command:
+        for seg in raw_segments(_normalize_ws(command)):
+            toks = _tokenize(seg)
+            if any(re.match(r"^GIT_CONFIG[A-Za-z0-9_]*=", t) for t in toks):
+                for lf in peel(toks):
+                    if lf and _prog(lf[0]) == "git":
+                        return "block", ("Blocked git configured via GIT_CONFIG_* "
+                            "environment variables (cannot be inspected). Use a plain git command.")
     for leaf in to_leaves(command):
         if not leaf:
             continue
         prog = _prog(leaf[0])
         if prog == "git":
+            # Aliases/config loaded from env or an include file can't be expanded
+            # here — block the (illegitimate) pattern outright.
+            if git_external_config(leaf):
+                return "block", ("Blocked git command loading aliases/config from "
+                                 "the environment or an include file (cannot be "
+                                 "inspected). Use a plain git command.")
             # A one-shot `-c alias.X=...` can hide the destructive subcommand
             # behind a benign alias name; expand and inspect it recursively.
             for expansion in git_alias_targets(leaf):
@@ -741,6 +815,8 @@ def inspect_command(command):
                 reason = git_destructive(sub, rest)
                 if reason:
                     return "block", reason
+                if sub == "checkout" and checkout_discards_path(leaf[idx + 1:]):
+                    return "block", "Blocked `git checkout <path>` (discards working-tree edits to that file)."
                 if sub == "push":
                     reason = push_refspec_protected(leaf, idx)
                     if reason:

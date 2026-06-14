@@ -563,6 +563,40 @@ def main():
         result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
         check(f"r4_allow::{cmd[:30]}", result["decision"] == "allow", (cmd, result))
 
+    # 25. PR review round 5 (fresh Codex P1s on the round 3/4 commits).
+    R5_BLOCK = [
+        # `--no-dry-run` is the OPPOSITE of dry-run; the old substring-n let it pass
+        "git clean -f --no-dry-run", "git clean -fd --no-dry-run",
+        # checkout of an existing path discards that file (README.md exists at root)
+        "git checkout README.md",
+        # aliases/config loaded from env or an include file can't be inspected
+        "git --config-env=alias.wipe=ALIAS wipe",
+        "git -c include.path=/tmp/cfg wipe",
+        "git -c includeIf.gitdir:/x.path=/tmp/cfg status",
+        # GIT_CONFIG_* env vars inject config/aliases from the environment
+        "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0='reset --hard' git x",
+        "GIT_CONFIG_GLOBAL=/tmp/cfg git wipe",
+        # magic / glob pathspecs discard files (refs can't contain : * ? [)
+        "git checkout :/",
+        "git checkout '*.kt'",
+        # find write/exec actions reach the self-protect catch-all
+        "find . -maxdepth 0 -fprintf .gigacode/settings.json x",
+    ]
+    for cmd in R5_BLOCK:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r5_block::{cmd[:32]}", result["decision"] == "block", (cmd, result))
+
+    R5_ALLOW = [
+        "git clean -fn", "git clean -f --dry-run",          # dry-run preview is safe
+        "git checkout feature/no-such-branch-zzz",          # no such file -> branch
+        "git checkout HEAD~1", "git checkout origin/main",  # rev/remote ref, not a path
+        "GIT_AUTHOR_NAME=x git commit -m y",                # not a GIT_CONFIG_* var
+        "find . -name Foo.kt", "find . -exec grep foo {} +",  # pure read / read-via-exec
+    ]
+    for cmd in R5_ALLOW:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r5_allow::{cmd[:32]}", result["decision"] == "allow", (cmd, result))
+
     print(f"\nAll {PASSED} router checks passed")
 
 
