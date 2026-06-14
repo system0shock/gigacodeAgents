@@ -11,6 +11,9 @@
 📖 **Подробное руководство** (быстрый старт, требуемый софт, разбор процесса и
 архитектуры, словарь терминов): [`docs/flow-overview.md`](docs/flow-overview.md).
 
+🔒 **Модель защиты и остаточные риски** (что enforcement гарантирует, а что
+остаётся за `settings.json` + ревью): [`docs/enforcement-limitations.md`](docs/enforcement-limitations.md).
+
 ## Состав модуля
 
 - `.gigacode/settings.json` — настройки проекта, разрешения, hooks, mcpServers.
