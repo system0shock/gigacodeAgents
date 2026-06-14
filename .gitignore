@@ -1,1 +1,12 @@
 .worktrees/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.gigacode/tmp/
+.gigacode/logs/
+docs/development/*/tmp/
+graphify-output/
+# internal planning/specs/reviews — kept on disk, out of public git
+docs/superpowers/

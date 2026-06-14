@@ -1,0 +1,18 @@
+schema: spec-driven
+
+# Project context shown to the AI when creating artifacts.
+# Teams adopting this template should fill this in for their repository:
+# tech stack, build/test commands, conventions, domain terms.
+context: |
+  This repository was set up from the GigaCode developer template.
+  Replace this block with your project's tech stack, conventions, and
+  domain knowledge. Code in the working tree is the source of truth.
+
+# Per-artifact rules enforced as constraints on generated artifacts.
+rules:
+  proposal:
+    - Tie every change to an observed need; no speculative scope.
+  spec:
+    - Every requirement MUST have at least one scenario with WHEN/THEN.
+  tasks:
+    - Break work into small, independently committable steps.

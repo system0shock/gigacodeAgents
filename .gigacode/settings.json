@@ -1,0 +1,179 @@
+{
+  "ui": {
+    "showCitations": true,
+    "showLineNumbers": true,
+    "hideTips": true,
+    "shellOutputMaxLines": 30
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(git status*)",
+      "Bash(git branch*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git rev-list*)",
+      "Bash(rg*)",
+      "Bash(python .gigacode/hooks/*)",
+      "Bash(python .gigacode/hooks/gates/*)",
+      "Edit(docs/development/**)"
+    ],
+    "ask": [
+      "Edit",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(mvn*)",
+      "Bash(npm*)",
+      "Bash(pytest*)",
+      "Bash(gradle*)",
+      "Bash(cargo*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -fd*)",
+      "Bash(git clean -df*)",
+      "Bash(git clean -ffd*)",
+      "Bash(git push --force*)",
+      "Bash(git push --force-with-lease*)",
+      "Bash(git remote set-url*)",
+      "Bash(rm -rf *)",
+      "Bash(del /s *)",
+      "Bash(format *)",
+      "Edit(.gigacode/**)",
+      "Write(.gigacode/**)",
+      "Edit(.gigacode/settings.json)",
+      "Edit(.gigacode/quality-gates.json)",
+      "MultiEdit(.gigacode/**)",
+      "NotebookEdit(.gigacode/**)",
+      "Bash(Remove-Item *)",
+      "Bash(rmdir *)"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/router.py --event UserPromptSubmit"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|Shell|Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/router.py --event PreToolUse"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "async": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "serena-hooks remind --client=claude-code",
+            "timeout": 5000
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__serena__*",
+        "async": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "serena-hooks auto-approve --client=claude-code",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/router.py --event PostToolUse"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/router.py --event Stop",
+            "timeout": 630000
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/router.py --event SessionStart"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "async": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "serena-hooks activate --client=claude-code",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .gigacode/hooks/router.py --event SubagentStart"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "async": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "serena-hooks cleanup --client=claude-code",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  },
+  "mcpServers": {
+    "serena": {
+      "command": "serena",
+      "args": ["start-mcp-server", "--context", "ide", "--project-from-cwd"]
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "stop_block_budget": 2,
+  "routes": [
+    {
+      "event": "UserPromptSubmit",
+      "gates": ["preflight_check", "gate_context_inject"]
+    },
+    {
+      "event": "SessionStart",
+      "gates": ["gate_context_inject"]
+    },
+    {
+      "event": "SubagentStart",
+      "agent_pattern": "^coder$",
+      "gates": ["gate_context_inject"]
+    },
+    {
+      "event": "PreToolUse",
+      "tool_pattern": "^(Bash|Shell)$",
+      "gates": ["git_guard"],
+      "safety_critical": true
+    },
+    {
+      "event": "PreToolUse",
+      "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
+      "gates": ["git_guard"],
+      "safety_critical": true
+    },
+    {
+      "event": "PreToolUse",
+      "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
+      "gates": ["gate_spec_structure"]
+    },
+    {
+      "event": "PreToolUse",
+      "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
+      "gates": ["gate_existing_code"]
+    },
+    {
+      "event": "PostToolUse",
+      "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
+      "gates": ["gate_spec_structure", "gate_lint", "gate_clean_code"]
+    },
+    {
+      "event": "Stop",
+      "gates": ["validate_development_output", "gate_spec_structure", "gate_build"]
+    }
+  ]
+}

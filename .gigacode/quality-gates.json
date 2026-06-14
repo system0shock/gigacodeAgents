@@ -1,0 +1,19 @@
+{
+  "lint": {
+    "command": "",
+    "applies_to": ["**/*.kt", "**/*.kts", "**/*.java"],
+    "timeout_seconds": 120
+  },
+  "build": {
+    "command": "",
+    "timeout_seconds": 600
+  },
+  "test": {
+    "command": ""
+  },
+  "clean_code": {
+    "max_file_lines": 400,
+    "max_function_lines": 60,
+    "placeholder_markers": ["TODO", "FIXME", "XXX"]
+  }
+}
