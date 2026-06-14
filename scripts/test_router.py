@@ -625,6 +625,32 @@ def main():
         result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
         check(f"r6_allow::{cmd[:34]}", result["decision"] == "allow", (cmd, result))
 
+    # 27. PR review round 7: value-taking wrapper options, push short clusters,
+    # checkout -B branch reset.
+    R7_BLOCK = [
+        "env --unset FOO git reset --hard",     # env value-opt operand
+        "env -C /tmp git reset --hard",
+        "env -S 'git reset --hard'",            # -S carries the command
+        "timeout -s KILL 5 git reset --hard",
+        "git push -uf origin feature/x",        # force in a short cluster
+        "git push -fu origin feature/x",
+        "git push -d origin feature/x",         # short delete flag
+        "git checkout -B main HEAD~1",          # force-create resets the ref
+    ]
+    for cmd in R7_BLOCK:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r7_block::{cmd[:34]}", result["decision"] == "block", (cmd, result))
+
+    R7_ALLOW = [
+        "env -i git status",                    # -i is boolean; must not eat `git`
+        "env FOO=bar git status",
+        "git push -u origin feature/x",         # set-upstream, not force/delete
+        "git checkout -b feature/new",          # lowercase create is benign
+    ]
+    for cmd in R7_ALLOW:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r7_allow::{cmd[:34]}", result["decision"] == "allow", (cmd, result))
+
     print(f"\nAll {PASSED} router checks passed")
 
 

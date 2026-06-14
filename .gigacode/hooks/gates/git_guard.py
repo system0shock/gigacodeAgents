@@ -90,6 +90,15 @@ WRAPPER_VALUE_FLAGS = {"-u", "-g", "-U", "--user", "--group"}
 # Matched CASE-SENSITIVELY: lowercase `-i`/`-e` take an OPTIONAL value, so
 # consuming the next token there would risk eating the real command (fail-open).
 XARGS_VALUE_FLAGS = {"-I", "-d", "-E", "-a", "--delimiter", "--arg-file"}
+# Per-wrapper word-valued options whose operand is a SEPARATE token. Only flags
+# that UNAMBIGUOUSLY take a value are listed — marking a boolean flag here would
+# consume the real command as its "value" and open a new bypass. (env -S /
+# --split-string carries the command itself and is handled by _env_split_string.)
+WRAPPER_VALUE_FLAGS_BY_PROG = {
+    "env": {"--unset", "-c", "--chdir"},               # -C chdir (folded), --unset NAME
+    "timeout": {"-s", "--signal", "-k", "--kill-after"},
+    "stdbuf": {"-i", "-o", "-e", "--input", "--output", "--error"},
+}
 # Wrappers that take the command as a -c / -Command / /c string argument.
 DASH_C_WRAPPERS = {"bash", "sh", "zsh", "dash", "ash", "ksh",
                    "cmd", "powershell", "pwsh"}
@@ -334,6 +343,18 @@ def raw_segments(command):
     return [p for p in parts if p]
 
 
+def _env_split_string(tok):
+    """env's -S / --split-string option carries the COMMAND in its value. Return
+    that value ('' if it is the next token), or None if tok is not the option."""
+    if tok in ("-S", "--split-string"):
+        return ""
+    if tok.startswith("-S") and len(tok) > 2:
+        return tok[2:]
+    if tok.startswith("--split-string="):
+        return tok[len("--split-string="):]
+    return None
+
+
 def peel(tokens):
     """Strip leading env-assignments and wrappers from a token list and return
     the real command(s) as a list of leaf token-lists. A `-c`/`/c` wrapper's
@@ -352,17 +373,25 @@ def peel(tokens):
             continue
         prog = _prog(tok)
         if prog in PREFIX_WRAPPERS:  # env / nice / sudo / timeout / xargs ... drop wrapper + flags/values
-            xargs = prog == "xargs"
+            extra_value_flags = WRAPPER_VALUE_FLAGS_BY_PROG.get(prog, set())
+            xargs_flags = XARGS_VALUE_FLAGS if prog == "xargs" else set()
             i += 1
             while i < len(tokens):
                 t = tokens[i]
+                if prog == "env":  # env -S/--split-string carries the command itself
+                    sval = _env_split_string(t)
+                    if sval is not None:
+                        if sval == "" and i + 1 < len(tokens):
+                            sval = tokens[i + 1]
+                        return to_leaves(sval)
                 if t.startswith("-"):
                     i += 1
-                    # skip a value belonging to this flag: a word value of a
-                    # known value-flag (`sudo -u root`, `xargs -I {}`) or any
-                    # numeric value (`nice -n 10`, `xargs -n 4`).
+                    # skip a value belonging to this flag: a word value of a known
+                    # value-flag (`sudo -u root`, `env --unset FOO`, `xargs -I {}`)
+                    # or any numeric value (`nice -n 10`, `xargs -n 4`).
                     word_value_flag = (t.lower() in WRAPPER_VALUE_FLAGS
-                                       or (xargs and t in XARGS_VALUE_FLAGS))
+                                       or t.lower() in extra_value_flags
+                                       or t in xargs_flags)
                     if (i < len(tokens) and not tokens[i].startswith("-")
                             and (word_value_flag or tokens[i].isdigit())):
                         i += 1
@@ -514,9 +543,12 @@ def git_destructive(sub, rest):
         if force and not dry:
             return "Blocked destructive `git clean -f`."
     if sub == "push":
-        if any(t == "-f" or t.startswith("--force") for t in rest):
+        # short clusters too: -uf / -fu (force), -d / -fd (delete). `--force*`
+        # also covers --force-with-lease / --force-if-includes.
+        if _has_force(rest) or any(t.startswith("--force") for t in rest):
             return "Blocked force push."
-        if "--delete" in rest or "--mirror" in rest:
+        if ("--delete" in rest or "--mirror" in rest
+                or any(t.startswith("-") and not t.startswith("--") and "d" in t for t in rest)):
             return "Blocked remote ref deletion/mirror push."
         # +ref / +src:dst = force-update refspec; :ref = remote ref deletion.
         if any(re.match(r"^\+[^\s]+$", t) or re.match(r"^:[^:\s]+$", t) for t in rest):
@@ -563,14 +595,17 @@ def git_destructive(sub, rest):
     return ""
 
 
-def switch_resets_branch(args):
-    """True if `git switch -C/--force-create <branch>` is present — it CREATES OR
-    RESETS the target branch ref before switching (can move a protected branch),
-    like `git branch -f`. `-C` is case-sensitive (lowercase `-c` is the harmless
-    create flag), so this must run on ORIGINAL-case args."""
-    return any(a == "--force-create" or a == "-C"
-               or (a.startswith("-") and not a.startswith("--") and "C" in a)
-               for a in args)
+def resets_branch_ref(args, short, long_flags=()):
+    """True if a force-create/reset branch flag is present: the uppercase short
+    flag `short` (checkout -B / switch -C — it CREATES OR RESETS the target ref,
+    like `git branch -f`) or any of long_flags. Case-sensitive: the lowercase
+    short flag is the harmless create flag, so run on ORIGINAL-case args."""
+    for a in args:
+        if a in long_flags:
+            return True
+        if a.startswith("-") and not a.startswith("--") and short in a:
+            return True
+    return False
 
 
 def checkout_discards_path(args):
@@ -860,7 +895,9 @@ def inspect_command(command):
                     return "block", reason
                 if sub == "checkout" and checkout_discards_path(leaf[idx + 1:]):
                     return "block", "Blocked `git checkout <path>` (discards working-tree edits to that file)."
-                if sub == "switch" and switch_resets_branch(leaf[idx + 1:]):
+                if sub == "checkout" and resets_branch_ref(leaf[idx + 1:], "B"):
+                    return "block", "Blocked `git checkout -B` (resets the target branch ref)."
+                if sub == "switch" and resets_branch_ref(leaf[idx + 1:], "C", ("--force-create",)):
                     return "block", "Blocked `git switch -C/--force-create` (resets the target branch ref)."
                 if sub == "push":
                     reason = push_refspec_protected(leaf, idx)
