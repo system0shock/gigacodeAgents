@@ -5,10 +5,27 @@ Set-Location $Root
 
 $required = @(
   ".gigacode/settings.json",
+  ".gigacode/quality-gates.json",
   ".gigacode/skills/reverse-analysis/SKILL.md",
   ".gigacode/commands/reverse-analysis.md",
-  ".gigacode/hooks/preflight_check.py",
-  ".gigacode/hooks/validate_output.py",
+  "rules/openspec.md",
+  "openspec/config.yaml",
+  "openspec/specs/.gitkeep",
+  "docs/templates/manifest.json",
+  "scripts/build_module_map.py",
+  "scripts/test_module_map.py",
+  ".serena/project.yml",
+  ".gigacode/hooks/router.py",
+  ".gigacode/hooks/router.config.json",
+  ".gigacode/hooks/hook_probe.py",
+  ".gigacode/hooks/gates/_lib.py",
+  ".gigacode/hooks/gates/git_guard.py",
+  ".gigacode/hooks/gates/gate_context_inject.py",
+  ".gigacode/hooks/gates/preflight_check.py",
+  ".gigacode/hooks/gates/gate_spec_bootstrap.py",
+  ".gigacode/hooks/gates/gate_techdocs.py",
+  ".gigacode/hooks/gates/gate_final_format.py",
+  ".gigacode/hooks/gates/validate_run_output.py",
   "docs/templates/feature-analysis.adoc",
   "rules/reverse-analysis.md",
   "rules/branch-naming.md",
@@ -21,11 +38,13 @@ foreach ($path in $required) {
   }
 }
 
-Get-Content ".gigacode/settings.json" -Raw | ConvertFrom-Json | Out-Null
+foreach ($jsonFile in @(".gigacode/settings.json", ".gigacode/hooks/router.config.json", ".gigacode/quality-gates.json", "docs/templates/manifest.json")) {
+  Get-Content $jsonFile -Raw | ConvertFrom-Json | Out-Null
+}
 
 $agents = Get-ChildItem ".gigacode/agents/*.md"
-if ($agents.Count -ne 5) {
-  throw "Expected 5 agent files, found $($agents.Count)"
+if ($agents.Count -ne 3) {
+  throw "Expected 3 agent files, found $($agents.Count)"
 }
 
 foreach ($agent in $agents) {
@@ -33,39 +52,50 @@ foreach ($agent in $agents) {
   if ($text.Length -ge 10000) {
     throw "Agent file exceeds 10,000 characters: $($agent.Name)"
   }
-  if (($text -split "`n" | Select-String -Pattern "^---$").Count -lt 2) {
+  if (([regex]::Matches($text, "(?m)^---\s*$")).Count -lt 2) {
     throw "Agent file missing YAML frontmatter boundaries: $($agent.Name)"
   }
 }
 
-$skillBoundaries = (Get-Content ".gigacode/skills/reverse-analysis/SKILL.md" | Select-String -Pattern "^---$").Count
-if ($skillBoundaries -lt 2) {
-  throw "Skill file missing YAML frontmatter boundaries"
+$session = '{"hook_event_name":"SessionStart"}' | python .gigacode/hooks/router.py --event=SessionStart | ConvertFrom-Json
+if ($session.decision -ne "allow") {
+  throw "Expected SessionStart routing to allow, got $($session.decision)"
 }
 
-$commandBoundaries = (Get-Content ".gigacode/commands/reverse-analysis.md" | Select-String -Pattern "^---$").Count
-if ($commandBoundaries -lt 2) {
-  throw "Command file missing YAML frontmatter boundaries"
-}
-
-$preflightOk = '{"prompt":"reverse-analysis feature Card Blocking jira ABC-123"}' | python .gigacode/hooks/preflight_check.py | ConvertFrom-Json
-if ($preflightOk.decision -ne "allow") {
-  throw "Expected complete preflight sample to allow, got $($preflightOk.decision)"
-}
-
-$preflightIgnored = '{"prompt":"hello"}' | python .gigacode/hooks/preflight_check.py | ConvertFrom-Json
-if ($preflightIgnored.decision -ne "allow") {
-  throw "Expected unrelated prompt to allow, got $($preflightIgnored.decision)"
-}
-
-$validationMissing = '{"last_assistant_message":"Reverse analysis complete in docs/features/card-blocking/"}' | python .gigacode/hooks/validate_output.py | ConvertFrom-Json
-if ($validationMissing.decision -ne "block") {
-  throw "Expected missing output validation sample to block, got $($validationMissing.decision)"
+$incomplete = '{"hook_event_name":"UserPromptSubmit","prompt":"reverse-analysis missing info"}' | python .gigacode/hooks/router.py --event=UserPromptSubmit | ConvertFrom-Json
+if ($incomplete.decision -ne "block") {
+  throw "Expected incomplete reverse-analysis prompt to block, got $($incomplete.decision)"
 }
 
 $template = Get-Content "docs/templates/feature-analysis.adoc" -Raw
 if (-not $template.TrimStart().StartsWith("=")) {
   throw "AsciiDoc template must start with a document title"
 }
+
+if (-not (Select-String -Path "openspec/config.yaml" -Pattern '^schema:' -Quiet)) {
+  throw "openspec/config.yaml must declare a schema"
+}
+
+$repomix = Get-ChildItem -Recurse -File ".gigacode/agents", "rules" |
+  Select-String -Pattern 'repomix' -SimpleMatch
+if ($repomix) {
+  throw "repomix must not appear in agents or rules"
+}
+if (Select-String -Path "README.md" -Pattern 'repomix' -SimpleMatch -Quiet) {
+  throw "repomix must not appear in README"
+}
+
+foreach ($d in @("architecture", "analytics/use-case", "analytics/integration/nfr and contact", "analytics/db/data-model")) {
+  if (-not (Test-Path (Join-Path $d ".gitkeep"))) {
+    throw "Missing final-tree skeleton dir: $d"
+  }
+}
+
+python scripts/test_router.py
+if ($LASTEXITCODE -ne 0) { throw "test_router.py failed" }
+python scripts/test_gates.py
+if ($LASTEXITCODE -ne 0) { throw "test_gates.py failed" }
+python scripts/test_module_map.py
+if ($LASTEXITCODE -ne 0) { throw "test_module_map.py failed" }
 
 Write-Host "Analytics module smoke check passed."
