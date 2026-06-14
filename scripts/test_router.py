@@ -597,6 +597,34 @@ def main():
         result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
         check(f"r5_allow::{cmd[:32]}", result["decision"] == "allow", (cmd, result))
 
+    # 26. PR review round 6: destructive git hidden by case-folded flags, shell
+    # control keywords, dry-run ordering, and the spaced --config-env form.
+    R6_BLOCK = [
+        "git switch -C main HEAD~1",            # force-create resets the branch ref
+        "git switch --force-create main HEAD~1",
+        "git restore --staged -W .",            # -W short worktree flag still discards
+        "if true; then git reset --hard; fi",   # command after a control keyword
+        "for x in 1; do git reset --hard; done",
+        "{ git reset --hard; }",
+        "git clean -f --dry-run --no-dry-run",  # --no-dry-run wins (deletes)
+        "git clean -fn --no-dry-run",
+        "git --config-env alias.wipe=ALIAS wipe",  # space-separated config-env alias
+    ]
+    for cmd in R6_BLOCK:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r6_block::{cmd[:34]}", result["decision"] == "block", (cmd, result))
+
+    R6_ALLOW = [
+        "git switch -c feature/new",            # lowercase -c create is benign
+        "git restore --staged file.kt",         # index-only unstage is safe
+        "git clean -f --no-dry-run --dry-run",  # later --dry-run wins (preview)
+        "if true; then echo ok; fi",            # benign command after a keyword
+        "git -c alias.st=status st",            # -c alias expands; benign -> allow
+    ]
+    for cmd in R6_ALLOW:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r6_allow::{cmd[:34]}", result["decision"] == "allow", (cmd, result))
+
     print(f"\nAll {PASSED} router checks passed")
 
 

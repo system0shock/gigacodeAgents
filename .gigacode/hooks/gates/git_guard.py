@@ -95,6 +95,12 @@ DASH_C_WRAPPERS = {"bash", "sh", "zsh", "dash", "ash", "ksh",
                    "cmd", "powershell", "pwsh"}
 # `eval ...` concatenates its arguments and runs the result as a command.
 EVAL_WRAPPERS = {"eval"}
+# Bash reserved words / control keywords that PRECEDE a command in a clause
+# (`if true; then git reset --hard; fi`). They are peeled like a wrapper so the
+# real command after `then`/`do`/`else`/`{`/`!` is still inspected.
+SHELL_KEYWORDS = {"if", "then", "elif", "else", "fi", "while", "until", "for",
+                  "do", "done", "case", "esac", "in", "select", "function",
+                  "coproc", "{", "}", "!"}
 # Non-git verbs that delete; flagged when they target a protected path. `find`
 # is delete-guarded in _destructive_target (only -delete / -exec rm counts).
 DESTRUCTIVE_VERBS = {"rm", "rmdir", "del", "erase", "remove-item", "ri", "rd",
@@ -341,6 +347,9 @@ def peel(tokens):
         if ENV_ASSIGN_RE.match(tok):  # VAR=val prefix
             i += 1
             continue
+        if tok.lower() in SHELL_KEYWORDS:  # then / do / else / { / ! ... precede a command
+            i += 1
+            continue
         prog = _prog(tok)
         if prog in PREFIX_WRAPPERS:  # env / nice / sudo / timeout / xargs ... drop wrapper + flags/values
             xargs = prog == "xargs"
@@ -486,13 +495,22 @@ def git_destructive(sub, rest):
     if sub == "reset" and "--hard" in rest:
         return "Blocked `git reset --hard`."
     if sub == "clean":
-        short = "".join(t[1:] for t in rest if re.match(r"^-[a-z]+$", t))
-        longs = [t for t in rest if t.startswith("--")]
-        force = "f" in short or "--force" in longs
-        # -n / --dry-run previews and is safe; `--no-dry-run` is the OPPOSITE
-        # (forces real deletion) and must NOT be read as dry-run — the old
-        # substring-`n` check matched the `n` inside "no-dry-run" and let it pass.
-        dry = "n" in short or "--dry-run" in longs
+        # --[no-]dry-run is last-one-wins, so compute the effective dry-run state
+        # in argument order: a later `--no-dry-run` re-arms deletion even after an
+        # earlier `-n`/`--dry-run`. force is sticky (once -f/--force).
+        force = dry = False
+        for t in rest:
+            if t == "--force":
+                force = True
+            elif t == "--dry-run":
+                dry = True
+            elif t == "--no-dry-run":
+                dry = False
+            elif re.match(r"^-[a-z]+$", t):   # short cluster, e.g. -fdn
+                if "f" in t:
+                    force = True
+                if "n" in t:
+                    dry = True
         if force and not dry:
             return "Blocked destructive `git clean -f`."
     if sub == "push":
@@ -523,19 +541,36 @@ def git_destructive(sub, rest):
         # `git checkout file.kt` can't be told from a branch name without git, so
         # only the unambiguous `.` / `--` / -f forms are blocked here.)
         return "Blocked `git checkout` (-f / -- / . discards working-tree edits)."
-    if sub == "switch" and (_has_force(rest) or "--discard-changes" in rest):
-        # `git switch -f` / `git switch --discard-changes` discard local edits.
-        return "Blocked `git switch --force/--discard-changes` (discards working-tree edits)."
-    if sub == "restore" and ("--worktree" in rest or "--staged" not in rest):
-        # --worktree is git restore's DEFAULT, so `git restore .` / `git restore
-        # <path>` discard working-tree edits even without the flag. Only the
-        # index-only form (`--staged` without `--worktree`) is non-destructive.
-        return "Blocked `git restore` (discards working-tree edits; use --staged to unstage)."
+    if sub == "switch" and (_has_force(rest) or "--discard-changes" in rest
+                            or "--force-create" in rest):
+        # `git switch -f` / `--discard-changes` discard local edits; `--force-create`
+        # (long form of -C) resets the target branch ref. (-C short form is
+        # case-folded to -c here, so it is caught in inspect_command's git branch.)
+        return "Blocked `git switch` (--force / --discard-changes / --force-create)."
+    if sub == "restore":
+        # --worktree is git restore's DEFAULT, so `git restore .` discards edits
+        # even without the flag; only the index-only form (`--staged` WITHOUT a
+        # worktree flag) is non-destructive. `-W` is the short worktree flag
+        # (case-folded to -w here), so `git restore --staged -W .` still discards.
+        worktree = "--worktree" in rest or any(
+            re.match(r"^-[a-z]*w[a-z]*$", t) for t in rest)
+        if worktree or "--staged" not in rest:
+            return "Blocked `git restore` (discards working-tree edits; use --staged to unstage)."
     if sub == "worktree" and rest[:1] == ["remove"]:
         return "Blocked `git worktree remove`."
     if sub == "stash" and rest[:1] in (["clear"], ["drop"]):
         return f"Blocked `git stash {rest[0]}` (discards stashed changes)."
     return ""
+
+
+def switch_resets_branch(args):
+    """True if `git switch -C/--force-create <branch>` is present — it CREATES OR
+    RESETS the target branch ref before switching (can move a protected branch),
+    like `git branch -f`. `-C` is case-sensitive (lowercase `-c` is the harmless
+    create flag), so this must run on ORIGINAL-case args."""
+    return any(a == "--force-create" or a == "-C"
+               or (a.startswith("-") and not a.startswith("--") and "C" in a)
+               for a in args)
 
 
 def checkout_discards_path(args):
@@ -573,11 +608,19 @@ def git_external_config(leaf):
     the subcommand to avoid matching a subcommand's own path arguments."""
     idx = git_sub_idx(leaf)
     region = leaf[1:idx] if idx > 0 else leaf[1:]
-    for t in region:
+    for i, t in enumerate(region):
         low = _sq(t).lower()
         if (low.startswith("--config-env=alias.")
                 or "include.path=" in low or low.startswith("includeif.")):
             return True
+        # space-separated `--config-env alias.x=VAR`: the operand is the next
+        # token (its value lives in an env var -> unexpandable -> block). The
+        # `-c alias.X=Y` form is NOT blocked here: git_alias_targets expands it,
+        # so a benign alias (`git -c alias.st=status st`) is still allowed.
+        if low == "--config-env" and i + 1 < len(region):
+            nxt = _sq(region[i + 1]).lower()
+            if nxt.startswith("alias.") or "include.path=" in nxt or nxt.startswith("includeif."):
+                return True
     return False
 
 
@@ -817,6 +860,8 @@ def inspect_command(command):
                     return "block", reason
                 if sub == "checkout" and checkout_discards_path(leaf[idx + 1:]):
                     return "block", "Blocked `git checkout <path>` (discards working-tree edits to that file)."
+                if sub == "switch" and switch_resets_branch(leaf[idx + 1:]):
+                    return "block", "Blocked `git switch -C/--force-create` (resets the target branch ref)."
                 if sub == "push":
                     reason = push_refspec_protected(leaf, idx)
                     if reason:
