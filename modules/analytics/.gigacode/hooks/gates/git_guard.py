@@ -429,6 +429,23 @@ def git_alias_targets(leaf):
     return [("git " + exp + " " + extra).strip()]  # git subcommand alias
 
 
+def git_unresolvable_alias(leaf):
+    """True if a git alias is defined via a mechanism whose VALUE cannot be
+    resolved from the argument text — `--config-env=alias.X=ENVVAR` puts the alias
+    body in an env var. The construct is an obfuscation (the real command hides in
+    the alias), so fail closed. (`-c alias.X=value` IS resolvable and is expanded
+    by git_alias_targets; GIT_CONFIG_* env-config is caught in inspect_command.)"""
+    i = 1
+    while i < len(leaf):
+        t = _sq(leaf[i]).lower()
+        if t.startswith("--config-env=") and "alias." in t:
+            return True
+        if t == "--config-env" and i + 1 < len(leaf) and "alias." in _sq(leaf[i + 1]).lower():
+            return True
+        i += 1
+    return False
+
+
 def _has_force(rest):
     """True if a flag list carries -f / --force, including short clusters (-qf)."""
     return any(t == "--force" or
@@ -477,12 +494,14 @@ def git_destructive(sub, rest):
         if "--force" in rest or any(
                 re.match(r"^-[A-Za-z]*f[A-Za-z]*$", t) and not t.startswith("--") for t in rest):
             return "Blocked `git checkout -f/--force` (discards working-tree edits)."
-        # Path-form `git checkout <file>` restores that file from the index,
-        # discarding edits. A branch name can't be told from a path without git,
-        # so block only when a non-flag arg actually names an existing worktree
-        # path (a real file/dir) — `git checkout <branch>` (no such path) stays ok.
-        if any(not t.startswith("-") and os.path.exists(_sq(t)) for t in rest):
-            return "Blocked `git checkout <path>` (discards working-tree edits)."
+        # Path-form `git checkout <file>` / pathspec restore (incl. magic like
+        # `:/README.md`, `:(top)…`) restores from the index, discarding edits. A
+        # branch name can't start with ':' and won't exist as a worktree path, so
+        # block ':'-pathspecs or args naming a real path; `git checkout <branch>`
+        # (no such path) stays allowed.
+        if any(not t.startswith("-")
+               and (_sq(t).startswith(":") or os.path.exists(_sq(t))) for t in rest):
+            return "Blocked `git checkout <path/pathspec>` (discards working-tree edits)."
     if sub == "restore":
         # restore touches the working tree by default; only --staged/-S WITHOUT
         # --worktree/-W leaves the worktree intact.
@@ -656,15 +675,25 @@ def _destructive_target(prog, leaf):
     args = leaf[1:]
     if prog == "find":
         low = [a.lower() for a in args]
-        deleting = "-delete" in low or (
-            "-exec" in low and any(_prog(a) in ("rm", "rmdir", "del") for a in args))
-        if not deleting:
+        # ACTIVE when find can mutate: -delete, OR any executor (-exec/-execdir/
+        # -ok/-okdir) — the executor may delete indirectly (`-exec sh -c 'rm …'`),
+        # so the exact'd program isn't necessarily a literal rm. Inactive find
+        # (-name/-type/...) is a read/list and stays allowed.
+        active = ("-delete" in low
+                  or any(e in low for e in ("-exec", "-execdir", "-ok", "-okdir")))
+        if not active:
             return ""
     worst = ""
     for t in args:
         if t.startswith("-"):
             continue
-        c = classify_path(_sq(t), shell=True)
+        ts = _sq(t).replace("\\", "/")
+        # LOOSE catch (same backstop as the catch-all) closes the glob-literal
+        # form `find . -path '*.gigacode*' -exec rm` where classify_path's
+        # component anchor would miss the predicate value.
+        if SELF_PROTECT_LOOSE.search(ts) or GIT_DIR_LOOSE.search(ts):
+            return "block"
+        c = classify_path(ts, shell=True)
         if c == "block":
             return "block"
         if c == "ask":
@@ -703,7 +732,26 @@ def _self_protect_catch_all(prog, leaf):
 def inspect_command(command):
     """Return (decision, reason) for a shell command: 'block'/'ask'/''."""
     pending_ask = ""
-    for leaf in to_leaves(command):
+    # GIT_CONFIG_* env-config can define an alias whose body runs a destructive
+    # command (GIT_CONFIG_COUNT/KEY_n/VALUE_n) without ever appearing as a git
+    # flag. peel drops env assignments, so detect the construct on the raw text.
+    # Legit GIT_CONFIG_GLOBAL/SYSTEM/NOSYSTEM are NOT matched.
+    if re.search(r"\bGIT_CONFIG_(KEY|VALUE|COUNT)\w*\s*=", command):
+        return "block", ("Blocked git env-config alias mechanism (GIT_CONFIG_*). "
+                         "Use plain git subcommands.")
+    for raw_leaf in to_leaves(command):
+        if not raw_leaf:
+            continue
+        # Strip redirections FIRST so the program is the first POSITIONAL, not a
+        # leading redirect token (`>/tmp/out git reset --hard` runs git, not `out`).
+        leaf, redir_targets = _split_redirects(raw_leaf)
+        for tgt in redir_targets:
+            t = _norm(_sq(tgt))
+            c = classify_path(t, shell=True)
+            if c == "block":
+                return "block", f"Blocked shell write to enforcement/.git path '{t}'."
+            if c == "ask":
+                pending_ask = "Shell write to a protected/openspec-truth path requires explicit confirmation."
         if not leaf:
             continue
         prog = _prog(leaf[0])
@@ -716,6 +764,10 @@ def inspect_command(command):
                     return "block", r
                 if d == "ask" and not pending_ask:
                     pending_ask = r
+            # …and an alias defined via --config-env hides its body in an env var.
+            if git_unresolvable_alias(leaf):
+                return "block", ("Blocked git inline alias via --config-env (body hidden "
+                                 "in an env var; cannot verify). Use plain git subcommands.")
             idx = git_sub_idx(leaf)
             if idx >= 0:
                 sub = _sq(leaf[idx]).lower()
@@ -729,7 +781,7 @@ def inspect_command(command):
                 return "block", "Blocked deletion of an enforcement/.git/openspec path."
             if d == "ask":
                 pending_ask = "Deletion of a protected path requires explicit confirmation."
-        for tgt in write_targets(leaf):
+        for tgt in write_targets(leaf):              # verb dests (redirects stripped)
             c = classify_path(tgt, shell=True)
             if c == "block":
                 return "block", f"Blocked shell write to enforcement/.git path '{tgt}'."

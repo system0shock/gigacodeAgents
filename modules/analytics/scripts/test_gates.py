@@ -232,6 +232,29 @@ def test_git_guard():
     check("gg_cat_gigacode_allows",  # reading an enforcement file is allow-listed
           gate.run({"tool_input": {"command": "cat .gigacode/hooks/router.py"}})["decision"] == "allow")
 
+    # --- Codex round 8 (review on cad914a): deeper structural edges ---
+    # a leading redirection must not hide the command (program = first positional)
+    check("gg_leading_redirect_reset",
+          gate.run({"tool_input": {"command": ">/tmp/out git reset --hard"}})["decision"] == "block")
+    check("gg_leading_redirect_fd",
+          gate.run({"tool_input": {"command": "2>/dev/null git reset --hard"}})["decision"] == "block")
+    # alias defined via --config-env (value in an env var) — unresolvable → block
+    check("gg_config_env_alias_blocks",
+          gate.run({"tool_input": {"command": "git --config-env=alias.nuke=A nuke"}})["decision"] == "block")
+    # GIT_CONFIG_* env-config alias mechanism → block; legit GIT_CONFIG_GLOBAL stays ok
+    check("gg_git_config_env_alias_blocks",
+          gate.run({"tool_input": {"command": "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0='reset --hard' git x"}})["decision"] == "block")
+    check("gg_git_config_global_allows",
+          gate.run({"tool_input": {"command": "GIT_CONFIG_GLOBAL=/dev/null git status"}})["decision"] == "allow")
+    # checkout pathspec magic (:/path) restores a tracked file, not a branch switch
+    check("gg_checkout_pathspec_magic",
+          gate.run({"tool_input": {"command": "git checkout :/README.md"}})["decision"] == "block")
+    # find deleting via an indirect executor (sh -c) still targets enforcement
+    check("gg_find_exec_sh_blocks",
+          gate.run({"tool_input": {"command": "find .gigacode -exec sh -c 'rm -rf $1' sh {} +"}})["decision"] == "block")
+    check("gg_find_read_allows",  # find without an active action is a read/list
+          gate.run({"tool_input": {"command": "find .gigacode -name '*.py'"}})["decision"] == "allow")
+
 
 def test_context_inject():
     gate = load_gate("gate_context_inject")
