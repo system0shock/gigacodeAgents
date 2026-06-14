@@ -37,7 +37,7 @@ def make_fixture():
     """Temp template root: rules/, openspec/changes/, .gigacode/logs/."""
     tmp = tempfile.mkdtemp(prefix="gates-test-")
     os.makedirs(os.path.join(tmp, "rules"))
-    for rule in ("development-flow.md", "openspec.md"):
+    for rule in ("development-flow.md", "code-style.md", "testing.md", "openspec.md"):
         shutil.copy(os.path.join(ROOT, "rules", rule), os.path.join(tmp, "rules"))
     os.makedirs(os.path.join(tmp, "openspec", "changes", "archive"))
     src_config = os.path.join(ROOT, "openspec", "config.yaml")
@@ -127,12 +127,18 @@ def test_context_inject():
         ctx = result.get("additionalContext", "")
         check("ci_session_decision", result["decision"] == "allow", result)
         check("ci_session_rules", "Development Flow Rules" in ctx, ctx[:200])
+        # project code/test rule injection (the "задел": RULE_FILES extensibility)
+        check("ci_session_code_rules", "Code Style Rules" in ctx, ctx[:400])
+        check("ci_session_test_rules", "Testing Rules" in ctx, ctx[:400])
         check("ci_session_module_map", "Module Map" in ctx, ctx[-400:])
         check("ci_session_changes", "add-sample" in ctx, ctx[-200:])
 
         result = gate.run({"hook_event_name": "SubagentStart", "agent_type": "coder"})
         ctx = result.get("additionalContext", "")
         check("ci_subagent_search", "find_symbol" in ctx, ctx[:200])
+        # the coder writes code -> it must carry the code/test conventions too
+        check("ci_subagent_code_rules", "Code Style Rules" in ctx, ctx[:400])
+        check("ci_subagent_test_rules", "Testing Rules" in ctx, ctx[:400])
         check("ci_subagent_changes", "add-sample" in ctx, ctx[-200:])
 
         result = gate.run({"hook_event_name": "UserPromptSubmit",

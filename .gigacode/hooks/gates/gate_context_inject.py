@@ -10,7 +10,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _lib
 
-RULE_FILES = ["development-flow.md", "openspec.md"]
+# Rules injected at SessionStart. Project code/test conventions live in
+# code-style.md / testing.md (sample templates the team edits); a missing file is
+# read as "" and dropped, so trimming this list never breaks the gate.
+RULE_FILES = ["development-flow.md", "code-style.md", "testing.md", "openspec.md"]
+# The coder subagent writes code in a fresh context, so it is grounded in the
+# code/test conventions directly (the design's "inject rules" for SubagentStart).
+CODER_RULE_FILES = ["code-style.md", "testing.md"]
 MODULE_MAP = os.path.join(".gigacode", "context", "module-map.md")
 
 
@@ -52,9 +58,11 @@ def run(event):
             "implementation first (mcp__serena__find_symbol when available, else "
             "rg / git grep). Reuse or extend matches; record the search result in "
             "docs/development/<task-slug>/journal.md.",
-            read_text(os.path.join(_lib.root(), MODULE_MAP)),
-            changes_line(),
         ]
+        parts.extend(read_text(os.path.join(_lib.root(), "rules", rule))
+                     for rule in CODER_RULE_FILES)
+        parts.append(read_text(os.path.join(_lib.root(), MODULE_MAP)))
+        parts.append(changes_line())
         return {"decision": "allow",
                 "additionalContext": "\n\n".join(part for part in parts if part)}
     if name == "UserPromptSubmit":

@@ -107,6 +107,13 @@ Smoke checks не требуют GigaCode, Graphify, MCP servers, network access
 
 Обновите `rules/git-safety.md` под protected branches и protected paths вашей команды.
 
+Отредактируйте `rules/code-style.md` и `rules/testing.md` под конвенции вашего
+кода и тестов — это файлы-образцы, которые `gate_context_inject` инжектирует в
+контекст агента на старте сессии и при запуске сабагента `coder`. Добавить ещё
+файл правил: положите `.md` в `rules/` и допишите имя в `RULE_FILES` (вся сессия)
+или `CODER_RULE_FILES` (только `coder`) в
+`.gigacode/hooks/gates/gate_context_inject.py`.
+
 Обновляйте `.gigacode/settings.json` только project-safe defaults. Не храните в репозитории secrets, tokens, personal paths или environment-specific credentials.
 
 ### Проверка семантики хуков вашей сборки GigaCode
