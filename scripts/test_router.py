@@ -521,6 +521,48 @@ def main():
         result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
         check(f"r3_allow::{cmd[:34]}", result["decision"] == "allow", (cmd, result))
 
+    # 24. PR review round 4 (structural hardening): a defense-in-depth self-protect
+    # catch-all (any non-read-only command NAMING a .gigacode/.git path blocks,
+    # even via a writer this gate doesn't model), plus shell-field bypasses and
+    # the remaining destructive-git discard/destroy forms.
+    R4_BLOCK = [
+        # self-protect catch-all: writers / interpreters not modeled elsewhere
+        "ln -sf evil .gigacode/settings.json",
+        "rsync evil .gigacode/",
+        "New-Item -Path .gigacode/x -ItemType File",
+        "python -c \"open('.gigacode/x','w')\"",
+        "python3 -c \"import os; os.remove('.git/index')\"",
+        "chmod -R 777 .gigacode",
+        "tar czf b.tgz .git",
+        "install evil .gigacode/settings.json",
+        # $IFS field-splitting and backslash-newline line continuation
+        "git${IFS}reset${IFS}--hard",
+        "git reset \\\n--hard",
+        # remaining destructive git forms
+        "git checkout .",
+        "git checkout HEAD .",
+        "git stash drop",
+        "git branch -f main start",
+        "git branch -d old",
+    ]
+    for cmd in R4_BLOCK:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r4_block::{cmd[:30]!r}", result["decision"] == "block", (cmd, result))
+
+    # reads/inspection of enforcement files MUST still allow (catch-all allow-list),
+    # and rename (vs delete/force-move) stays allowed.
+    R4_ALLOW = [
+        "cat .gigacode/settings.json", "grep foo .gigacode/quality-gates.json",
+        "ls -la .gigacode/hooks", "find .gigacode -name '*.py'",
+        "head .git/HEAD", "Get-Content .gigacode/settings.json",
+        "test -f .gigacode/settings.json", "cd .gigacode && ls",
+        "git branch -m newname", "git branch -M main",
+        "cp .gitignore backup.txt", "ln -s a.txt b.txt", "rsync -a src/ dst/",
+    ]
+    for cmd in R4_ALLOW:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r4_allow::{cmd[:30]}", result["decision"] == "allow", (cmd, result))
+
     print(f"\nAll {PASSED} router checks passed")
 
 

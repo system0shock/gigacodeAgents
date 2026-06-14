@@ -12,6 +12,21 @@ Path policy: writes to enforcement-owned paths (`.gigacode/**`) and openspec
 truth BLOCK (fail-closed — the layer must not be editable by the agent it
 constrains); writes to PROTECTED_PATHS (CI/secrets/infra) ASK.
 
+Threat model / why two layers. Token-parsing arbitrary shell is inherently
+leaky (every shell feature is a potential bypass), so self-protection does NOT
+rely on parsing alone: `inspect_command` has a defense-in-depth backstop that
+blocks ANY non-read-only command merely *naming* a `.gigacode`/`.git` path
+(`_self_protect_catch_all`), regardless of the mechanism (ln, rsync, New-Item,
+an interpreter one-liner, a writer this gate does not model). Read-only programs
+are allow-listed so inspecting/reading enforcement files still works.
+
+Known, accepted residuals (defense-in-depth, not a perfect sandbox): commands
+whose destructive effect is fully hidden from the argument text — e.g. a value
+read from an environment variable the shell expands (`rm -rf "$X"`), a here-doc
+body, or bytes written by a compiled helper — cannot be classified here and are
+caught by the broader settings.json permission layer + human review, not this
+gate.
+
 This gate is self-contained (it does not import _lib) and runs on the
 safety-critical PreToolUse Bash/Shell and WriteFile/Edit routes.
 """
@@ -46,6 +61,13 @@ PROTECTED_PATHS = [
 # same protected directory, so the match must not be dodged by altered casing.
 SELF_PROTECT_RE = re.compile(r"(^|/)\.gigacode(/|$)", re.IGNORECASE)
 GIT_DIR_RE = re.compile(r"(^|/)\.git(/|$)", re.IGNORECASE)
+# Looser variants for the defense-in-depth catch-all: match the protected
+# component anywhere in an argument token (e.g. inside a quoted interpreter
+# one-liner `python -c "open('.gigacode/x','w')"`), not only as a clean path
+# component. `(?![A-Za-z0-9_])` keeps `.gigacoder` / `.github` / `.gitignore`
+# from matching, so reads/writes of unrelated dot-names are unaffected.
+SELF_PROTECT_LOOSE = re.compile(r"\.gigacode(?![A-Za-z0-9_])", re.IGNORECASE)
+GIT_DIR_LOOSE = re.compile(r"\.git(?![A-Za-z0-9_])", re.IGNORECASE)
 # Mirror of gate_spec_structure.DENY_RE so shell-redirection writes to openspec
 # truth are caught here too (gate_spec_structure only sees WriteFile/Edit).
 OPENSPEC_TRUTH_RE = re.compile(r"(^|/)openspec/(specs|changes/archive)/", re.IGNORECASE)
@@ -77,15 +99,35 @@ EVAL_WRAPPERS = {"eval"}
 # is delete-guarded in _destructive_target (only -delete / -exec rm counts).
 DESTRUCTIVE_VERBS = {"rm", "rmdir", "del", "erase", "remove-item", "ri", "rd",
                      "truncate", "shred", "find"}
-# Verbs whose final positional argument is a write destination.
+# Verbs whose final positional argument is a write destination (ln/rsync create
+# the link/copy at their last operand).
 WRITE_VERBS = {"cp", "mv", "copy", "move", "copy-item", "cpi", "move-item",
-               "mi", "tee", "install", "rename-item", "rni"}
+               "mi", "tee", "install", "rename-item", "rni", "ln", "rsync"}
 # PowerShell write cmdlets: destination is -Path/-FilePath/-LiteralPath or the
 # FIRST positional (NOT the last) — Windows is the primary platform.
 PS_WRITE_VERBS = {"set-content", "add-content", "out-file", "tee-object",
-                  "sc", "ac"}
+                  "sc", "ac", "new-item", "ni"}
 # Writer programs with a non-positional / in-place destination.
 WRITER_PROGS = {"dd", "sed", "perl", "truncate", "ed"}
+# Read-only programs: the defense-in-depth catch-all skips these, so reading or
+# inspecting an enforcement file (cat/grep/ls/Get-Content ...) is never blocked.
+# Programs that can WRITE (awk/sed/perl/tee/dd/cp/python/node/tar/...) are
+# deliberately absent — naming a protected path with one of them is suspect.
+READ_ONLY_PROGS = {
+    "cat", "bat", "tac", "nl", "less", "more", "head", "tail", "view",
+    "grep", "egrep", "fgrep", "rg", "ag", "ack", "git-grep",
+    "ls", "dir", "tree", "stat", "file", "wc", "du", "df", "realpath",
+    "find",  # delete form (-delete / -exec rm) handled by _destructive_target
+    "readlink", "basename", "dirname", "cksum", "md5sum", "sha1sum",
+    "sha256sum", "diff", "cmp", "comm", "sort", "uniq", "cut", "column",
+    "echo", "printf", "true", "false", "test", "[", "which", "type",
+    "whereis", "whatis", "man", "pwd", "cd", "pushd", "popd", "date",
+    # PowerShell readers / navigation
+    "get-content", "gc", "get-childitem", "gci", "select-string", "sls",
+    "get-item", "gi", "test-path", "resolve-path", "get-location", "gl",
+    "set-location", "sl", "push-location", "pop-location", "format-hex",
+    "measure-object", "write-output", "write-host",
+}
 ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 # Zero-width / format chars stripped before tokenizing (NBSP and other Zs spaces
 # are folded to a normal space by NFKC + the Zs check in _normalize_ws).
@@ -196,10 +238,17 @@ def _is_dash_c(tok):
 
 
 def _normalize_ws(s):
-    """NFKC-normalize, drop zero-width/format chars, and fold every Unicode
-    space (Zs) to a plain space. Closes the NBSP / zero-width separator bypass
-    (git<NBSP>reset<NBSP>--hard) on PowerShell, which splits on those."""
+    """NFKC-normalize, fold `$IFS` to a space, drop zero-width/format chars, and
+    fold every Unicode space (Zs) to a plain space. Closes the NBSP / zero-width
+    separator bypass (git<NBSP>reset<NBSP>--hard) on PowerShell and the
+    `git${IFS}reset${IFS}--hard` field-splitting bypass on bash (default IFS
+    expands to whitespace)."""
     s = unicodedata.normalize("NFKC", s)
+    # Bash line continuation: a backslash immediately before a newline is removed
+    # and the two lines join. Mimic it so `git reset \<newline>--hard` is seen as
+    # `git reset --hard` instead of splitting on the newline.
+    s = s.replace("\\\r\n", "").replace("\\\n", "")
+    s = s.replace("${IFS}", " ").replace("$IFS", " ")
     out = []
     for ch in s:
         if ch in ZERO_WIDTH:
@@ -445,8 +494,12 @@ def git_destructive(sub, rest):
         # +ref / +src:dst = force-update refspec; :ref = remote ref deletion.
         if any(re.match(r"^\+[^\s]+$", t) or re.match(r"^:[^:\s]+$", t) for t in rest):
             return "Blocked force/delete by refspec."
-    if sub == "branch" and any(t in ("-d", "-D", "--delete") for t in rest):
-        return "Blocked local branch deletion."
+    if sub == "branch" and (any(t in ("-d", "-D", "--delete", "--force")
+                                for t in rest) or _has_force(rest)):
+        # delete (-d/-D) or force-move a ref (-f/--force) can lose commits.
+        # Rename (-m/-M) is left allowed: `git branch -M main` (rename the current
+        # branch) is a routine operation and recoverable via reflog.
+        return "Blocked destructive `git branch` (delete / force-move)."
     if sub == "remote" and rest[:1] == ["set-url"]:
         return "Blocked remote URL change."
     if sub == "reflog" and rest[:1] in (["expire"], ["delete"], ["drop"]):
@@ -455,10 +508,12 @@ def git_destructive(sub, rest):
         return "Blocked `git gc --prune` (drops dangling-commit recovery)."
     if sub in DESTRUCTIVE_SUBCMDS:
         return f"Blocked potentially irreversible `git {sub}`."
-    if sub == "checkout" and ("--" in rest or _has_force(rest)):
-        # `git checkout -f <branch>` / `git checkout -- <path>` both throw away
-        # local working-tree modifications.
-        return "Blocked `git checkout` (-f / -- discards working-tree edits)."
+    if sub == "checkout" and ("--" in rest or "." in rest or _has_force(rest)):
+        # `git checkout -f <branch>`, `git checkout -- <path>`, and `git checkout .`
+        # all throw away local working-tree modifications. (A specific-file
+        # `git checkout file.kt` can't be told from a branch name without git, so
+        # only the unambiguous `.` / `--` / -f forms are blocked here.)
+        return "Blocked `git checkout` (-f / -- / . discards working-tree edits)."
     if sub == "switch" and (_has_force(rest) or "--discard-changes" in rest):
         # `git switch -f` / `git switch --discard-changes` discard local edits.
         return "Blocked `git switch --force/--discard-changes` (discards working-tree edits)."
@@ -469,8 +524,8 @@ def git_destructive(sub, rest):
         return "Blocked `git restore` (discards working-tree edits; use --staged to unstage)."
     if sub == "worktree" and rest[:1] == ["remove"]:
         return "Blocked `git worktree remove`."
-    if sub == "stash" and rest[:1] == ["clear"]:
-        return "Blocked `git stash clear`."
+    if sub == "stash" and rest[:1] in (["clear"], ["drop"]):
+        return f"Blocked `git stash {rest[0]}` (discards stashed changes)."
     return ""
 
 
@@ -640,6 +695,29 @@ def _destructive_target(prog, leaf):
     return worst
 
 
+def _self_protect_catch_all(prog, leaf):
+    """Defense-in-depth backstop: block ANY non-read-only command that merely
+    NAMES a `.gigacode`/`.git` path in its arguments — even through a writer this
+    gate does not model (ln, rsync, New-Item, chmod, tar, an interpreter
+    one-liner like `python -c "open('.gigacode/x','w')"`). git is inspected by
+    subcommand above; read-only programs (cat/grep/ls/Get-Content/find/...) are
+    allow-listed so reading or inspecting enforcement files still works.
+
+    This is the layer that makes self-protection robust against unparsed shell
+    structure: the bypass class shrinks from 'every shell feature' to 'effects
+    fully hidden from the argument text' (env-var expansion, here-docs, compiled
+    helpers) — those are accepted residuals handled by settings.json + review."""
+    if prog == "git" or prog in READ_ONLY_PROGS:
+        return ""
+    for tok in leaf[1:]:
+        t = _sq(tok).replace("\\", "/")
+        if SELF_PROTECT_LOOSE.search(t) or GIT_DIR_LOOSE.search(t):
+            return (f"Blocked command '{prog}' that references an enforcement/.git "
+                    "path. Enforcement files are edited only via an out-of-band "
+                    "human workflow.")
+    return ""
+
+
 def inspect_command(command):
     """Return (decision, reason) for a shell command: 'block'/'ask'/''."""
     pending_ask = ""
@@ -679,6 +757,9 @@ def inspect_command(command):
                 return "block", f"Blocked shell write to enforcement/.git path '{tgt}'."
             if c == "ask":
                 pending_ask = "Shell write to a protected/openspec-truth path requires explicit confirmation."
+        reason = _self_protect_catch_all(prog, leaf)
+        if reason:
+            return "block", reason
     if pending_ask:
         return "ask", pending_ask
     return "", ""

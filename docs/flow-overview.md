@@ -84,7 +84,7 @@ intake (главная сессия) → repo-context → OpenSpec propose
 |---|---|---|
 | `SessionStart`, `SubagentStart(coder)` | context_inject | инъекция правил + индекса символов |
 | `UserPromptSubmit` | preflight | блок невалидного запроса |
-| `PreToolUse(Bash/Shell, Write/Edit)` | git_guard | блок: защищённые ветки, деструктивный git, разрушение/правка репозитория и `.gigacode`/`.git`; **ask** на `openspec/specs` — всё это сквозь обёртки, перенаправления и подстановки |
+| `PreToolUse(Bash/Shell, Write/Edit)` | git_guard | блок: защищённые ветки (включая push по refspec), деструктивный git, разрушение/правка репозитория и `.gigacode`/`.git`; **ask** на `openspec/specs` — всё это сквозь обёртки, перенаправления, подстановки и `$IFS`/перенос строки. Самозащита `.gigacode`/`.git` устроена как defense-in-depth: **любая** не-read-only команда, лишь упоминающая такой путь (ln/rsync/New-Item/`python -c`/…), блокируется — детектор не зависит от идеального парсинга shell |
 | `PreToolUse(Write/Edit)` | spec_structure | **ask** на запись в `openspec/specs|archive` (легитимно в `/opsx:sync`/`archive`, прямая правка всплывает человеку) |
 | `PreToolUse(Write/Edit)` | existing_code | **advisory**: «похожий символ уже есть в X» (только новые файлы) |
 | `PostToolUse(Write/Edit)` | spec_structure, lint, clean_code | strict-валидация change + блок по линтеру; эвристики — предупреждение |
