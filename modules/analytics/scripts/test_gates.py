@@ -255,6 +255,33 @@ def test_git_guard():
     check("gg_find_read_allows",  # find without an active action is a read/list
           gate.run({"tool_input": {"command": "find .gigacode -name '*.py'"}})["decision"] == "allow")
 
+    # --- Codex round 9 (review on 4136d1e) ---
+    # git path-mutating subcommands (rm/mv) on enforcement paths
+    check("gg_git_rm_gigacode",
+          gate.run({"tool_input": {"command": "git rm .gigacode/hooks/router.py"}})["decision"] == "block")
+    check("gg_git_mv_gigacode",
+          gate.run({"tool_input": {"command": "git mv .gigacode/hooks/router.py /tmp/x"}})["decision"] == "block")
+    check("gg_git_rm_benign_allows",
+          gate.run({"tool_input": {"command": "git rm old.py"}})["decision"] == "allow")
+    # destructive command hidden in a shell function body (header is a transparent prefix)
+    check("gg_func_body_reset",
+          gate.run({"tool_input": {"command": "f(){ git reset --hard; }; f"}})["decision"] == "block")
+    check("gg_func_kw_body_reset",
+          gate.run({"tool_input": {"command": "function f { git reset --hard; }; f"}})["decision"] == "block")
+    check("gg_func_spaced_body",
+          gate.run({"tool_input": {"command": "f () { rm -rf .gigacode; }; f"}})["decision"] == "block")
+    # wrapper value-options consume their value, so the tail command is inspected
+    check("gg_timeout_signal_reset",
+          gate.run({"tool_input": {"command": "timeout -s TERM 5 git reset --hard"}})["decision"] == "block")
+    check("gg_timeout_duration_suffix",
+          gate.run({"tool_input": {"command": "timeout 5s git reset --hard"}})["decision"] == "block")
+    check("gg_xargs_argfile_reset",
+          gate.run({"tool_input": {"command": "xargs -a /dev/null git reset --hard"}})["decision"] == "block")
+    check("gg_env_unset_reset",
+          gate.run({"tool_input": {"command": "env -u FOO git reset --hard"}})["decision"] == "block")
+    check("gg_timeout_benign_allows",  # benign wrapped command still allowed
+          gate.run({"tool_input": {"command": "timeout -s TERM 5 git status"}})["decision"] == "allow")
+
 
 def test_context_inject():
     gate = load_gate("gate_context_inject")

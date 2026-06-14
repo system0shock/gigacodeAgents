@@ -65,10 +65,29 @@ PREFIX_WRAPPERS = {"env", "nice", "ionice", "time", "stdbuf", "nohup",
                    "sudo", "doas", "timeout", "xargs", "command", "exec",
                    "builtin"}
 # Wrapper short/long flags that consume a separate WORD value (e.g. `sudo -u
-# root`, `env -u NAME`). Numeric values (`nice -n 10`, `timeout 30`) are caught
-# generically by the isdigit() skip in peel(), so only word-valued flags are
-# listed here to avoid swallowing the real command after a boolean flag.
+# root`, `env -u NAME`). Numeric/duration values (`nice -n 10`, `timeout 5s`) are
+# caught generically by the _is_duration() skip in peel(); WRAPPER_VALUE_OPTS
+# below adds the per-wrapper word-valued options so the real command after them is
+# still reached (`timeout -s TERM 5 git …`, `xargs -a FILE git …`).
 WRAPPER_VALUE_FLAGS = {"-u", "-g", "-U", "--user", "--group"}
+# Per-wrapper options that consume a following WORD value. Enumerated from the
+# tools' docs so a value (signal/file/delim/...) is not mistaken for the command.
+WRAPPER_VALUE_OPTS = {
+    "timeout": {"-s", "--signal", "-k", "--kill-after"},
+    "xargs": {"-a", "--arg-file", "-E", "-e", "--eof", "-I", "-i", "--replace",
+              "-L", "-l", "--max-lines", "-n", "--max-args", "-P", "--max-procs",
+              "-s", "--max-chars", "-d", "--delimiter", "--process-slot-var"},
+    "nice": {"-n", "--adjustment"},
+    "ionice": {"-c", "--class", "-n", "--classdata", "-p", "--pid"},
+    "stdbuf": {"-i", "--input", "-o", "--output", "-e", "--error"},
+    "env": {"-u", "--unset", "-S", "--split-string", "-C", "--chdir"},
+    "sudo": {"-u", "--user", "-g", "--group", "-U", "-C", "--close-from", "-h",
+             "--host", "-p", "--prompt", "-r", "--role", "-t", "--type",
+             "-T", "--command-timeout"},
+    "doas": {"-u", "-C", "-a"},
+    "time": {"-o", "--output", "-f", "--format"},
+}
+_DURATION_RE = re.compile(r"^\d+(\.\d+)?[smhd]?$")
 # Wrappers that take the command as a -c / -Command / /c string argument.
 DASH_C_WRAPPERS = {"bash", "sh", "zsh", "dash", "ash", "ksh",
                    "cmd", "powershell", "pwsh"}
@@ -289,7 +308,8 @@ def peel(tokens):
     argument is re-parsed (it may itself contain separators)."""
     i = 0
     while i < len(tokens):
-        tok = tokens[i].strip("()")
+        raw = tokens[i]                 # function headers are matched pre-strip
+        tok = raw.strip("()")
         if not tok:
             i += 1
             continue
@@ -299,20 +319,37 @@ def peel(tokens):
         if tok in SHELL_CONTROL:  # then/do/else/{/... — the command follows
             i += 1
             continue
+        if tok == "function":  # `function name { body; }` — skip keyword + name
+            i += 1
+            if i < len(tokens) and re.match(r"^[A-Za-z_][\w-]*(\(\))?[\{\(]?$", tokens[i]):
+                i += 1
+            continue
+        # function definition header — the body runs on invocation, so inspect it.
+        # Matched on the RAW token (before paren-strip) so a `{`/`(` body marker
+        # isn't lost. Forms: `name()`, `name(){`, `name()(`, or `name` + `()`.
+        if re.match(r"^([A-Za-z_][\w-]*)?\(\)[\{\(]?$", raw):
+            i += 1
+            continue
+        if (re.match(r"^[A-Za-z_][\w-]*$", tok) and i + 1 < len(tokens)
+                and re.match(r"^\(\)[\{\(]?$", tokens[i + 1].strip())):
+            i += 2
+            continue
         prog = _prog(tok)
         if prog in PREFIX_WRAPPERS:  # env / nice / sudo / timeout ... drop wrapper + flags/values
+            value_opts = WRAPPER_VALUE_OPTS.get(prog, set()) | WRAPPER_VALUE_FLAGS
             i += 1
             while i < len(tokens):
                 t = tokens[i]
                 if t.startswith("-"):
+                    base = t.split("=", 1)[0].lower()
                     i += 1
-                    # skip a value belonging to this flag: a word value of a
-                    # known value-flag (`sudo -u root`) or any numeric value
-                    # (`nice -n 10`, `stdbuf -o 0`)
-                    if (i < len(tokens) and not tokens[i].startswith("-")
-                            and (t.lower() in WRAPPER_VALUE_FLAGS or tokens[i].isdigit())):
+                    # consume a separate WORD value of a known value-option
+                    # (`timeout -s TERM`, `xargs -a FILE`) — glued `--opt=val`
+                    # carries its own value, and a value-less boolean is left alone.
+                    if ("=" not in t and base in value_opts
+                            and i < len(tokens) and not tokens[i].startswith("-")):
                         i += 1
-                elif t.isdigit():  # positional numeric value, e.g. `timeout 30 ...`
+                elif _DURATION_RE.match(t):  # numeric/duration positional (`timeout 5s`)
                     i += 1
                 else:
                     break  # first real command token
@@ -457,6 +494,17 @@ def git_destructive(sub, rest):
     """Return a block reason for a destructive git subcommand, else ''."""
     if sub == "reset" and "--hard" in rest:
         return "Blocked `git reset --hard`."
+    if sub in ("rm", "mv"):
+        # git rm <pathspec> removes, git mv <src>... <dst> moves — both mutate
+        # the named worktree files. Classify the path operands like the catch-all
+        # (git is skipped there), so enforcement/.git/openspec paths are blocked.
+        for t in rest:
+            if t.startswith("-"):
+                continue
+            ts = t.replace("\\", "/")
+            if (SELF_PROTECT_LOOSE.search(ts) or GIT_DIR_LOOSE.search(ts)
+                    or classify_path(ts, shell=True) == "block"):
+                return f"Blocked `git {sub}` of an enforcement/.git/openspec path."
     if sub == "clean":
         # Parse flags exactly: short clusters are single-dash alpha runs; long
         # flags whole. An option VALUE (--exclude=node_modules) must not leak its
