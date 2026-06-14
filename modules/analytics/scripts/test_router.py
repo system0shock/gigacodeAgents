@@ -119,6 +119,13 @@ def test_routing():
         check("rt_context_passthrough",
               ctx["decision"] == "allow" and ctx.get("additionalContext") == "ctx-marker",
               repr(ctx))
+        # GigaCode/Claude-style consumers read injected context from
+        # hookSpecificOutput.additionalContext; the router must mirror it there
+        # (keeping the top-level field) or context-inject silently delivers nothing.
+        hso = ctx.get("hookSpecificOutput", {})
+        check("rt_context_hookspecific",
+              hso.get("additionalContext") == "ctx-marker"
+              and hso.get("hookEventName") == "SessionStart", repr(ctx))
 
 
 def test_gate_failures():

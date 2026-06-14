@@ -152,6 +152,35 @@ def test_git_guard():
     check("gg_checkout_plain_allows",
           gate.run({"tool_input": {"command": "git checkout my-feature"}})["decision"] == "allow")
 
+    # --- Codex round 5 (review on Phase 4 HEAD): residual engine gaps ---
+    # move/rename OUT of the enforcement tree is destructive (the source file is
+    # removed from .gigacode) — classify move sources, not just the destination.
+    check("gg_mv_source_gigacode",
+          gate.run({"tool_input": {"command": "mv .gigacode/hooks/router.py /tmp/router.py"}})["decision"] == "block")
+    # copy does NOT remove the source, so reading an enforcement file out is allowed.
+    check("gg_cp_source_allows",
+          gate.run({"tool_input": {"command": "cp .gigacode/hooks/router.py /tmp/router.py"}})["decision"] == "allow")
+    # `>&file` / `>& file` is a combined stdout+stderr redirect to a real file.
+    check("gg_amp_redirect_glued",
+          gate.run({"tool_input": {"command": "echo x >&.gigacode/settings.json"}})["decision"] == "block")
+    check("gg_amp_redirect_spaced",
+          gate.run({"tool_input": {"command": "echo x >& .gigacode/settings.json"}})["decision"] == "block")
+    # `2>&1` is fd duplication, not a file write — must stay allow (no false block).
+    check("gg_fd_dup_allows",
+          gate.run({"tool_input": {"command": "echo x 2>&1"}})["decision"] == "allow")
+    # process substitution runs its inner command — destructive git inside blocks.
+    check("gg_proc_subst_reset",
+          gate.run({"tool_input": {"command": "cat <(git reset --hard)"}})["decision"] == "block")
+    # git switch destructive forms discard working-tree edits like checkout/restore.
+    check("gg_switch_force_blocks",
+          gate.run({"tool_input": {"command": "git switch -f main"}})["decision"] == "block")
+    check("gg_switch_discard_blocks",
+          gate.run({"tool_input": {"command": "git switch --discard-changes main"}})["decision"] == "block")
+    check("gg_switch_plain_allows",
+          gate.run({"tool_input": {"command": "git switch my-feature"}})["decision"] == "allow")
+    check("gg_switch_create_allows",
+          gate.run({"tool_input": {"command": "git switch -c my-feature"}})["decision"] == "allow")
+
 
 def test_context_inject():
     gate = load_gate("gate_context_inject")
@@ -271,6 +300,18 @@ def test_final_format():
         write_qg(tmp, {"final_validators": [
             {"name": "off", "command": "", "applies_to": ["**"]}]})
         check("ff_validator_unconfigured", gate.run(file_event(rel))["decision"] == "allow")
+        # absolute file_path (Claude Code's default) must be relativized against
+        # the template root first, so the module dir (…/modules/analytics) is not
+        # mistaken for the final-tree `analytics/` component.
+        os.environ["GIGACODE_ROOT"] = "/work/modules/analytics"
+        try:
+            check("ff_abs_relativized",
+                  gate.rel_tree_path("/work/modules/analytics/analytics/use-case/Foo.adoc")
+                  == "analytics/use-case/Foo.adoc")
+            check("ff_abs_module_file_ignored",
+                  gate.rel_tree_path("/work/modules/analytics/README.md") == "")
+        finally:
+            os.environ["GIGACODE_ROOT"] = tmp  # restore for any later checks
 
 
 def manifest(status, **extra):

@@ -34,6 +34,15 @@ PLACEMENT = {
 
 def rel_tree_path(path):
     p = path.replace("\\", "/")
+    # Relativize against the template root first: the module directory itself is
+    # …/modules/analytics, so an absolute file_path (Claude Code's default) would
+    # otherwise let the module's own `analytics/` component pose as the final-tree
+    # root — double-counting `analytics/` or flagging module files (README.md,
+    # scripts/…) as misplaced final artifacts.
+    root = _lib.root().replace("\\", "/").rstrip("/")
+    pl, rl = p.lower(), root.lower()
+    if root and (pl == rl or pl.startswith(rl + "/")):
+        p = p[len(root):].lstrip("/")
     match = TREE_RE.search(p)
     return p[match.start():].lstrip("/") if match else ""
 

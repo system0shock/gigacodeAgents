@@ -158,6 +158,15 @@ def decide(event, event_name, tool_name, config):
             results.append(result)
     final = aggregate(results)
     final = apply_stop_budget(event_name, final, config, event)
+    # GigaCode/Claude-style consumers read injected context from
+    # hookSpecificOutput.additionalContext; mirror it there (keeping the
+    # top-level field for forward-compat) so SessionStart/SubagentStart/
+    # UserPromptSubmit context-inject routes actually deliver the rules/module map.
+    if final.get("additionalContext"):
+        final["hookSpecificOutput"] = {
+            "hookEventName": event_name,
+            "additionalContext": final["additionalContext"],
+        }
     journal({"kind": "final", "event": event_name, "tool": tool_name,
              "decision": final["decision"]})
     return final

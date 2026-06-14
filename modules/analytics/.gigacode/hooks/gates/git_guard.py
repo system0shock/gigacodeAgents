@@ -75,6 +75,11 @@ DESTRUCTIVE_VERBS = {"rm", "rmdir", "del", "erase", "remove-item", "ri", "rd",
 # Verbs whose final positional argument is a write destination.
 WRITE_VERBS = {"cp", "mv", "copy", "move", "copy-item", "cpi", "move-item",
                "mi", "tee", "install", "rename-item", "rni"}
+# Move/rename verbs REMOVE the source from its location, so moving an
+# enforcement-owned file OUT of the protected tree is destructive — every path
+# operand (sources AND destination) must be classified, not just the dest.
+# Copy verbs are excluded: copying reads the source, it does not remove it.
+MOVE_VERBS = {"mv", "move", "move-item", "mi", "rename-item", "rni"}
 # PowerShell write cmdlets: destination is -Path/-FilePath/-LiteralPath or the
 # FIRST positional (NOT the last) — Windows is the primary platform.
 PS_WRITE_VERBS = {"set-content", "add-content", "out-file", "tee-object",
@@ -300,12 +305,16 @@ def peel(tokens):
 
 
 def extract_substitutions(command):
-    """Inner command strings of $(...) and `...` substitutions, so a destructive
-    command hidden inside one (x=$(git reset --hard)) is still inspected."""
+    """Inner command strings of $(...), `...`, and process substitutions
+    <(...) / >(...), so a destructive command hidden inside one
+    (x=$(git reset --hard), cat <(git reset --hard)) is still inspected."""
     inners = []
     i = 0
     while i < len(command) - 1:
-        if command[i] == "$" and command[i + 1] == "(":
+        # $(...) command-substitution and <(...) / >(...) process-substitution all
+        # run their inner command in a subshell.
+        if (command[i] == "$" and command[i + 1] == "(") or (
+                command[i] in "<>" and command[i + 1] == "("):
             depth, j = 1, i + 2
             while j < len(command) and depth:
                 if command[j] == "(":
@@ -399,6 +408,12 @@ def git_destructive(sub, rest):
         worktree = ("--worktree" in rest) or _short("W")
         if worktree or not staged:
             return "Blocked `git restore` (discards working-tree edits)."
+    if sub == "switch":
+        # `-f`/`--force` is an alias for `--discard-changes`; both throw away
+        # uncommitted edits on a dirty worktree. `-c`/`-C` (create) are safe.
+        if "--discard-changes" in rest or "--force" in rest or any(
+                re.match(r"^-[A-Za-z]*f[A-Za-z]*$", t) and not t.startswith("--") for t in rest):
+            return "Blocked `git switch -f/--discard-changes` (discards working-tree edits)."
     if sub == "worktree" and rest[:1] == ["remove"]:
         return "Blocked `git worktree remove`."
     if sub == "stash" and rest[:1] == ["clear"]:
@@ -421,34 +436,58 @@ def classify_path(path, shell=False):
     return ""
 
 
+def _is_fd_ref(operand):
+    """True if a redirection operand is a file-descriptor reference (`1`, `&2`,
+    `-`, `&-`) rather than a filename — i.e. `>&1` / `2>&-` duplication/close."""
+    s = operand[1:] if operand.startswith("&") else operand
+    return s == "" or all(c in "0123456789-" for c in s)
+
+
+def _redir_file(operand):
+    """The file a redirection writes to, or '' when it is an fd dup/close.
+    Handles bash's combined-redirect `>&file` (operand `&file` -> `file`)."""
+    if operand.startswith("&"):
+        return "" if _is_fd_ref(operand) else operand[1:]
+    return operand
+
+
 def _split_redirects(tokens):
     """(positionals, out_targets): out_targets are files written via > >> n> >|
-    — leading-operator OR glued after a word (`x>file`). Input redirects
+    >& — leading-operator OR glued after a word (`x>file`). Input redirects
     (< << n<) are consumed but never write-targets, so a stdin redirect cannot
-    masquerade as a copy/move destination."""
+    masquerade as a copy/move destination. `>&`/`n>&` to an fd (`2>&1`) is a
+    duplication, not a write, so it yields no target."""
     positionals, out_targets = [], []
     i = 0
     while i < len(tokens):
         t = tokens[i]
         m = REDIR_RE.match(t)
-        if m:  # token starts with [fd]> / >> / >| / <
-            operand = m.group(4)
-            if not operand and i + 1 < len(tokens):
-                operand = tokens[i + 1]
+        if m:  # token starts with [fd]> / >> / >| / >& / <
+            op, operand = m.group(2), m.group(4)
+            is_write = op.startswith(">")
+            if operand in ("", "&"):  # operator-only token: file is the next token
+                if i + 1 < len(tokens):
+                    nxt = tokens[i + 1]
+                    i += 1
+                    # `>& 1` duplicates an fd; `>& file` / `> file` writes a file
+                    if is_write and not (operand == "&" and _is_fd_ref(nxt)):
+                        out_targets.append(nxt)
                 i += 1
-            if m.group(2).startswith(">") and operand:
-                out_targets.append(operand)
+                continue
+            f = _redir_file(operand)
+            if is_write and f:
+                out_targets.append(f)
             i += 1
             continue
-        if ">" in t:  # operator glued after a word: `arg>file`
+        if ">" in t:  # operator glued after a word: `arg>file`, `arg>&file`
             em = EMBED_REDIR_RE.search(t)
             if em:
-                operand = em.group("operand")
-                if not operand and i + 1 < len(tokens):
-                    operand = tokens[i + 1]
+                f = _redir_file(em.group("operand"))
+                if not f and not em.group("operand") and i + 1 < len(tokens):
+                    f = tokens[i + 1]
                     i += 1
-                if operand:
-                    out_targets.append(operand)
+                if f:
+                    out_targets.append(f)
                 prefix = t[:em.start()].rstrip("0123456789")  # drop trailing fd digits
                 if prefix:
                     positionals.append(prefix)
@@ -486,8 +525,10 @@ def write_targets(tokens):
     nonflag = [a for a in rest if not a.startswith("-")]
     if prog == "tee":
         targets.extend(nonflag)                  # tee writes EVERY file operand
+    elif prog in MOVE_VERBS:
+        targets.extend(nonflag)                  # move removes source(s) + writes dest
     elif prog in WRITE_VERBS and nonflag:
-        targets.append(nonflag[-1])              # cp/mv/install dest = last
+        targets.append(nonflag[-1])              # cp/install dest = last
     elif prog in PS_WRITE_VERBS:
         dest = _ps_dest(rest)
         if dest:
