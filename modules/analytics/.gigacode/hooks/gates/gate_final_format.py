@@ -8,7 +8,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _lib
 
-TREE_RE = re.compile(r"(^|/)(analytics|architecture)/", re.IGNORECASE)
+# After relativizing against the root, the final tree is ONLY the root-level
+# analytics/ + architecture/ — anchored so a nested source path like
+# src/analytics/model.py is not mistaken for a (malformed) final artifact.
+ROOT_TREE_RE = re.compile(r"^(analytics|architecture)/", re.IGNORECASE)
 UPPER_CAMEL_RE = re.compile(r"^[A-Z][A-Za-z0-9]*\.[a-z]+$")
 KEBAB_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 DIR_EXCEPTIONS = {"nfr and contact"}
@@ -43,8 +46,9 @@ def rel_tree_path(path):
     pl, rl = p.lower(), root.lower()
     if root and (pl == rl or pl.startswith(rl + "/")):
         p = p[len(root):].lstrip("/")
-    match = TREE_RE.search(p)
-    return p[match.start():].lstrip("/") if match else ""
+    if p.startswith("./"):
+        p = p[2:]
+    return p if ROOT_TREE_RE.match(p) else ""
 
 
 def read_target(rel):

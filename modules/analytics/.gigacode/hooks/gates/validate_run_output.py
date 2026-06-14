@@ -57,10 +57,16 @@ def check_feature(root_dir, feature_dir, manifest):
         if not isinstance(produced, dict):
             produced = {}
         final = produced.get("final", [])
-        if not (isinstance(final, (list, tuple))
-                and any(isinstance(x, str) and x for x in final)):
-            issues.append(f"{name}: статус complete, но produced.final пуст "
-                          "(финальное дерево не сгенерировано/не записано)")
+        final_list = final if isinstance(final, (list, tuple)) else []
+        # A real final artifact is an existing FILE — not empty, not a .gitkeep
+        # skeleton placeholder, not a directory. Otherwise a `complete` run could
+        # close with produced.final = [".../.gitkeep"] / [a dir] and pass.
+        real_final = [x for x in final_list if isinstance(x, str) and x
+                      and os.path.basename(x.replace("\\", "/")) != ".gitkeep"
+                      and os.path.isfile(os.path.join(root_dir, *x.replace("\\", "/").split("/")))]
+        if not real_final:
+            issues.append(f"{name}: статус complete, но produced.final не содержит "
+                          "реальных финальных файлов (пусто/плейсхолдер/каталог)")
         for group in ("technical", "final"):
             for rel in missing_files(root_dir, produced.get(group, []) or []):
                 issues.append(f"{name}: заявленный файл отсутствует: {rel}")

@@ -157,9 +157,12 @@ def test_git_guard():
     # removed from .gigacode) — classify move sources, not just the destination.
     check("gg_mv_source_gigacode",
           gate.run({"tool_input": {"command": "mv .gigacode/hooks/router.py /tmp/router.py"}})["decision"] == "block")
-    # copy does NOT remove the source, so reading an enforcement file out is allowed.
-    check("gg_cp_source_allows",
-          gate.run({"tool_input": {"command": "cp .gigacode/hooks/router.py /tmp/router.py"}})["decision"] == "allow")
+    # round-7: the structural catch-all now blocks ANY non-read-only command that
+    # merely names an enforcement path (supersedes the round-5 copy-out allowance).
+    check("gg_cp_enforcement_ref_blocks",
+          gate.run({"tool_input": {"command": "cp .gigacode/hooks/router.py /tmp/router.py"}})["decision"] == "block")
+    check("gg_cp_benign_allows",
+          gate.run({"tool_input": {"command": "cp README.md /tmp/x"}})["decision"] == "allow")
     # `>&file` / `>& file` is a combined stdout+stderr redirect to a real file.
     check("gg_amp_redirect_glued",
           gate.run({"tool_input": {"command": "echo x >&.gigacode/settings.json"}})["decision"] == "block")
@@ -199,6 +202,35 @@ def test_git_guard():
           gate.run({"tool_input": {"command": "cp --target-directory=.gigacode/hooks router.py"}})["decision"] == "block")
     check("gg_cp_target_dir_benign_allows",
           gate.run({"tool_input": {"command": "cp -t /tmp router.py"}})["decision"] == "allow")
+
+    # --- Codex round 7 (review on cb16246) ---
+    # path-form checkout restores a file (discards edits); branch switch stays ok.
+    check("gg_checkout_dot_blocks",
+          gate.run({"tool_input": {"command": "git checkout ."}})["decision"] == "block")
+    check("gg_checkout_path_blocks",  # README.md exists in the module cwd (tests run there)
+          gate.run({"tool_input": {"command": "git checkout README.md"}})["decision"] == "block")
+    # inline one-shot alias hiding a destructive subcommand (git skip the catch-all).
+    check("gg_alias_reset_blocks",
+          gate.run({"tool_input": {"command": "git -c alias.nuke='reset --hard' nuke"}})["decision"] == "block")
+    check("gg_alias_shell_blocks",
+          gate.run({"tool_input": {"command": "git -c alias.boom='!rm -rf .gigacode' boom"}})["decision"] == "block")
+    # branch force-move and stash drop discard work, like delete/clear.
+    check("gg_branch_force_move_blocks",
+          gate.run({"tool_input": {"command": "git branch -f main other"}})["decision"] == "block")
+    check("gg_stash_drop_blocks",
+          gate.run({"tool_input": {"command": "git stash drop"}})["decision"] == "block")
+    # structural catch-all: any non-read-only program merely naming an enforcement
+    # path is blocked (touch/mkdir/ln/chmod/…), reads (cat) stay allowed.
+    check("gg_touch_gigacode",
+          gate.run({"tool_input": {"command": "touch .gigacode/hooks/router.py"}})["decision"] == "block")
+    check("gg_mkdir_specs",
+          gate.run({"tool_input": {"command": "mkdir -p openspec/specs/cap"}})["decision"] == "block")
+    check("gg_ln_gigacode",
+          gate.run({"tool_input": {"command": "ln -s /tmp/x .gigacode/x"}})["decision"] == "block")
+    check("gg_chmod_gigacode",
+          gate.run({"tool_input": {"command": "chmod 777 .gigacode/hooks/router.py"}})["decision"] == "block")
+    check("gg_cat_gigacode_allows",  # reading an enforcement file is allow-listed
+          gate.run({"tool_input": {"command": "cat .gigacode/hooks/router.py"}})["decision"] == "allow")
 
 
 def test_context_inject():
@@ -339,6 +371,11 @@ def test_final_format():
                   gate.rel_tree_path("/work/modules/analytics/README.md") == "")
         finally:
             os.environ["GIGACODE_ROOT"] = tmp  # restore for any later checks
+        # the final tree is ROOT-level analytics/ + architecture/ only — a nested
+        # source path like src/analytics/model.py must not be treated as a final
+        # artifact (anchored match, not search-anywhere).
+        check("ff_nested_analytics_ignored", gate.rel_tree_path("src/analytics/model.py") == "")
+        check("ff_nested_architecture_ignored", gate.rel_tree_path("app/architecture/x.puml") == "")
 
 
 def manifest(status, **extra):
@@ -378,6 +415,23 @@ def test_validate_run_output():
               gate.run({"hook_event_name": "Stop"})["decision"] == "block")
         write_file(tmp, "analytics/use-case/CardBlocking.adoc", GOOD_FINAL_ADOC)
         check("vr_complete_ok", gate.run({"hook_event_name": "Stop"})["decision"] == "allow")
+        # produced.final pointing only at a .gitkeep placeholder is not a real final
+        write_file(tmp, "analytics/use-case/.gitkeep", "")
+        write_file(tmp, "docs/features/card-blocking/manifest.json",
+                   manifest("complete", produced={
+                       "technical": ["docs/features/card-blocking/overview.adoc"],
+                       "spec": "openspec/specs/card-blocking/spec.md",
+                       "final": ["analytics/use-case/.gitkeep"]}))
+        check("vr_complete_gitkeep_final",
+              gate.run({"hook_event_name": "Stop"})["decision"] == "block")
+        # produced.final pointing at a directory (not a file) is not a real final
+        write_file(tmp, "docs/features/card-blocking/manifest.json",
+                   manifest("complete", produced={
+                       "technical": ["docs/features/card-blocking/overview.adoc"],
+                       "spec": "openspec/specs/card-blocking/spec.md",
+                       "final": ["analytics/use-case"]}))
+        check("vr_complete_dir_final",
+              gate.run({"hook_event_name": "Stop"})["decision"] == "block")
         # complete with empty produced.final must NOT pass (finals required)
         write_file(tmp, "docs/features/card-blocking/manifest.json",
                    manifest("complete", produced={
