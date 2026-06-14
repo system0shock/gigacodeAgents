@@ -68,6 +68,12 @@ DASH_C_WRAPPERS = {"bash", "sh", "zsh", "dash", "ash", "ksh",
                    "cmd", "powershell", "pwsh"}
 # `eval ...` concatenates its arguments and runs the result as a command.
 EVAL_WRAPPERS = {"eval"}
+# Shell control / grouping keywords that introduce a command list. They are
+# transparent prefixes: the real command follows (`then git reset --hard`,
+# `{ git reset --hard; }`, `do git reset --hard`). Matched as exact bare tokens
+# (never paths), so a program literally named `do` is not skipped.
+SHELL_CONTROL = {"if", "then", "else", "elif", "fi", "do", "done", "while",
+                 "until", "for", "in", "case", "esac", "select", "{", "}", "!"}
 # Non-git verbs that delete; flagged when they target a protected path. `find`
 # is delete-guarded in _destructive_target (only -delete / -exec rm counts).
 DESTRUCTIVE_VERBS = {"rm", "rmdir", "del", "erase", "remove-item", "ri", "rd",
@@ -80,6 +86,9 @@ WRITE_VERBS = {"cp", "mv", "copy", "move", "copy-item", "cpi", "move-item",
 # operand (sources AND destination) must be classified, not just the dest.
 # Copy verbs are excluded: copying reads the source, it does not remove it.
 MOVE_VERBS = {"mv", "move", "move-item", "mi", "rename-item", "rni"}
+# GNU coreutils verbs that accept `-t DIR` / `--target-directory[=DIR]`: every
+# source operand is written INTO DIR, so DIR is the write destination.
+GNU_TARGET_DIR_VERBS = {"cp", "mv", "install"}
 # PowerShell write cmdlets: destination is -Path/-FilePath/-LiteralPath or the
 # FIRST positional (NOT the last) — Windows is the primary platform.
 PS_WRITE_VERBS = {"set-content", "add-content", "out-file", "tee-object",
@@ -260,6 +269,9 @@ def peel(tokens):
             i += 1
             continue
         if ENV_ASSIGN_RE.match(tok):  # VAR=val prefix
+            i += 1
+            continue
+        if tok in SHELL_CONTROL:  # then/do/else/{/... — the command follows
             i += 1
             continue
         prog = _prog(tok)
@@ -498,6 +510,22 @@ def _split_redirects(tokens):
     return positionals, out_targets
 
 
+def _target_dir_opt(args):
+    """GNU `-t DIR` / `-tDIR` / `--target-directory[=DIR]`: the directory all
+    sources are written into. Returns DIR or ''."""
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ("-t", "--target-directory") and i + 1 < len(args):
+            return args[i + 1]
+        if a.startswith("--target-directory="):
+            return a.split("=", 1)[1]
+        if a.startswith("-t") and len(a) > 2 and not a.startswith("--"):
+            return a[2:]  # glued -tDIR
+        i += 1
+    return ""
+
+
 def _ps_dest(args):
     """Destination of a PowerShell write cmdlet: -Path/-FilePath/-LiteralPath
     value, else the FIRST positional argument."""
@@ -523,12 +551,15 @@ def write_targets(tokens):
     positionals, targets = _split_redirects(tokens)
     rest = positionals[1:]                       # arguments after the program
     nonflag = [a for a in rest if not a.startswith("-")]
+    tdir = _target_dir_opt(rest) if prog in GNU_TARGET_DIR_VERBS else ""
+    if tdir:
+        targets.append(tdir)                     # -t DIR: sources copied INTO DIR
     if prog == "tee":
         targets.extend(nonflag)                  # tee writes EVERY file operand
     elif prog in MOVE_VERBS:
         targets.extend(nonflag)                  # move removes source(s) + writes dest
-    elif prog in WRITE_VERBS and nonflag:
-        targets.append(nonflag[-1])              # cp/install dest = last
+    elif prog in WRITE_VERBS and nonflag and not tdir:
+        targets.append(nonflag[-1])              # cp/install dest = last (no -t DIR)
     elif prog in PS_WRITE_VERBS:
         dest = _ps_dest(rest)
         if dest:

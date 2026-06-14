@@ -181,6 +181,25 @@ def test_git_guard():
     check("gg_switch_create_allows",
           gate.run({"tool_input": {"command": "git switch -c my-feature"}})["decision"] == "allow")
 
+    # --- Codex round 6 (review on dcb436b): control blocks + target-directory ---
+    # a destructive command after a control/group token must be inspected, not
+    # just leaf[0] (`then`, `{`, `do`, …).
+    check("gg_then_reset_blocks",
+          gate.run({"tool_input": {"command": "if true; then git reset --hard; fi"}})["decision"] == "block")
+    check("gg_brace_group_reset_blocks",
+          gate.run({"tool_input": {"command": "{ git reset --hard; }"}})["decision"] == "block")
+    check("gg_do_loop_reset_blocks",
+          gate.run({"tool_input": {"command": "while true; do git reset --hard; done"}})["decision"] == "block")
+    check("gg_if_benign_allows",
+          gate.run({"tool_input": {"command": "if git diff --quiet; then echo clean; fi"}})["decision"] == "allow")
+    # GNU -t/--target-directory: sources are written INTO the dir (the write target)
+    check("gg_cp_target_dir_blocks",
+          gate.run({"tool_input": {"command": "cp -t .gigacode/hooks router.py"}})["decision"] == "block")
+    check("gg_cp_target_dir_eq_blocks",
+          gate.run({"tool_input": {"command": "cp --target-directory=.gigacode/hooks router.py"}})["decision"] == "block")
+    check("gg_cp_target_dir_benign_allows",
+          gate.run({"tool_input": {"command": "cp -t /tmp router.py"}})["decision"] == "allow")
+
 
 def test_context_inject():
     gate = load_gate("gate_context_inject")
@@ -213,6 +232,14 @@ def test_preflight():
     complete = "reverse-analysis feature Card Blocking jira ABC-123"
     check("pf_complete",
           gate.run({"hook_event_name": "UserPromptSubmit", "prompt": complete})["decision"] == "allow")
+    # documented slash form: feature is the quoted argument, not a keyword prefix
+    check("pf_slash_feature",
+          gate.run({"hook_event_name": "UserPromptSubmit",
+                    "prompt": '/reverse-analysis "Card Blocking" code-only'})["decision"] == "allow")
+    # slash command carrying only a context flag (no feature) still asks
+    check("pf_slash_no_feature",
+          gate.run({"hook_event_name": "UserPromptSubmit",
+                    "prompt": "/reverse-analysis code-only"})["decision"] == "block")
     check("pf_wrong_event",
           gate.run({"hook_event_name": "PreToolUse", "prompt": "реверс"})["decision"] == "allow")
     payload = b"\xef\xbb\xbf" + json.dumps(
