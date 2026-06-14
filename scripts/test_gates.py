@@ -619,6 +619,32 @@ def test_validate_output():
         init_git(fix)
         result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "all tests passed"})
         check("vdo_passed_no_evidence_block", result["decision"] == "block", result)
+    # (h) PR review: production code changed + dev dir but verification.md lacks
+    # evidence and the message does NOT say "passed" -> must still block. The old
+    # "passed"-word-only check was bypassable by avoiding that word; the disk
+    # trigger (code_changed) cannot be talked around.
+    with fixture_root() as fix:
+        srcdir = os.path.join(fix, "src")
+        os.makedirs(srcdir)
+        with open(os.path.join(srcdir, "Foo.kt"), "w", encoding="utf-8") as handle:
+            handle.write("class Foo\n")
+        write_dev_dir(fix, "feat", {
+            "journal.md": "did work\n",
+            "verification.md": "looks good\n",   # no command / exit evidence
+            "pr-summary.md": "summary\n"})
+        init_git(fix)
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "done"})
+        check("vdo_code_change_no_evidence_block", result["decision"] == "block", result)
+    # (i) plan-only (no code change) dev dir whose verification.md legitimately
+    # states "not executed", neutral message -> must NOT over-block.
+    with fixture_root() as fix:
+        write_dev_dir(fix, "planonly", {
+            "journal.md": "analysis only\n",
+            "verification.md": "verification not executed (plan-only)\n",
+            "pr-summary.md": "summary\n"})
+        init_git(fix)
+        result = gate.run({"hook_event_name": "Stop", "last_assistant_message": "planned"})
+        check("vdo_planonly_no_overblock", result["decision"] == "allow", result)
 
 
 def test_cyrillic():

@@ -74,9 +74,9 @@ Fallbacks:
 
 ## Enterprise Git Safety
 
-Шаблон блокирует реализацию и git write operations на защищенных ветках, включая `main`, `master`, `develop`, `release/*`, `hotfix/*`, `production`, `staging` и `uat`.
+Шаблон блокирует реализацию и git write operations на защищенных ветках, включая `main`, `master`, `develop`, `release/*`, `hotfix/*`, `production`, `staging` и `uat`. Сюда же входит push, нацеленный на защищённую ветку по refspec из feature-ветки (`git push origin main`, `git push origin HEAD:main`).
 
-Шаблон по умолчанию блокирует destructive git operations, включая `git reset --hard`, destructive `git clean` variants, forced pushes, branch deletion, remote URL changes и direct protected-branch commits.
+Шаблон по умолчанию блокирует destructive git operations, включая `git reset --hard`, destructive `git clean` variants, forced pushes, branch deletion, remote URL changes, direct protected-branch commits и команды, отбрасывающие правки рабочего дерева (`git checkout -f`, `git checkout -- <path>`, `git switch --discard-changes`, `git restore`).
 
 В v1 шаблон не выполняет auto-commit и auto-push. PR readiness означает, что workflow готовит reviewer-facing notes и verification evidence для человека или CI workflow.
 

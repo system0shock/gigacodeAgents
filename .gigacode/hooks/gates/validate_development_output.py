@@ -88,10 +88,19 @@ def run(event):
                 return {"decision": "block", "reason": (
                     f"Placeholder marker найден в {_rel(os.path.join(task_dir, name))}.")}
         verification = read_file(os.path.join(task_dir, "verification.md")).lower()
-        if "passed" in message.lower() and "command" not in verification and "exit" not in verification:
+        # Evidence is required whenever production code changed (an implement-mode
+        # flow on disk), NOT only when the final message says "passed". Gating on
+        # that word let an empty verification.md pass simply by avoiding it; the
+        # disk trigger can't be talked around. A plan-only flow (no code change)
+        # may legitimately state that verification was not executed.
+        needs_evidence = code_changed or "passed" in message.lower()
+        if needs_evidence and "command" not in verification and "exit" not in verification:
+            trigger = ("изменён production-код" if code_changed
+                       else "сообщение заявляет passing checks")
             return {"decision": "block", "reason": (
-                "Сообщение заявляет passing checks без command evidence в "
-                f"{_rel(os.path.join(task_dir, 'verification.md'))}.")}
+                f"{trigger.capitalize()}, но в "
+                f"{_rel(os.path.join(task_dir, 'verification.md'))} нет command "
+                "evidence (команда/exit-код). Зафиксируй доказательства проверки.")}
 
     return {"decision": "allow"}
 

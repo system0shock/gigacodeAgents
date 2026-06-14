@@ -462,6 +462,65 @@ def main():
         result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
         check(f"r2_allow::{cmd[:32]}", result["decision"] == "allow", (cmd, result))
 
+    # 23. PR review round 3 (T6 follow-up): newly closed git_guard bypasses.
+    R3_BLOCK = [
+        # escaped quote must NOT swallow the && segment (\" is a literal quote)
+        'echo \\" && git reset --hard',
+        # process substitutions execute their contents
+        "cat <(git reset --hard)",
+        "tee >(git reset --hard) < x",
+        # one-shot -c alias hiding a destructive subcommand (git + shell alias)
+        "git -c alias.wipe='reset --hard' wipe",
+        "git -c alias.x='!rm -rf .gigacode' x",
+        # xargs replacement operand must be skipped, not taken as the command
+        "printf x | xargs -I {} git reset --hard",
+        # >& / &> redirection targets to enforcement paths (glued and spaced)
+        "echo x >& .gigacode/settings.json",
+        "echo x &> .gigacode/settings.json",
+        "echo x >&.gigacode/settings.json",
+        # checkout -f / switch --discard-changes / switch -f discard edits
+        "git checkout -f main",
+        "git switch --discard-changes main",
+        "git switch -f main",
+        # push to a protected branch by refspec (current-branch check misses these)
+        "git push origin main",
+        "git push origin HEAD:main",
+        "git push origin HEAD:refs/heads/master",
+    ]
+    for cmd in R3_BLOCK:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r3_block::{cmd[:34]}", result["decision"] == "block", (cmd, result))
+
+    # case-altered self-protect paths (case-insensitive FS) MUST block
+    for p in (".GIGACODE/settings.json", "C:/proj/.Git/config", ".Gigacode/hooks/router.py"):
+        result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": p}})
+        check(f"r3_self_case::{p[-20:]}", result["decision"] == "block", (p, result))
+
+    # NotebookEdit identifies its target via notebook_path
+    result = run_router("PreToolUse", {"tool_name": "NotebookEdit",
+                        "tool_input": {"notebook_path": ".gigacode/x.ipynb"}})
+    check("r3_notebook_self_block", result["decision"] == "block", result)
+    result = run_router("PreToolUse", {"tool_name": "NotebookEdit",
+                        "tool_input": {"notebook_path": "notebooks/clean.ipynb"}})
+    check("r3_notebook_clean_allow", result["decision"] == "allow", result)
+
+    # absolute protected (deploy / k8s / config-prod) paths MUST ask, not allow
+    for p in ("/home/u/proj/deploy/foo.yml", "/home/u/proj/k8s/x.yml",
+              "/home/u/proj/config/prod/app.yml"):
+        result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": p}})
+        check(f"r3_abs_protected::{p[-18:]}", result["decision"] == "ask", (p, result))
+
+    # benign new forms MUST still allow (no over-block from the round-3 parsing)
+    R3_ALLOW = [
+        "git push origin feature/x", "git push origin HEAD:feature/x",
+        "git checkout -b feature/new", "git switch -c feature/new",
+        "git -c user.name=x commit -m y", "xargs -n 4 echo",
+        "cat <(git status)", "echo x >&2", "ls 2>&1 | grep foo",
+    ]
+    for cmd in R3_ALLOW:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"r3_allow::{cmd[:34]}", result["decision"] == "allow", (cmd, result))
+
     print(f"\nAll {PASSED} router checks passed")
 
 

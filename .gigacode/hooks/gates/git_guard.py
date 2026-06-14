@@ -41,9 +41,11 @@ PROTECTED_PATHS = [
 # Enforcement-owned paths and the .git repo: writes/deletes here BLOCK
 # (fail-closed). Matched as a path COMPONENT anywhere in the (possibly absolute)
 # path — a start-anchored fnmatch let an absolute path like F:/proj/.gigacode/...
-# slip past, and Claude Code passes absolute file_path by default.
-SELF_PROTECT_RE = re.compile(r"(^|/)\.gigacode(/|$)")
-GIT_DIR_RE = re.compile(r"(^|/)\.git(/|$)")
+# slip past, and Claude Code passes absolute file_path by default. IGNORECASE:
+# on case-insensitive filesystems (Windows/macOS) `.GIGACODE` / `.Git` target the
+# same protected directory, so the match must not be dodged by altered casing.
+SELF_PROTECT_RE = re.compile(r"(^|/)\.gigacode(/|$)", re.IGNORECASE)
+GIT_DIR_RE = re.compile(r"(^|/)\.git(/|$)", re.IGNORECASE)
 # Mirror of gate_spec_structure.DENY_RE so shell-redirection writes to openspec
 # truth are caught here too (gate_spec_structure only sees WriteFile/Edit).
 OPENSPEC_TRUTH_RE = re.compile(r"(^|/)openspec/(specs|changes/archive)/", re.IGNORECASE)
@@ -60,6 +62,12 @@ PREFIX_WRAPPERS = {"env", "nice", "ionice", "time", "stdbuf", "nohup",
 # generically by the isdigit() skip in peel(), so only word-valued flags are
 # listed here to avoid swallowing the real command after a boolean flag.
 WRAPPER_VALUE_FLAGS = {"-u", "-g", "-U", "--user", "--group"}
+# xargs flags whose mandatory WORD operand precedes COMMAND. Without skipping the
+# operand, `xargs -I {} git reset --hard` leaves the generic flag loop stopping on
+# `{}` and treating `git` as the command's own argument, hiding the reset.
+# Matched CASE-SENSITIVELY: lowercase `-i`/`-e` take an OPTIONAL value, so
+# consuming the next token there would risk eating the real command (fail-open).
+XARGS_VALUE_FLAGS = {"-I", "-d", "-E", "-a", "--delimiter", "--arg-file"}
 # Wrappers that take the command as a -c / -Command / /c string argument.
 DASH_C_WRAPPERS = {"bash", "sh", "zsh", "dash", "ash", "ksh",
                    "cmd", "powershell", "pwsh"}
@@ -79,9 +87,6 @@ PS_WRITE_VERBS = {"set-content", "add-content", "out-file", "tee-object",
 # Writer programs with a non-positional / in-place destination.
 WRITER_PROGS = {"dd", "sed", "perl", "truncate", "ed"}
 ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
-# A redirection token: optional fd digits, > >> < or <<, optional clobber |, and
-# an optional glued operand.  e.g.  >  >>  1>  2>>  >|  1>file  <  <file
-REDIR_RE = re.compile(r"^(\d*)(>{1,2}|<{1,2})(\|?)(.*)$")
 # Zero-width / format chars stripped before tokenizing (NBSP and other Zs spaces
 # are folded to a normal space by NFKC + the Zs check in _normalize_ws).
 ZERO_WIDTH = {"​", "‌", "‍", "⁠", "﻿"}
@@ -132,24 +137,41 @@ def _norm(path):
     return p[2:] if p.startswith("./") else p
 
 
+_PATH_KEYS = ("path", "file_path", "filename", "notebook_path")
+
+
 def path_from_event(event):
-    for key in ("path", "file_path", "filename"):
+    # notebook_path: NotebookEdit identifies its target notebook there, not under
+    # path/file_path — without it a NotebookEdit to .gigacode/x.ipynb has no
+    # recognized path and slips past the write gate.
+    for key in _PATH_KEYS:
         v = event.get(key)
         if isinstance(v, str):
             return _norm(v)
     ti = event.get("tool_input")
     if isinstance(ti, dict):
-        for key in ("path", "file_path", "filename"):
+        for key in _PATH_KEYS:
             v = ti.get(key)
             if isinstance(v, str):
                 return _norm(v)
     return ""
 
 
+def _matches_protected(p):
+    """True if p matches any PROTECTED_PATHS pattern, repo-relative OR nested
+    under an absolute prefix. Each pattern is tested as-is AND with a leading
+    `**/`, so a relative `deploy/x.yml` (caught by `deploy/**`) and an absolute
+    `/home/u/proj/deploy/x.yml` (caught by `**/deploy/**`) both register without
+    needing a hand-written `**/` twin per pattern. Claude Code commonly supplies
+    absolute file_path values."""
+    return any(fnmatch.fnmatch(p, pat) or fnmatch.fnmatch(p, "**/" + pat)
+               for pat in PROTECTED_PATHS)
+
+
 def protected_path(path):
     if not path:
         return False
-    return any(fnmatch.fnmatch(_norm(path), pat) for pat in PROTECTED_PATHS)
+    return _matches_protected(_norm(path))
 
 
 def _sq(tok):
@@ -205,6 +227,17 @@ def raw_segments(command):
     i = 0
     while i < len(command):
         c = command[i]
+        # Backslash outside single quotes escapes the next char (bash): an escaped
+        # quote/separator is literal, so `echo \" && git reset --hard` still splits
+        # on && — the \" must not open a quoted context that swallows the rest.
+        if c == "\\" and not in_s:
+            cur.append(c)
+            if i + 1 < len(command):
+                cur.append(command[i + 1])
+                i += 2
+            else:
+                i += 1
+            continue
         if c == "'" and not in_d:
             in_s = not in_s
             cur.append(c)
@@ -222,9 +255,13 @@ def raw_segments(command):
                 i += 2
                 continue
             if c in (";", "|", "&", "\n"):
-                # `>|` (clobber) and `>&` (fd-dup) are redirections, not pipes —
-                # don't split, or the redirect target lands in its own segment.
-                if c in ("|", "&") and "".join(cur).rstrip().endswith(">"):
+                # Redirections that embed | or & are not separators: `>|`
+                # (clobber), `>&` (fd-dup / redirect-both), and `&>` / `&>>`
+                # (redirect stdout+stderr). Don't split, or the redirect target
+                # lands in its own segment and the write goes uninspected.
+                prev_redir = "".join(cur).rstrip().endswith(">")
+                next_redir = c == "&" and command[i + 1:i + 2] == ">"
+                if c in ("|", "&") and (prev_redir or next_redir):
                     cur.append(c)
                     i += 1
                     continue
@@ -252,17 +289,20 @@ def peel(tokens):
             i += 1
             continue
         prog = _prog(tok)
-        if prog in PREFIX_WRAPPERS:  # env / nice / sudo / timeout ... drop wrapper + flags/values
+        if prog in PREFIX_WRAPPERS:  # env / nice / sudo / timeout / xargs ... drop wrapper + flags/values
+            xargs = prog == "xargs"
             i += 1
             while i < len(tokens):
                 t = tokens[i]
                 if t.startswith("-"):
                     i += 1
                     # skip a value belonging to this flag: a word value of a
-                    # known value-flag (`sudo -u root`) or any numeric value
-                    # (`nice -n 10`, `stdbuf -o 0`)
+                    # known value-flag (`sudo -u root`, `xargs -I {}`) or any
+                    # numeric value (`nice -n 10`, `xargs -n 4`).
+                    word_value_flag = (t.lower() in WRAPPER_VALUE_FLAGS
+                                       or (xargs and t in XARGS_VALUE_FLAGS))
                     if (i < len(tokens) and not tokens[i].startswith("-")
-                            and (t.lower() in WRAPPER_VALUE_FLAGS or tokens[i].isdigit())):
+                            and (word_value_flag or tokens[i].isdigit())):
                         i += 1
                 elif t.isdigit():  # positional numeric value, e.g. `timeout 30 ...`
                     i += 1
@@ -294,12 +334,15 @@ def peel(tokens):
 
 
 def extract_substitutions(command):
-    """Inner command strings of $(...) and `...` substitutions, so a destructive
-    command hidden inside one (x=$(git reset --hard)) is still inspected."""
+    """Inner command strings of $(...), <(...), >(...) and `...` substitutions, so
+    a destructive command hidden in a command OR process substitution
+    (x=$(git reset --hard), cat <(git reset --hard), tee >(git reset --hard)) is
+    still inspected — Bash executes the contents of all of these."""
     inners = []
     i = 0
     while i < len(command) - 1:
-        if command[i] == "$" and command[i + 1] == "(":
+        two = command[i:i + 2]
+        if two in ("$(", "<(", ">(") and not (i > 0 and command[i - 1] == "\\"):
             depth, j = 1, i + 2
             while j < len(command) and depth:
                 if command[j] == "(":
@@ -345,6 +388,46 @@ def git_sub_idx(leaf):
     return -1
 
 
+def git_alias_targets(leaf):
+    """If `git -c alias.X=Y ... X` defines a one-shot alias and then invokes it,
+    return the command string the alias expands to (for recursive inspection): a
+    git subcommand string, or a shell command for a `!`-prefixed alias.
+
+    `git -c alias.wipe='reset --hard' wipe` discards a dirty worktree while the
+    subcommand token git_destructive sees is the harmless `wipe`; expanding the
+    alias closes that bypass without touching persistent config."""
+    aliases = {}
+    i = 1
+    while i < len(leaf) - 1:
+        if leaf[i] == "-c":
+            m = re.match(r"alias\.([^=]+)=(.*)$", _sq(leaf[i + 1]), re.IGNORECASE)
+            if m:
+                aliases[m.group(1).lower()] = m.group(2)
+            i += 2
+            continue
+        i += 1
+    if not aliases:
+        return []
+    idx = git_sub_idx(leaf)
+    if idx < 0:
+        return []
+    exp = aliases.get(_sq(leaf[idx]).lower())
+    if exp is None:
+        return []
+    extra = " ".join(leaf[idx + 1:])
+    if exp.startswith("!"):                       # shell alias: run the body verbatim
+        return [(exp[1:] + " " + extra).strip()]
+    return [("git " + exp + " " + extra).strip()]  # git subcommand alias
+
+
+def _has_force(rest):
+    """True if a flag list carries -f / --force, including short clusters like
+    -qf. (rest is already lowercased by the caller.)"""
+    return any(t == "--force" or
+               (t.startswith("-") and not t.startswith("--") and "f" in t)
+               for t in rest)
+
+
 def git_destructive(sub, rest):
     """Return a block reason for a destructive git subcommand, else ''."""
     if sub == "reset" and "--hard" in rest:
@@ -372,8 +455,13 @@ def git_destructive(sub, rest):
         return "Blocked `git gc --prune` (drops dangling-commit recovery)."
     if sub in DESTRUCTIVE_SUBCMDS:
         return f"Blocked potentially irreversible `git {sub}`."
-    if sub == "checkout" and "--" in rest:
-        return "Blocked `git checkout --` (discards working-tree edits)."
+    if sub == "checkout" and ("--" in rest or _has_force(rest)):
+        # `git checkout -f <branch>` / `git checkout -- <path>` both throw away
+        # local working-tree modifications.
+        return "Blocked `git checkout` (-f / -- discards working-tree edits)."
+    if sub == "switch" and (_has_force(rest) or "--discard-changes" in rest):
+        # `git switch -f` / `git switch --discard-changes` discard local edits.
+        return "Blocked `git switch --force/--discard-changes` (discards working-tree edits)."
     if sub == "restore" and ("--worktree" in rest or "--staged" not in rest):
         # --worktree is git restore's DEFAULT, so `git restore .` / `git restore
         # <path>` discard working-tree edits even without the flag. Only the
@@ -383,6 +471,32 @@ def git_destructive(sub, rest):
         return "Blocked `git worktree remove`."
     if sub == "stash" and rest[:1] == ["clear"]:
         return "Blocked `git stash clear`."
+    return ""
+
+
+def push_dst_branch(refspec):
+    """Destination branch of a push refspec (src:dst or bare dst), normalized;
+    '' when there is no determinate destination (a bare HEAD pushes to the
+    same-named remote branch, which the current-branch check already covers)."""
+    spec = refspec
+    if ":" in spec:
+        spec = spec.split(":", 1)[1]
+    elif spec.upper() == "HEAD":
+        return ""
+    spec = re.sub(r"^refs/(heads|remotes)/", "", spec)
+    return spec.strip("/")
+
+
+def push_refspec_protected(leaf, idx):
+    """Block reason if a `git push` leaf targets a protected branch BY REFSPEC
+    (`git push origin main`, `git push origin HEAD:main`), else ''. The
+    current-branch check misses these — they push to a protected branch from a
+    feature branch — so local policy (rules/git-safety.md) needs them here too."""
+    nonflag = [_sq(t) for t in leaf[idx + 1:] if not t.startswith("-")]
+    for refspec in nonflag[1:]:           # nonflag[0] is the remote
+        dst = push_dst_branch(refspec)
+        if dst and is_protected_branch(dst):
+            return f"Blocked push to protected branch '{dst}'. Open a PR or push a feature branch."
     return ""
 
 
@@ -398,31 +512,64 @@ def classify_path(path):
     p = _norm(path)
     if SELF_PROTECT_RE.search(p) or GIT_DIR_RE.search(p):
         return "block"
-    if OPENSPEC_TRUTH_RE.search(p) or any(fnmatch.fnmatch(p, pat) for pat in PROTECTED_PATHS):
+    if OPENSPEC_TRUTH_RE.search(p) or _matches_protected(p):
         return "ask"
     return ""
 
 
+def _parse_redirect(tok):
+    """Classify a possible redirection token.
+
+    Returns (is_write, operand, needs_next), or None if tok is not a redirection:
+      is_write   — writes a FILE (not an fd dup/close like 2>&1 / >&-)
+      operand    — glued file operand ('' if the file is the next token)
+      needs_next — the operand is the following token
+
+    Handled forms:  n>  n>>  >|  n<  n<<        (operand = file)
+                    &>file  &>>file             (stdout+stderr -> file)
+                    >&-  n>&m  2>&1             (fd dup / close, NOT a write)
+                    >&file  n>&file            (stdout[+stderr] -> file)
+    A bare `>& file` (spaced) is treated as a file write — the rare `>& 1`
+    (spaced fd dup) erring toward block is the safe direction for a guard."""
+    m = re.match(r"^&(>{1,2})(.*)$", tok)            # &>  &>>
+    if m:
+        operand = m.group(2)
+        return (True, operand, operand == "")
+    m = re.match(r"^(\d*)(>{1,2}|<{1,2})&(.*)$", tok)  # n>&...  n<&...
+    if m:
+        rest = m.group(3)
+        if rest == "-" or rest.isdigit():            # >&-  >&1  2>&1 : no file
+            return (False, "", False)
+        if rest == "":                               # `>& file` : file is next token
+            return (m.group(2).startswith(">"), "", True)
+        return (m.group(2).startswith(">"), rest, False)   # `>&file`
+    m = re.match(r"^(\d*)(>{1,2}|<{1,2})(\|?)(.*)$", tok)  # n>  n>>  >|  n<  n<<
+    if m:
+        operand = m.group(4)
+        return (m.group(2).startswith(">"), operand, operand == "")
+    return None
+
+
 def _split_redirects(tokens):
     """(positionals, out_targets): positionals excludes redirect operators and
-    their operands; out_targets are files written via > >> n> >| (any fd, glued
-    or spaced). Input redirects (< << n<) are consumed but never write-targets,
-    so a stdin redirect can't masquerade as a copy/move destination."""
+    their operands; out_targets are files written via > >> n> >| &> >&file (any
+    fd, glued or spaced). Input redirects (< << n<) and fd dup/close (2>&1, >&-)
+    are consumed but never write-targets, so neither a stdin redirect nor an
+    fd-dup can masquerade as a copy/move destination."""
     positionals, out_targets = [], []
     i = 0
     while i < len(tokens):
-        t = tokens[i]
-        m = REDIR_RE.match(t)
-        if m:
-            operand = m.group(4)
-            if not operand and i + 1 < len(tokens):
+        pr = _parse_redirect(tokens[i])
+        if pr is not None:
+            is_write, operand, needs_next = pr
+            if needs_next and i + 1 < len(tokens):
                 operand = tokens[i + 1]
                 i += 1
-            if m.group(2).startswith(">") and operand:
+            if is_write and operand:
                 out_targets.append(operand)
             i += 1
             continue
-        positionals.append(t)
+        positionals.append(tokens[i])
         i += 1
     return positionals, out_targets
 
@@ -501,6 +648,14 @@ def inspect_command(command):
             continue
         prog = _prog(leaf[0])
         if prog == "git":
+            # A one-shot `-c alias.X=...` can hide the destructive subcommand
+            # behind a benign alias name; expand and inspect it recursively.
+            for expansion in git_alias_targets(leaf):
+                d, r = inspect_command(expansion)
+                if d == "block":
+                    return "block", r
+                if d == "ask" and not pending_ask:
+                    pending_ask = r
             idx = git_sub_idx(leaf)
             if idx >= 0:
                 sub = _sq(leaf[idx]).lower()
@@ -508,6 +663,10 @@ def inspect_command(command):
                 reason = git_destructive(sub, rest)
                 if reason:
                     return "block", reason
+                if sub == "push":
+                    reason = push_refspec_protected(leaf, idx)
+                    if reason:
+                        return "block", reason
         elif prog in DESTRUCTIVE_VERBS:
             d = _destructive_target(prog, leaf)
             if d == "block":

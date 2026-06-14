@@ -61,14 +61,19 @@ def _norm_path(value):
     return p[2:] if p.startswith("./") else p
 
 
+# notebook_path: NotebookEdit names its target there, not under path/file_path —
+# without it a NotebookEdit slips past the write gates with no recognized path.
+_PATH_KEYS = ("path", "file_path", "filename", "notebook_path")
+
+
 def path_from_event(event):
-    for key in ("path", "file_path", "filename"):
+    for key in _PATH_KEYS:
         value = event.get(key)
         if isinstance(value, str):
             return _norm_path(value)
     tool_input = event.get("tool_input")
     if isinstance(tool_input, dict):
-        for key in ("path", "file_path", "filename"):
+        for key in _PATH_KEYS:
             value = tool_input.get(key)
             if isinstance(value, str):
                 return _norm_path(value)
