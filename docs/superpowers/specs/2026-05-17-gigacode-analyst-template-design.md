@@ -4,9 +4,9 @@
 
 Create a Git-ready project template for analysts who use the GigaCode CLI, a fork of Qwen Code. The template must be usable on Windows and Linux, must follow Qwen Code configuration semantics, and must replace user-facing `qwen` naming with `gigacode`.
 
-The first version is a self-contained project folder. Analysts clone the repository, open the project root, run `gigacode`, and use the included project-level skills, agents, hooks, commands, and rules.
+The first version is a self-contained analytics module. Analysts clone the repository, open `modules/analytics/`, run `gigacode`, and use the included project-level skills, agents, hooks, commands, and rules. Future modules can be added next to it, such as `modules/development/` and `modules/nt/`.
 
-Final analyst-facing documentation produced by the workflow must be written in AsciiDoc.
+Final analyst-facing documentation produced by the workflow must be written in Russian-language AsciiDoc.
 
 ## Source Requirements
 
@@ -39,39 +39,41 @@ If the fork still expects `.qwen` internally, the template will need a compatibi
 ## Repository Layout
 
 ```text
-.gigacode/
-  settings.json
-  skills/
-    reverse-analysis/
-      SKILL.md
-  agents/
-    intake-scope.md
-    code-mapping.md
-    documentation.md
-    evidence-gap.md
-    review.md
-  hooks/
-    preflight_check.py
-    validate_output.py
-  commands/
-    reverse-analysis.md
-docs/
-  features/
-    .gitkeep
-  templates/
-    feature-analysis.adoc
-rules/
-  reverse-analysis.md
-  branch-naming.md
-scripts/
-  smoke-check.ps1
-  smoke-check.sh
-README.md
+modules/
+  analytics/
+    .gigacode/
+      settings.json
+      skills/
+        reverse-analysis/
+          SKILL.md
+      agents/
+        intake-scope.md
+        code-mapping.md
+        documentation.md
+        evidence-gap.md
+        review.md
+      hooks/
+        preflight_check.py
+        validate_output.py
+      commands/
+        reverse-analysis.md
+    docs/
+      features/
+        .gitkeep
+      templates/
+        feature-analysis.adoc
+    rules/
+      reverse-analysis.md
+      branch-naming.md
+    scripts/
+      smoke-check.ps1
+      smoke-check.sh
+    README.md
 ```
 
 ## Runtime Workflow
 
-The analyst starts from the repository root and runs `gigacode`.
+The analyst starts from `modules/analytics/` and runs `gigacode`.
 
 The primary entry point is the project custom command `/reverse-analysis`. The command instructs GigaCode to use the `reverse-analysis` skill, gather the feature name and source context, and produce documentation under `docs/features/<feature-name>/`.
 
@@ -79,7 +81,7 @@ The workflow has this sequence:
 
 1. Intake and preflight: validate the feature name, external context status, target directory, rules, and branch guidance.
 2. Context collection: use Jira/Confluence only if Atlassian MCP is already installed and available.
-3. Code mapping: identify entry points, relevant files, integrations, dependencies, and unclear areas.
+3. Code mapping: optionally use `repomix` and `graphify` if installed, then identify entry points, relevant files, integrations, dependencies, and unclear areas. If either tool is unavailable, continue with normal code search and record the limitation.
 4. Human scope confirmation: stop before drafting and ask the analyst to confirm the scope.
 5. Documentation drafting: create the feature documentation files from confirmed facts.
 6. Evidence and gap review: separate confirmed facts from assumptions and open questions.
@@ -111,7 +113,7 @@ docs/features/<feature-name>/
   questions.adoc
 ```
 
-All generated feature files must be valid AsciiDoc. Markdown headings, tables, and fenced code blocks should be avoided in generated analyst artifacts unless they are inside literal examples where Markdown syntax is being discussed.
+All generated feature files must be valid Russian-language AsciiDoc. Markdown headings, tables, and fenced code blocks should be avoided in generated analyst artifacts unless they are inside literal examples where Markdown syntax is being discussed.
 
 ## Agent Design
 
@@ -145,6 +147,7 @@ Hook wiring belongs in `.gigacode/settings.json` using the same hook event and c
 
 - Hook definitions for preflight and validation.
 - Permission rules that protect secrets and destructive shell operations.
+- Optional permission rules for `repomix` and `graphify`.
 - UI defaults suitable for analysts, such as citations and line numbers enabled.
 - Optional MCP allowlist guidance if project names are known later.
 
@@ -162,10 +165,10 @@ The template documents how the workflow behaves:
 
 ## Smoke Checks
 
-The repository includes lightweight checks for both target operating systems:
+The analytics module includes lightweight checks for both target operating systems:
 
-- `scripts/smoke-check.ps1` for Windows PowerShell.
-- `scripts/smoke-check.sh` for Linux shells.
+- `modules/analytics/scripts/smoke-check.ps1` for Windows PowerShell.
+- `modules/analytics/scripts/smoke-check.sh` for Linux shells.
 
 The checks verify repository structure, JSON validity, expected files, YAML frontmatter presence, and direct hook-script execution. They do not require `gigacode` or Atlassian MCP to be installed.
 
@@ -180,6 +183,7 @@ The README must explain:
 - How to invoke `/reverse-analysis`.
 - Expected inputs and outputs.
 - That generated analyst deliverables are AsciiDoc files under `docs/features/<feature-name>/`.
+- That generated analyst deliverables must be written in Russian.
 - MCP responsibility and limitations.
 - How to adapt the template for a real team repository.
 
