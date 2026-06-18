@@ -4,11 +4,12 @@
 !.env.example
 __pycache__/
 *.pyc
-# dev-flow (repo root) runtime artifacts
-.gigacode/tmp/
-.gigacode/logs/
-docs/development/*/tmp/
+graphify-out/
 graphify-output/
+# development module runtime artifacts
+modules/development/.gigacode/tmp/
+modules/development/.gigacode/logs/
+modules/development/docs/development/*/tmp/
 # analytics module runtime artifacts
 modules/analytics/.gigacode/tmp/
 modules/analytics/.gigacode/logs/
