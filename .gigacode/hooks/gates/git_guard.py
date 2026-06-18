@@ -52,6 +52,7 @@ PROTECTED_PATHS = [
     "infra/**", "**/infra/**", ".env", ".env.*", "**/.env", "**/.env.*",
     "secrets/**", "**/secrets/**", "config/prod/**", "config/production/**",
     "config/staging/**", "config/uat/**",
+    ".qwen/**", "**/.qwen/**",
 ]
 # Enforcement-owned paths and the .git repo: writes/deletes here BLOCK
 # (fail-closed). Matched as a path COMPONENT anywhere in the (possibly absolute)

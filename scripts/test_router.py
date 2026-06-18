@@ -86,6 +86,27 @@ def main():
     result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": "git -C . reset --hard HEAD"}}, bom=True)
     check("bom_destructive_block", result["decision"] == "block", result)
 
+    # 1b. A PreToolUse block must reach the runtime as permissionDecision=deny
+    # (Qwen/GigaCode ignores the legacy top-level decision for PreToolUse).
+    result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": "git reset --hard"}})
+    hso = result.get("hookSpecificOutput", {})
+    check("pretool_permissiondecision_deny",
+          hso.get("permissionDecision") == "deny" and hso.get("hookEventName") == "PreToolUse", result)
+    # 1b2. A benign/allow PreToolUse MUST NOT carry a permissionDecision —
+    # emitting one auto-approves the call and silently nullifies permissions.ask.
+    result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": "git status --short"}})
+    check("pretool_allow_no_permissiondecision",
+          result["decision"] == "allow" and "permissionDecision" not in result.get("hookSpecificOutput", {}), result)
+    # 1b3. An ask decision must carry permissionDecision=ask (not allow or deny).
+    result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": ".qwen/settings.json"}})
+    check("pretool_ask_permissiondecision",
+          result.get("hookSpecificOutput", {}).get("permissionDecision") == "ask", result)
+    # 1c. SessionStart context must be mirrored into hookSpecificOutput.additionalContext
+    result = run_router("SessionStart", {})
+    hso = result.get("hookSpecificOutput", {})
+    check("sessionstart_context_mirrored",
+          bool(hso.get("additionalContext")) and hso.get("hookEventName") == "SessionStart", result)
+
     # 2. Benign git command is allowed
     result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": "git status --short"}})
     check("benign_allow", result["decision"] == "allow", result)
@@ -93,6 +114,13 @@ def main():
     # 3. Unmatched tool produces allow without running gates
     result = run_router("PreToolUse", {"tool_name": "ReadFile", "tool_input": {"path": "README.md"}})
     check("unmatched_tool_allow", result["decision"] == "allow", result)
+
+    # 3b. Raw Qwen tool ids are normalized before matching: run_shell_command ->
+    # Bash routes to git_guard; write_file -> WriteFile hits self-protect.
+    result = run_router("PreToolUse", {"tool_name": "run_shell_command", "tool_input": {"command": "git reset --hard"}})
+    check("raw_shell_normalized_block", result["decision"] == "block", result)
+    result = run_router("PreToolUse", {"tool_name": "write_file", "tool_input": {"file_path": ".gigacode/settings.json"}})
+    check("raw_write_normalized_block", result["decision"] == "block", result)
 
     # 4. Protected path write asks
     result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": ".github/workflows/deploy.yml"}})
@@ -339,6 +367,11 @@ def main():
     result = run_router("PreToolUse", {"tool_name": "Bash",
                         "tool_input": {"command": "echo x > .github/workflows/deploy.yml"}})
     check("guard_shell_ci_ask", result["decision"] == "ask", result)
+    # .qwen holds disableAllHooks; writing it must ASK (not silently allow).
+    result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": ".qwen/settings.json"}})
+    check("qwen_write_ask", result["decision"] == "ask", result)
+    result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": "echo x > .qwen/settings.json"}})
+    check("qwen_shell_ask", result["decision"] == "ask", result)
 
     # 19. WriteFile/Edit to enforcement-owned paths MUST block (self-protection).
     # The logs/* entries are the PRIMARY closure of the Stop-budget-seed and

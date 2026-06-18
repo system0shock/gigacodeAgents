@@ -4,9 +4,14 @@
 !.env.example
 __pycache__/
 *.pyc
+# dev-flow (repo root) runtime artifacts
 .gigacode/tmp/
 .gigacode/logs/
 docs/development/*/tmp/
 graphify-output/
+# analytics module runtime artifacts
+modules/analytics/.gigacode/tmp/
+modules/analytics/.gigacode/logs/
+modules/analytics/docs/features/*/tmp/
 # internal planning/specs/reviews — kept on disk, out of public git
 docs/superpowers/

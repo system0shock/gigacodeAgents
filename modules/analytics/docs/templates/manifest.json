@@ -1,0 +1,9 @@
+{
+  "feature": "<feature-slug>",
+  "run_date": "<YYYY-MM-DD>",
+  "code_commit": "<git-sha>",
+  "status": "scoping",
+  "scope": {"included": "", "excluded": "", "sources": ["code"]},
+  "capability": "<capability>",
+  "produced": {"technical": [], "spec": "", "final": []}
+}

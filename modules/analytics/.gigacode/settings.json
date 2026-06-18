@@ -1,0 +1,125 @@
+{
+  "ui": {
+    "showCitations": true,
+    "showLineNumbers": true,
+    "hideTips": true,
+    "shellOutputMaxLines": 20
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(git status*)",
+      "Bash(git branch*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(rg *)",
+      "Bash(graphify*)",
+      "Bash(python .gigacode/hooks/*)",
+      "Bash(python scripts/*)",
+      "Edit(docs/features/**)",
+      "Edit(openspec/specs/**)",
+      "Edit(analytics/**)",
+      "Edit(architecture/**)"
+    ],
+    "ask": [
+      "Edit",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Edit(.qwen/**)",
+      "Write(.qwen/**)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Bash(rm -rf *)",
+      "Bash(del /s *)",
+      "Bash(format *)"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type": "command", "command": "node .gigacode/hooks/run-hook.cjs --event=UserPromptSubmit"}
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type": "command", "command": "node .gigacode/hooks/run-hook.cjs --event=SessionStart"}
+        ]
+      },
+      {
+        "matcher": "",
+        "async": true,
+        "hooks": [
+          {"type": "command", "command": "serena-hooks activate --client=claude-code", "timeout": 10000}
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "code-mapping|documentation",
+        "hooks": [
+          {"type": "command", "command": "node .gigacode/hooks/run-hook.cjs --event=SubagentStart"}
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type": "command", "command": "node .gigacode/hooks/run-hook.cjs --event=PreToolUse"}
+        ]
+      },
+      {
+        "matcher": "",
+        "async": true,
+        "hooks": [
+          {"type": "command", "command": "serena-hooks remind --client=claude-code", "timeout": 5000}
+        ]
+      },
+      {
+        "matcher": "mcp__serena__*",
+        "async": true,
+        "hooks": [
+          {"type": "command", "command": "serena-hooks auto-approve --client=claude-code", "timeout": 5000}
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type": "command", "command": "node .gigacode/hooks/run-hook.cjs --event=PostToolUse"}
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type": "command", "command": "node .gigacode/hooks/run-hook.cjs --event=Stop"}
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "async": true,
+        "hooks": [
+          {"type": "command", "command": "serena-hooks cleanup --client=claude-code", "timeout": 5000}
+        ]
+      }
+    ]
+  },
+  "mcpServers": {
+    "serena": {
+      "command": "serena",
+      "args": ["start-mcp-server", "--context", "ide", "--project-from-cwd"]
+    }
+  }
+}
