@@ -30,7 +30,8 @@
 ## Требования
 
 - GigaCode CLI (команда `gigacode`).
-- Git, Python 3.
+- Git, Python 3 (в PATH как `python3`, `python` или Windows-лаунчер `py`).
+- Node.js — среда выполнения GigaCode; также запускает лаунчер хуков (`node .gigacode/hooks/run-hook.cjs`), который автоматически находит Python на любой ОС.
 - PowerShell (Windows) / Bash (Linux) для smoke-проверок.
 - Опционально: Serena MCP — семантический поиск кода (нужен `uv`).
 - Опционально: Graphify — карта модулей.
@@ -106,7 +107,7 @@ gigacode
 
 ```text
 pip install uv          # или см. https://docs.astral.sh/uv/
-uv tool install -p 3.13 serena-agent
+uv tool install -p 3.13 serena-agent   # если uv не в PATH: python -m uv tool install -p 3.13 serena-agent
 serena init             # инициализирует LSP-бэкенд
 ```
 
@@ -117,7 +118,11 @@ serena project create   # создаёт .serena/project.yml
 ```
 
 Шаблон уже содержит `.serena/project.yml` — замените `project_name` и
-`ignored_paths` под свой проект. Serena объявлена в `settings.json`
+`ignored_paths` под свой проект. Обязательно добавьте поле `languages:` в
+`.serena/project.yml` — без него Serena 1.5.3+ не определяет язык проекта.
+На Qwen/GigaCode MCP-сервер может стартовать вне корня проекта; если Serena
+сообщает неверный рут, укажите явный путь: `--project <путь>` вместо
+`--project-from-cwd`. Serena объявлена в `settings.json`
 (`mcpServers.serena`); напоминания подключены асинхронными hooks. **Фолбэк:**
 если `serena` недоступен, агенты переключаются на `rg`, а smoke-проверки
 проходят без него.
