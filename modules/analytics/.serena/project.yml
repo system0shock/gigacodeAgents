@@ -6,6 +6,11 @@
 # Replace with your actual project name.
 project_name: my-project
 
+# Language servers to start. REQUIRED by Serena >= 1.5.3.
+# Replace with your project's language(s), e.g. [python], [typescript], [java].
+languages:
+  - python
+
 # ignored_paths lists directories Serena will skip when indexing.
 # Adjust for your build output, dependency, and generated-file paths.
 ignored_paths:
