@@ -26,7 +26,9 @@
       "Bash(npm*)",
       "Bash(pytest*)",
       "Bash(gradle*)",
-      "Bash(cargo*)"
+      "Bash(cargo*)",
+      "Edit(.qwen/**)",
+      "Write(.qwen/**)"
     ],
     "deny": [
       "Read(.env)",
@@ -58,18 +60,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/router.py --event UserPromptSubmit"
+            "command": "node .gigacode/hooks/run-hook.cjs --event UserPromptSubmit"
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "^(Bash|Shell|Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/router.py --event PreToolUse"
+            "command": "node .gigacode/hooks/run-hook.cjs --event PreToolUse"
           }
         ]
       },
@@ -98,11 +100,11 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/router.py --event PostToolUse"
+            "command": "node .gigacode/hooks/run-hook.cjs --event PostToolUse"
           }
         ]
       }
@@ -113,7 +115,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/router.py --event Stop",
+            "command": "node .gigacode/hooks/run-hook.cjs --event Stop",
             "timeout": 630000
           }
         ]
@@ -125,7 +127,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/router.py --event SessionStart"
+            "command": "node .gigacode/hooks/run-hook.cjs --event SessionStart"
           }
         ]
       },
@@ -147,7 +149,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .gigacode/hooks/router.py --event SubagentStart"
+            "command": "node .gigacode/hooks/run-hook.cjs --event SubagentStart"
           }
         ]
       }

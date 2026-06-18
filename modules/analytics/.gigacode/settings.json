@@ -24,7 +24,9 @@
     "ask": [
       "Edit",
       "Bash(git add*)",
-      "Bash(git commit*)"
+      "Bash(git commit*)",
+      "Edit(.qwen/**)",
+      "Write(.qwen/**)"
     ],
     "deny": [
       "Read(.env)",
@@ -39,7 +41,7 @@
       {
         "matcher": "",
         "hooks": [
-          {"type": "command", "command": "python .gigacode/hooks/router.py --event=UserPromptSubmit"}
+          {"type": "command", "command": "node .gigacode/hooks/run-hook.cjs --event=UserPromptSubmit"}
         ]
       }
     ],
@@ -47,7 +49,7 @@
       {
         "matcher": "",
         "hooks": [
-          {"type": "command", "command": "python .gigacode/hooks/router.py --event=SessionStart"}
+          {"type": "command", "command": "node .gigacode/hooks/run-hook.cjs --event=SessionStart"}
         ]
       },
       {
@@ -62,15 +64,15 @@
       {
         "matcher": "code-mapping|documentation",
         "hooks": [
-          {"type": "command", "command": "python .gigacode/hooks/router.py --event=SubagentStart"}
+          {"type": "command", "command": "node .gigacode/hooks/run-hook.cjs --event=SubagentStart"}
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "^(Bash|Shell|WriteFile|Edit|NotebookEdit)$",
+        "matcher": "",
         "hooks": [
-          {"type": "command", "command": "python .gigacode/hooks/router.py --event=PreToolUse"}
+          {"type": "command", "command": "node .gigacode/hooks/run-hook.cjs --event=PreToolUse"}
         ]
       },
       {
@@ -90,9 +92,9 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "^(WriteFile|Edit)$",
+        "matcher": "",
         "hooks": [
-          {"type": "command", "command": "python .gigacode/hooks/router.py --event=PostToolUse"}
+          {"type": "command", "command": "node .gigacode/hooks/run-hook.cjs --event=PostToolUse"}
         ]
       }
     ],
@@ -100,7 +102,7 @@
       {
         "matcher": "",
         "hooks": [
-          {"type": "command", "command": "python .gigacode/hooks/router.py --event=Stop"}
+          {"type": "command", "command": "node .gigacode/hooks/run-hook.cjs --event=Stop"}
         ]
       }
     ],
