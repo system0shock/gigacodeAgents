@@ -484,6 +484,17 @@ def test_validate_run_output():
                        "final": ["analytics/use-case"]}))
         check("vr_complete_dir_final",
               gate.run({"hook_event_name": "Stop"})["decision"] == "block")
+        # produced.final pointing at an existing file OUTSIDE the final tree
+        # (root-level analytics/ + architecture/ only) is not a real final —
+        # a manifest can't close a complete run by naming e.g. README.md.
+        write_file(tmp, "README.md", "# readme\n")
+        write_file(tmp, "docs/features/card-blocking/manifest.json",
+                   manifest("complete", produced={
+                       "technical": ["docs/features/card-blocking/overview.adoc"],
+                       "spec": "openspec/specs/card-blocking/spec.md",
+                       "final": ["README.md"]}))
+        check("vr_complete_final_outside_tree",
+              gate.run({"hook_event_name": "Stop"})["decision"] == "block")
         # complete with empty produced.final must NOT pass (finals required)
         write_file(tmp, "docs/features/card-blocking/manifest.json",
                    manifest("complete", produced={

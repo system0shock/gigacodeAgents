@@ -13,7 +13,8 @@ const args = process.argv.slice(2); // e.g. ["--event", "PreToolUse"]
 let input;
 try {
   input = fs.readFileSync(0); // stdin (fd 0)
-} catch (_) {
+} catch (e) {
+  process.stderr.write("run-hook: stdin read failed: " + String(e) + "\n");
   input = Buffer.alloc(0);
 }
 
@@ -27,7 +28,10 @@ const candidates =
 const env = { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" };
 
 for (const [cmd, ...pre] of candidates) {
-  const r = spawnSync(cmd, [...pre, router, ...args], { input, env });
+  // timeout bounds a pathological hang (e.g. a Windows MS-Store `python3` alias
+  // opening the Store); 630s matches the Stop hook budget so it never kills a
+  // legitimate long gate run. On timeout spawnSync sets r.error -> fail-open below.
+  const r = spawnSync(cmd, [...pre, router, ...args], { input, env, timeout: 630000 });
   if (r.error && r.error.code === "ENOENT") continue; // not installed; try next
   if (r.error) {
     process.stderr.write("run-hook: " + String(r.error) + "\n");

@@ -10,6 +10,16 @@ import _lib
 REQUIRED_TECHDOCS = ("overview.adoc", "flow.adoc", "integrations.adoc",
                      "data.adoc", "questions.adoc")
 STATUSES = ("scoping", "draft", "confirmed", "complete")
+# Final deliverables live ONLY under the documented final tree (root-level
+# analytics/ + architecture/). A produced.final entry pointing elsewhere (e.g.
+# README.md) must NOT count as a real final artifact, otherwise a complete run
+# could close by naming an unrelated existing file.
+FINAL_TREE_PREFIXES = ("analytics/", "architecture/")
+
+
+def in_final_tree(rel):
+    norm = rel.replace("\\", "/").lstrip("./")
+    return any(norm.startswith(prefix) for prefix in FINAL_TREE_PREFIXES)
 
 
 def load_manifest(path):
@@ -63,10 +73,12 @@ def check_feature(root_dir, feature_dir, manifest):
         # close with produced.final = [".../.gitkeep"] / [a dir] and pass.
         real_final = [x for x in final_list if isinstance(x, str) and x
                       and os.path.basename(x.replace("\\", "/")) != ".gitkeep"
+                      and in_final_tree(x)
                       and os.path.isfile(os.path.join(root_dir, *x.replace("\\", "/").split("/")))]
         if not real_final:
             issues.append(f"{name}: статус complete, но produced.final не содержит "
-                          "реальных финальных файлов (пусто/плейсхолдер/каталог)")
+                          "реальных финальных файлов "
+                          "(пусто/плейсхолдер/каталог/вне analytics|architecture)")
         for group in ("technical", "final"):
             for rel in missing_files(root_dir, produced.get(group, []) or []):
                 issues.append(f"{name}: заявленный файл отсутствует: {rel}")
