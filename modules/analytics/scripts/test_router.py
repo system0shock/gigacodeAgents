@@ -106,6 +106,11 @@ def test_routing():
         sb.gate("fixture_context", CONTEXT_GATE)
         check("rt_tool_match", sb.run({"hook_event_name": "PreToolUse",
                                        "tool_name": "Edit"})["decision"] == "block")
+        pre = sb.run({"hook_event_name": "PreToolUse", "tool_name": "Edit"})
+        phso = pre.get("hookSpecificOutput", {})
+        check("rt_pretool_permissiondecision",
+              phso.get("permissionDecision") == "deny"
+              and phso.get("hookEventName") == "PreToolUse", repr(pre))
         check("rt_tool_anchored", sb.run({"hook_event_name": "PreToolUse",
                                           "tool_name": "MyEdit"})["decision"] == "allow")
         # Qwen/GigaCode raw tool ids normalize to the canonical names the

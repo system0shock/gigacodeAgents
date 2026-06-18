@@ -172,18 +172,35 @@ def decide(event, event_name, tool_name, config):
             results.append(result)
     final = aggregate(results)
     final = apply_stop_budget(event_name, final, config, event)
-    # GigaCode/Claude-style consumers read injected context from
-    # hookSpecificOutput.additionalContext; mirror it there (keeping the
-    # top-level field for forward-compat) so SessionStart/SubagentStart/
-    # UserPromptSubmit context-inject routes actually deliver the rules/module map.
-    if final.get("additionalContext"):
-        final["hookSpecificOutput"] = {
-            "hookEventName": event_name,
-            "additionalContext": final["additionalContext"],
-        }
     journal({"kind": "final", "event": event_name, "tool": tool_name,
              "decision": final["decision"]})
     return final
+
+
+def to_wire(event_name, final):
+    """Add the hookSpecificOutput shape Qwen/GigaCode actually reads, WITHOUT
+    dropping the top-level fields (kept for the offline suite and for
+    Stop/PostToolUse, which read top-level). Top-level decision stays the source
+    of truth; this only re-expresses it where the runtime looks."""
+    decision = final.get("decision", "allow")
+    if event_name == "PreToolUse":
+        final["hookSpecificOutput"] = {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": {"allow": "allow", "ask": "ask", "block": "deny"}.get(decision, "allow"),
+            "permissionDecisionReason": final.get("reason")
+                or ("OK" if decision == "allow" else "Blocked by GigaCode gate"),
+        }
+    elif event_name in ("SessionStart", "SubagentStart", "UserPromptSubmit", "PostToolUse"):
+        if final.get("additionalContext"):
+            final["hookSpecificOutput"] = {
+                "hookEventName": event_name,
+                "additionalContext": final["additionalContext"],
+            }
+    return final
+
+
+def emit(event_name, final):
+    print(json.dumps(to_wire(event_name, final), ensure_ascii=False))
 
 
 def main():
@@ -198,13 +215,13 @@ def main():
         event = json.loads(sys.stdin.buffer.read().decode("utf-8-sig", errors="replace"))
     except json.JSONDecodeError as exc:
         journal({"kind": "parse_error", "error": str(exc)})
-        print(json.dumps({"decision": "allow"}))
+        emit(ev_name_from_arg, {"decision": "allow"})
         return
 
     # FIX 1a: non-dict JSON (null, [], "x") treated same as parse error
     if not isinstance(event, dict):
         journal({"kind": "parse_error", "error": f"expected object, got {type(event).__name__}"})
-        print(json.dumps({"decision": "allow"}))
+        emit(ev_name_from_arg, {"decision": "allow"})
         return
 
     event_name = ev_name_from_arg or str(event.get("hook_event_name", ""))
@@ -218,21 +235,19 @@ def main():
             config = json.load(handle)
     except (OSError, json.JSONDecodeError) as exc:
         journal({"kind": "config_error", "error": str(exc)})
-        print(json.dumps({"decision": "block",
-                          "reason": f"router.config.json unreadable: {exc}. {ESCAPE_HATCH}"},
-                         ensure_ascii=False))
+        emit(ev_name_from_arg, {"decision": "block",
+                                "reason": f"router.config.json unreadable: {exc}. {ESCAPE_HATCH}"})
         return
 
     try:
         final = decide(event, event_name, tool_name, config)
     except Exception as exc:
         journal({"kind": "router_error", "error": str(exc)})
-        print(json.dumps({"decision": "block",
-                          "reason": f"Hook router internal error: {exc}. {ESCAPE_HATCH}"},
-                         ensure_ascii=False))
+        emit(ev_name_from_arg, {"decision": "block",
+                                "reason": f"Hook router internal error: {exc}. {ESCAPE_HATCH}"})
         return
 
-    print(json.dumps(final, ensure_ascii=False))
+    emit(event_name, final)
 
 
 if __name__ == "__main__":

@@ -86,6 +86,18 @@ def main():
     result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": "git -C . reset --hard HEAD"}}, bom=True)
     check("bom_destructive_block", result["decision"] == "block", result)
 
+    # 1b. A PreToolUse block must reach the runtime as permissionDecision=deny
+    # (Qwen/GigaCode ignores the legacy top-level decision for PreToolUse).
+    result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": "git reset --hard"}})
+    hso = result.get("hookSpecificOutput", {})
+    check("pretool_permissiondecision_deny",
+          hso.get("permissionDecision") == "deny" and hso.get("hookEventName") == "PreToolUse", result)
+    # 1c. SessionStart context must be mirrored into hookSpecificOutput.additionalContext
+    result = run_router("SessionStart", {})
+    hso = result.get("hookSpecificOutput", {})
+    check("sessionstart_context_mirrored",
+          bool(hso.get("additionalContext")) and hso.get("hookEventName") == "SessionStart", result)
+
     # 2. Benign git command is allowed
     result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": "git status --short"}})
     check("benign_allow", result["decision"] == "allow", result)
