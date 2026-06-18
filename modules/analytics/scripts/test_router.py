@@ -111,6 +111,12 @@ def test_routing():
         check("rt_pretool_permissiondecision",
               phso.get("permissionDecision") == "deny"
               and phso.get("hookEventName") == "PreToolUse", repr(pre))
+        # An allow PreToolUse MUST NOT carry permissionDecision — emitting one
+        # auto-approves the call and silently nullifies the user's permissions.ask.
+        allow_pre = sb.run({"hook_event_name": "PreToolUse", "tool_name": "MyEdit"})
+        check("rt_pretool_allow_no_pd",
+              allow_pre["decision"] == "allow" and "permissionDecision" not in allow_pre.get("hookSpecificOutput", {}),
+              repr(allow_pre))
         check("rt_tool_anchored", sb.run({"hook_event_name": "PreToolUse",
                                           "tool_name": "MyEdit"})["decision"] == "allow")
         # Qwen/GigaCode raw tool ids normalize to the canonical names the

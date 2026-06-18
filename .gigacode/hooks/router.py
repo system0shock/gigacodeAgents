@@ -198,15 +198,22 @@ def to_wire(event_name, final):
     """Add the hookSpecificOutput shape Qwen/GigaCode actually reads, WITHOUT
     dropping the top-level fields (kept for the offline suite and for
     Stop/PostToolUse, which read top-level). Top-level decision stays the source
-    of truth; this only re-expresses it where the runtime looks."""
+    of truth; this only re-expresses it where the runtime looks.
+
+    For PreToolUse: emit hookSpecificOutput ONLY when the decision is ask or
+    block (deny). On allow, emit nothing extra so the runtime's own permission
+    flow applies (respecting the user's settings.json permissions.ask/allow/deny
+    config). Emitting permissionDecision:"allow" on every benign call would
+    auto-approve the tool call and silently nullify the user's permission config."""
     decision = final.get("decision", "allow")
     if event_name == "PreToolUse":
-        final["hookSpecificOutput"] = {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": {"allow": "allow", "ask": "ask", "block": "deny"}.get(decision, "allow"),
-            "permissionDecisionReason": final.get("reason")
-                or ("OK" if decision == "allow" else "Blocked by GigaCode gate"),
-        }
+        if decision in ("ask", "block"):
+            final["hookSpecificOutput"] = {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny" if decision == "block" else "ask",
+                "permissionDecisionReason": final.get("reason") or "Blocked by GigaCode gate",
+            }
+        # allow: emit no hookSpecificOutput so the runtime's own permission flow applies
     elif event_name in ("SessionStart", "SubagentStart", "UserPromptSubmit", "PostToolUse"):
         if final.get("additionalContext"):
             final["hookSpecificOutput"] = {

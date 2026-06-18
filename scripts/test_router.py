@@ -92,6 +92,15 @@ def main():
     hso = result.get("hookSpecificOutput", {})
     check("pretool_permissiondecision_deny",
           hso.get("permissionDecision") == "deny" and hso.get("hookEventName") == "PreToolUse", result)
+    # 1b2. A benign/allow PreToolUse MUST NOT carry a permissionDecision —
+    # emitting one auto-approves the call and silently nullifies permissions.ask.
+    result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": "git status --short"}})
+    check("pretool_allow_no_permissiondecision",
+          result["decision"] == "allow" and "permissionDecision" not in result.get("hookSpecificOutput", {}), result)
+    # 1b3. An ask decision must carry permissionDecision=ask (not allow or deny).
+    result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": ".qwen/settings.json"}})
+    check("pretool_ask_permissiondecision",
+          result.get("hookSpecificOutput", {}).get("permissionDecision") == "ask", result)
     # 1c. SessionStart context must be mirrored into hookSpecificOutput.additionalContext
     result = run_router("SessionStart", {})
     hso = result.get("hookSpecificOutput", {})
