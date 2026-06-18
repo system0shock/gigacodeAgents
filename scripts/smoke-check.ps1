@@ -38,6 +38,10 @@ foreach ($path in $required) {
   }
 }
 
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+  throw "Node.js is required (GigaCode runtime + hook launcher)"
+}
+
 python -m json.tool .gigacode/settings.json | Out-Null
 if ($LASTEXITCODE -ne 0) {
   throw "invalid JSON: .gigacode/settings.json"
@@ -150,5 +154,11 @@ if (Get-Command serena -ErrorAction SilentlyContinue) {
 } else {
   Write-Warning "NOTE: serena CLI not installed; Serena MCP will not start. Install with: uv tool install -p 3.13 serena-agent"
 }
+
+$launcher = '{"tool_name":"Bash","tool_input":{"command":"git reset --hard HEAD"}}' | node .gigacode/hooks/run-hook.cjs --event PreToolUse
+if ($launcher -notmatch '"permissionDecision":\s*"deny"') {
+  throw "launcher round-trip did not return permissionDecision: deny"
+}
+Write-Host "launcher round-trip: deny OK"
 
 Write-Host "Smoke check passed"

@@ -38,6 +38,10 @@ foreach ($path in $required) {
   }
 }
 
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+  throw "Node.js is required (GigaCode runtime + hook launcher)"
+}
+
 foreach ($jsonFile in @(".gigacode/settings.json", ".gigacode/hooks/router.config.json", ".gigacode/quality-gates.json", "docs/templates/manifest.json")) {
   Get-Content $jsonFile -Raw | ConvertFrom-Json | Out-Null
 }
@@ -97,5 +101,11 @@ python scripts/test_gates.py
 if ($LASTEXITCODE -ne 0) { throw "test_gates.py failed" }
 python scripts/test_module_map.py
 if ($LASTEXITCODE -ne 0) { throw "test_module_map.py failed" }
+
+$launcher = '{"tool_name":"Bash","tool_input":{"command":"git reset --hard HEAD"}}' | node .gigacode/hooks/run-hook.cjs --event PreToolUse
+if ($launcher -notmatch '"permissionDecision":\s*"deny"') {
+  throw "launcher round-trip did not return permissionDecision: deny"
+}
+Write-Host "launcher round-trip: deny OK"
 
 Write-Host "Analytics module smoke check passed."

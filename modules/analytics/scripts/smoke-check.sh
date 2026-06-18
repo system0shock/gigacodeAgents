@@ -40,6 +40,8 @@ for path in "${required[@]}"; do
   fi
 done
 
+command -v node >/dev/null 2>&1 || { echo "Node.js is required (GigaCode runtime + hook launcher)" >&2; exit 1; }
+
 python -m json.tool .gigacode/settings.json >/dev/null
 python -m json.tool .gigacode/hooks/router.config.json >/dev/null
 python -m json.tool .gigacode/quality-gates.json >/dev/null
@@ -113,5 +115,9 @@ done
 python scripts/test_router.py
 python scripts/test_gates.py
 python scripts/test_module_map.py
+
+launcher="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git reset --hard HEAD"}}' | node .gigacode/hooks/run-hook.cjs --event PreToolUse)"
+printf '%s' "$launcher" | grep -q '"permissionDecision": "deny"'
+echo "launcher round-trip: deny OK"
 
 echo "Analytics module smoke check passed."

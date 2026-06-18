@@ -47,6 +47,8 @@ else
   exit 1
 fi
 
+command -v node >/dev/null 2>&1 || { echo "Node.js is required (GigaCode runtime + hook launcher)" >&2; exit 1; }
+
 "$python_cmd" -m json.tool .gigacode/settings.json >/dev/null
 
 for path in .gigacode/agents/*.md; do
@@ -112,5 +114,9 @@ if command -v serena >/dev/null 2>&1; then
 else
   echo "NOTE: serena CLI not installed; Serena MCP will not start. Install with: uv tool install -p 3.13 serena-agent" >&2
 fi
+
+launcher="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git reset --hard HEAD"}}' | node .gigacode/hooks/run-hook.cjs --event PreToolUse)"
+printf '%s' "$launcher" | grep -q '"permissionDecision": "deny"'
+echo "launcher round-trip: deny OK"
 
 echo "Smoke check passed"
