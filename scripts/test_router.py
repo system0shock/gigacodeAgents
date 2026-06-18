@@ -358,6 +358,11 @@ def main():
     result = run_router("PreToolUse", {"tool_name": "Bash",
                         "tool_input": {"command": "echo x > .github/workflows/deploy.yml"}})
     check("guard_shell_ci_ask", result["decision"] == "ask", result)
+    # .qwen holds disableAllHooks; writing it must ASK (not silently allow).
+    result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": ".qwen/settings.json"}})
+    check("qwen_write_ask", result["decision"] == "ask", result)
+    result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": "echo x > .qwen/settings.json"}})
+    check("qwen_shell_ask", result["decision"] == "ask", result)
 
     # 19. WriteFile/Edit to enforcement-owned paths MUST block (self-protection).
     # The logs/* entries are the PRIMARY closure of the Stop-budget-seed and

@@ -97,6 +97,8 @@ def test_git_guard():
           gate.run({"tool_input": {"file_path": ".gigacode/hooks/router.py"}})["decision"] == "block")
     check("gg_env_ask",
           gate.run({"tool_input": {"file_path": ".env"}})["decision"] == "ask")
+    check("gg_qwen_ask",
+          gate.run({"tool_input": {"file_path": ".qwen/settings.json"}})["decision"] == "ask")
     check("gg_benign",
           gate.run({"tool_input": {"command": "git status"}})["decision"] == "allow")
     check("gg_file_archive",
