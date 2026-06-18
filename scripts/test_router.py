@@ -94,6 +94,13 @@ def main():
     result = run_router("PreToolUse", {"tool_name": "ReadFile", "tool_input": {"path": "README.md"}})
     check("unmatched_tool_allow", result["decision"] == "allow", result)
 
+    # 3b. Raw Qwen tool ids are normalized before matching: run_shell_command ->
+    # Bash routes to git_guard; write_file -> WriteFile hits self-protect.
+    result = run_router("PreToolUse", {"tool_name": "run_shell_command", "tool_input": {"command": "git reset --hard"}})
+    check("raw_shell_normalized_block", result["decision"] == "block", result)
+    result = run_router("PreToolUse", {"tool_name": "write_file", "tool_input": {"file_path": ".gigacode/settings.json"}})
+    check("raw_write_normalized_block", result["decision"] == "block", result)
+
     # 4. Protected path write asks
     result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": ".github/workflows/deploy.yml"}})
     check("protected_path_ask", result["decision"] == "ask", result)

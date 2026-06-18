@@ -28,6 +28,20 @@ ESCAPE_HATCH = (
 
 SEVERITY = {"allow": 0, "ask": 1, "block": 2}
 
+# Qwen/GigaCode hook payloads carry the RAW tool id (run_shell_command,
+# write_file, replace, ...), not the canonical Bash/WriteFile/Edit names the
+# route tool_patterns match on. Normalize before routing so git_guard et al.
+# actually fire. Idempotent: canonical names are not keys, so they pass through.
+TOOL_NAME_MAP = {
+    "run_shell_command": "Bash",
+    "shell": "Bash",
+    "write_file": "WriteFile",
+    "replace": "Edit",
+    "edit": "Edit",
+    "edit_file": "Edit",
+    "notebook_edit": "NotebookEdit",
+}
+
 
 def journal(record):
     try:
@@ -194,8 +208,9 @@ def main():
         return
 
     event_name = ev_name_from_arg or str(event.get("hook_event_name", ""))
-    tool_name = str(event.get("tool_name", ""))
+    tool_name = TOOL_NAME_MAP.get(str(event.get("tool_name", "")), str(event.get("tool_name", "")))
     event["hook_event_name"] = event_name  # canonical name so gates can branch on it
+    event["tool_name"] = tool_name         # canonical tool id for gates that read it
 
     # FIX 1b: load config, then wrap ALL remaining logic fail-closed
     try:

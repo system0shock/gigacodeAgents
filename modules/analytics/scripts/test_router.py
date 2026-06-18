@@ -108,6 +108,14 @@ def test_routing():
                                        "tool_name": "Edit"})["decision"] == "block")
         check("rt_tool_anchored", sb.run({"hook_event_name": "PreToolUse",
                                           "tool_name": "MyEdit"})["decision"] == "allow")
+        # Qwen/GigaCode raw tool ids normalize to the canonical names the
+        # tool_pattern matches on. write_file -> WriteFile must route + block.
+        check("rt_raw_write_file_normalized",
+              sb.run({"hook_event_name": "PreToolUse",
+                      "tool_name": "write_file"})["decision"] == "block")
+        check("rt_raw_replace_normalized",
+              sb.run({"hook_event_name": "PreToolUse",
+                      "tool_name": "replace"})["decision"] == "block")
         check("rt_notebookedit_routes",
               sb.run({"hook_event_name": "PreToolUse",
                       "tool_name": "NotebookEdit"})["decision"] == "block")
