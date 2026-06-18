@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.gigacode/logs/
+.gigacode/tmp/
+docs/development/*/tmp/
+graphify-out/
+graphify-output/

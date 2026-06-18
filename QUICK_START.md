@@ -22,11 +22,12 @@ Python на любой ОС — ОС-специфичных правок не н
 npm install -g @fission-ai/openspec@1.4.1
 ```
 
-## 2. Разработка (dev-flow) — в корне репозитория
+## 2. Разработка (dev-flow) — в `modules/development/`
 
 Windows:
 
 ```powershell
+cd modules\development
 .\scripts\smoke-check.ps1      # должно закончиться "Smoke check passed"
 gigacode
 ```
@@ -34,6 +35,7 @@ gigacode
 Linux/macOS:
 
 ```bash
+cd modules/development
 bash scripts/smoke-check.sh
 gigacode
 ```
@@ -79,14 +81,14 @@ gigacode
 заблокирован специально — это ручная человеческая операция вне агента.
 
 Аварийный выключатель (правит человек — для агента файл защищён):
-`"disableAllHooks": true` в `.gigacode/settings.json` (для аналитики — в
-`modules/analytics/.gigacode/settings.json`). Это последнее средство: потом
-почините причину и верните хуки.
+`"disableAllHooks": true` в `<модуль>/.gigacode/settings.json`
+(`modules/development/...` для разработки, `modules/analytics/...` для аналитики).
+Это последнее средство: потом почините причину и верните хуки.
 
-Журнал всех решений гейтов — `.gigacode/logs/decisions.jsonl`.
+Журнал всех решений гейтов — `<модуль>/.gigacode/logs/decisions.jsonl`.
 
 ## Дальше
 
-- Разработка целиком: [docs/USER-GUIDE.md](docs/USER-GUIDE.md) · [docs/flow-overview.md](docs/flow-overview.md)
+- Разработка целиком: [modules/development/README.md](modules/development/README.md) · [modules/development/docs/USER-GUIDE.md](modules/development/docs/USER-GUIDE.md) · [modules/development/docs/flow-overview.md](modules/development/docs/flow-overview.md)
 - Аналитика целиком: [modules/analytics/README.md](modules/analytics/README.md) · [modules/analytics/docs/flow-overview.md](modules/analytics/docs/flow-overview.md)
 - Опциональные инструменты (Serena, Graphify, Context7) и их установка — в гайдах выше; у каждого есть fallback.

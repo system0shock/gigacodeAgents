@@ -12,18 +12,20 @@
 
 ## Флоу
 
-- **Разработка (dev-flow)** — в корне репозитория (`.gigacode/`, `rules/`,
-  `scripts/`, `openspec/`). Команды `/develop-feature` и `/fix-bug`; git-safety,
-  quality gates, OpenSpec, артефакты задачи.
-  📖 Руководство: [docs/USER-GUIDE.md](docs/USER-GUIDE.md) ·
-  обзор флоу: [docs/flow-overview.md](docs/flow-overview.md).
+- **Разработка (dev-flow)** — в [`modules/development/`](modules/development/)
+  (`.gigacode/`, `rules/`, `scripts/`, `openspec/`). Команды `/develop-feature`
+  и `/fix-bug`; git-safety, quality gates, OpenSpec, артефакты задачи.
+  📖 [modules/development/README.md](modules/development/README.md) ·
+  руководство: [modules/development/docs/USER-GUIDE.md](modules/development/docs/USER-GUIDE.md) ·
+  обзор флоу: [modules/development/docs/flow-overview.md](modules/development/docs/flow-overview.md).
 
 - **Аналитика (reverse-analysis)** — в [`modules/analytics/`](modules/analytics/).
   Одноразовый обратный анализ одной бизнес-фичи по коду → технический слой +
   спека OpenSpec + дерево документации.
   📖 [modules/analytics/README.md](modules/analytics/README.md).
 
-Позже рядом можно добавить другие модули (например `modules/development`, `modules/nt`).
+Каждый модуль открывается как корень проекта для `gigacode`. Позже рядом можно
+добавить другие модули (например `modules/nt`).
 
 ## Требования
 
