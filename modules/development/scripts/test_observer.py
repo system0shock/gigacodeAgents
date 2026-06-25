@@ -57,12 +57,23 @@ def _write(tmp, rel, obj):
         h.write(obj if isinstance(obj, str) else json.dumps(obj))
 
 
-def make_root(intake=None, verdict=None):
+def make_root(intake=None, verdict=None, contract=None, openspec=None,
+              approvals=None, tasks_md=None):
+    """Temp root. openspec: dict of relpath-under-openspec/changes/<slug> -> text.
+    approvals: list of stage names (writes .gigacode/approvals/<slug>/<stage>.ok)."""
     tmp = tempfile.mkdtemp(prefix="observer-test-")
     if intake is not None:
         _write(tmp, "docs/development/card/intake.json", intake)
     if verdict is not None:
         _write(tmp, "docs/development/card/verdict.json", verdict)
+    if contract is not None:
+        _write(tmp, "docs/development/card/contract.json", contract)
+    for rel, text in (openspec or {}).items():
+        _write(tmp, "openspec/changes/card/" + rel, text)
+    if tasks_md is not None:
+        _write(tmp, "openspec/changes/card/tasks.md", tasks_md)
+    for stage in (approvals or []):
+        _write(tmp, ".gigacode/approvals/card/" + stage + ".ok", "{}")
     return tmp
 
 
@@ -303,6 +314,40 @@ def test_read_only_and_loopback():
         else: os.environ["GIGACODE_ROOT"] = orig
 
 
+def test_tasks_progress():
+    obs = load_mod("observer")
+    md = "- [x] a\n- [x] b\n- [ ] c\n- [ ] d\n- [ ] e\n"
+    with root_at(make_root(tasks_md=md)):
+        check("tasks_progress", obs.tasks_progress("card") == "2/5", obs.tasks_progress("card"))
+    with root_at(make_root()):
+        check("tasks_progress_none", obs.tasks_progress("card") is None)
+
+
+def _docmap(docs):
+    return {d["path"].rsplit("/", 1)[-1]: d for d in docs}
+
+
+def test_documents():
+    obs = load_mod("observer")
+    with root_at(make_root(intake={"x": 1}, contract={"y": 1},
+                           approvals=["intake", "contract"],
+                           openspec={"proposal.md": "p", "specs/cards/spec.md": "s"},
+                           tasks_md="- [x] a\n- [ ] b\n")):
+        docs = obs.documents("card")
+        m = _docmap(docs)
+        check("doc_intake_approved", m["intake.json"]["state"] == "approved", m.get("intake.json"))
+        check("doc_contract_frozen", m["contract.json"]["state"] == "frozen", m.get("contract.json"))
+        check("doc_proposal_present", m["proposal.md"]["state"] == "present", m.get("proposal.md"))
+        check("doc_spec_present", any(d["label"] == "spec.md" and d["family"] == "openspec" for d in docs), docs)
+        check("doc_tasks_progress", m["tasks.md"]["progress"] == "1/2", m.get("tasks.md"))
+        check("doc_design_optional", m["design.md"]["state"] == "optional", m.get("design.md"))
+        check("doc_verdict_pending", m["verdict.json"]["state"] == "pending", m.get("verdict.json"))
+        check("doc_pr_pending", m["pr-summary.md"]["state"] == "pending", m.get("pr-summary.md"))
+        check("doc_family_split",
+              m["proposal.md"]["family"] == "openspec" and m["intake.json"]["family"] == "flow", m)
+    check("documents_no_slug", obs.documents(None) == [])
+
+
 if __name__ == "__main__":
     test_readers()
     test_vitals()
@@ -315,4 +360,6 @@ if __name__ == "__main__":
     test_server_routes()
     test_html_zero_external_assets()
     test_read_only_and_loopback()
+    test_tasks_progress()
+    test_documents()
     print(f"\n{PASSED} checks passed")

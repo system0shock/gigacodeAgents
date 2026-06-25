@@ -12,9 +12,11 @@ Usage:
     python .gigacode/hooks/observer.py [--port 8787] [--slug card]
 """
 import argparse
+import glob
 import json
 import os
 import queue
+import re
 import sys
 import threading
 from datetime import datetime
@@ -23,6 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "gates"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import projection  # WI-13: collect / read_decisions / read_from_offset / _read_json
+import _lib
 
 CONTRACT = "wi15/1"
 
@@ -133,6 +136,68 @@ def implement_status(snapshot, decisions, now):
     return {"active": True, "edits": len(edits), "last_sec": last_sec}
 
 
+ALLOWED_DOC_PREFIXES = ("docs/development/", "openspec/changes/")
+
+
+def _root():
+    return _lib.root()
+
+
+def _isfile(rel):
+    return os.path.isfile(os.path.join(_root(), *rel.split("/")))
+
+
+def _approved(slug, stage):
+    return os.path.isfile(os.path.join(_root(), ".gigacode", "approvals", slug, stage + ".ok"))
+
+
+def tasks_progress(slug):
+    target = os.path.join(_root(), "openspec", "changes", slug, "tasks.md")
+    try:
+        with open(target, "r", encoding="utf-8") as handle:
+            text = handle.read()
+    except OSError:
+        return None
+    done = len(re.findall(r"(?m)^\s*[-*]\s*\[[xX]\]", text))
+    total = len(re.findall(r"(?m)^\s*[-*]\s*\[[ xX]\]", text))
+    return "%d/%d" % (done, total) if total else None
+
+
+def documents(slug):
+    """Both doc families with computed state. Always lists the core expected
+    docs (pending/optional when absent) so the index shows what is yet to come."""
+    if not slug:
+        return []
+    docs = []
+
+    def add(family, phase, rel, state, progress=None):
+        docs.append({"family": family, "phase": phase, "path": rel,
+                     "label": rel.rsplit("/", 1)[-1], "state": state, "progress": progress})
+
+    # flow artifacts
+    intake_rel = "docs/development/%s/intake.json" % slug
+    add("flow", "intake", intake_rel,
+        "approved" if _approved(slug, "intake") else ("present" if _isfile(intake_rel) else "pending"))
+    contract_rel = "docs/development/%s/contract.json" % slug
+    add("flow", "contract", contract_rel,
+        "frozen" if _approved(slug, "contract") else ("present" if _isfile(contract_rel) else "pending"))
+    # openspec
+    base = "openspec/changes/%s" % slug
+    add("openspec", "plan", base + "/proposal.md", "present" if _isfile(base + "/proposal.md") else "pending")
+    for spec in sorted(glob.glob(os.path.join(_root(), "openspec", "changes", slug, "specs", "*", "spec.md"))):
+        rel = os.path.relpath(spec, _root()).replace("\\", "/")
+        add("openspec", "plan", rel, "present")
+    add("openspec", "plan", base + "/tasks.md",
+        "present" if _isfile(base + "/tasks.md") else "pending", tasks_progress(slug))
+    add("openspec", "plan", base + "/design.md", "present" if _isfile(base + "/design.md") else "optional")
+    # delivery flow artifacts
+    verdict_rel = "docs/development/%s/verdict.json" % slug
+    add("flow", "delivery", verdict_rel, "present" if _isfile(verdict_rel) else "pending")
+    pr_rel = "docs/development/%s/pr-summary.md" % slug
+    add("flow", "delivery", pr_rel, "present" if _isfile(pr_rel) else "pending")
+    return docs
+
+
 def enrich(snapshot, decisions, now):
     slug = snapshot.get("slug")
     out = dict(snapshot)
@@ -142,6 +207,7 @@ def enrich(snapshot, decisions, now):
     out["blocker"] = blocker(snapshot, decisions)
     out["vitals"] = vitals(decisions, now)
     out["implement"] = implement_status(out, decisions, now)
+    out["documents"] = documents(slug)
     return out
 
 
@@ -150,6 +216,7 @@ def _empty_snapshot(slug):
             "stage": {"current": None, "stages": []},
             "budget": {"used": None, "limit": None}, "scope": None, "decisions": [],
             "intake": None, "verdict": None, "blocker": None, "implement": None,
+            "documents": [],
             "vitals": {"total": 0, "block": 0, "ask": 0, "allow": 0, "per_min": 0,
                        "idle_sec": None, "session_sec": 0, "tools": {}}}
 
