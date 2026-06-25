@@ -136,3 +136,71 @@ def collect(slug=None, tail_n=8):
         "decisions": decisions,
         "scope": read_scope(resolved),
     }
+
+
+_ANSI = {"block": "\x1b[31m", "ask": "\x1b[33m", "allow": "\x1b[32m"}
+_RESET = "\x1b[0m"
+
+
+def _color(text, decision, enable):
+    code = _ANSI.get(decision)
+    return (code + text + _RESET) if (enable and code) else text
+
+
+def _short_ts(ts):
+    # "2026-06-25T14:03:01+0300" -> "14:03:01"; fall back to the raw value.
+    if isinstance(ts, str) and "T" in ts:
+        tail = ts.split("T", 1)[1]
+        return tail[:8]
+    return ts or "--:--:--"
+
+
+def render_snapshot(snap, color=False):
+    lines = []
+    lines.append("GigaCode flow · session %s" % (snap.get("session") or "—"))
+    lines.append("")
+
+    stage = snap.get("stage") or {}
+    current = stage.get("current") or "—"
+    marks = []
+    for st in stage.get("stages", []):
+        for label in st.get("met", []):
+            marks.append("✓ " + label)
+        for label in st.get("unmet", []):
+            marks.append("☐ " + label)
+    lines.append("stage    : %s   %s" % (current, "  ".join(marks)))
+
+    budget = snap.get("budget") or {}
+    used, limit = budget.get("used"), budget.get("limit")
+    if used is None and limit is None:
+        lines.append("budget   : нет данных")
+    else:
+        lines.append("budget   : stop %s/%s used" % (
+            used if used is not None else "?", limit if limit is not None else "?"))
+
+    scope = snap.get("scope")
+    if scope:
+        globs = ", ".join(scope.get("scope_globs", [])) or "—"
+        lines.append("scope    : %s  (%s)" % (
+            ", ".join(scope.get("modules", [])) or "—", globs))
+    else:
+        lines.append("scope    : нет contract.json")
+
+    candidates = snap.get("slug_candidates") or []
+    if len(candidates) > 1:
+        lines.append("note     : несколько активных задач (%s) — сузь через --slug"
+                     % ", ".join(candidates))
+
+    decisions = snap.get("decisions") or []
+    lines.append("")
+    lines.append("recent decisions (last %d)" % len(decisions))
+    for obj in decisions:
+        decision = obj.get("decision", "?")
+        head = "  %s  %-5s  %-18s %s" % (
+            _short_ts(obj.get("ts")), decision,
+            obj.get("gate") or obj.get("kind") or "-", obj.get("tool") or "")
+        lines.append(_color(head, decision, color))
+        reason = obj.get("reason")
+        if reason:
+            lines.append("            → %s" % reason)
+    return "\n".join(lines)

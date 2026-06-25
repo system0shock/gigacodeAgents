@@ -197,6 +197,46 @@ def test_collect():
               snap["stage"])
 
 
+def test_render():
+    proj = load_projection()
+    snap = {
+        "session": "s-7", "slug": "card", "slug_candidates": ["card", "other"],
+        "stage": {"current": "contract",
+                  "stages": [
+                      {"id": "intake", "order": 0, "enterable": True,
+                       "met": [], "unmet": []},
+                      {"id": "contract", "order": 1, "enterable": True,
+                       "met": ["approval:intake"], "unmet": []},
+                      {"id": "plan", "order": 2, "enterable": False,
+                       "met": [], "unmet": ["approval:contract"]}]},
+        "budget": {"used": 1, "limit": 2},
+        "decisions": [
+            {"ts": "2026-06-25T14:02:30+0300", "kind": "gate", "decision": "ask",
+             "gate": "git_guard", "tool": "Bash", "reason": "writes .github/"},
+            {"ts": "2026-06-25T14:03:01+0300", "kind": "gate", "decision": "block",
+             "gate": "gate_stage_order", "tool": "Edit",
+             "reason": "стадия 'plan' не разблокирована"}],
+        "scope": {"scope_globs": ["src/cards/**"], "modules": ["cards"]},
+    }
+    out = proj.render_snapshot(snap, color=False)
+    check("render_has_session", "s-7" in out, out)
+    check("render_current_stage", "contract" in out, out)
+    check("render_budget", "1/2" in out, out)
+    check("render_scope_glob", "src/cards/**" in out, out)
+    check("render_decision_reason", "git_guard" in out and "block" in out, out)
+    check("render_multi_hint", "other" in out, out)  # >1 candidate -> hint lists them
+    check("render_no_ansi_when_off", "\x1b[" not in out, repr(out))
+    # empty/None snapshot must not crash
+    blank = {"session": None, "slug": None, "slug_candidates": [],
+             "stage": {"current": None, "stages": []},
+             "budget": {"used": None, "limit": None}, "decisions": [], "scope": None}
+    blank_out = proj.render_snapshot(blank, color=False)
+    check("render_blank_ok", isinstance(blank_out, str) and blank_out, repr(blank_out))
+    # color=True emits ANSI for a block/ask decision
+    colored = proj.render_snapshot(snap, color=True)
+    check("render_ansi_when_on", "\x1b[" in colored)
+
+
 if __name__ == "__main__":
     test_journal_reader()
     test_budget()
@@ -204,4 +244,5 @@ if __name__ == "__main__":
     test_resolve_slug()
     test_read_stage()
     test_collect()
+    test_render()
     print(f"\n{PASSED} checks passed")
