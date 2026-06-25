@@ -34,12 +34,15 @@ def check(name, condition, detail=""):
 
 
 def make_repo(test_exit=0, with_tasks=True, with_code=True, test_command=None,
-              slug="card", state=None, missing_inputs=None):
+              slug="card", state=None, missing_inputs=None, contract=None):
     tmp = tempfile.mkdtemp(prefix="verdict-test-")
     os.makedirs(os.path.join(tmp, ".gigacode", "logs"))
-    with open(os.path.join(tmp, "fake_test.py"), "w", encoding="utf-8") as h:
+    # the fake test script lives under .gigacode/ so it is NOT counted as changed
+    # product code (changed_code_files excludes .gigacode/) — matching reality
+    # where the test command (./gradlew test) is not product source.
+    with open(os.path.join(tmp, ".gigacode", "fake_test.py"), "w", encoding="utf-8") as h:
         h.write("import sys\nsys.exit(%d)\n" % test_exit)
-    cmd = "python fake_test.py" if test_command is None else test_command
+    cmd = "python .gigacode/fake_test.py" if test_command is None else test_command
     with open(os.path.join(tmp, ".gigacode", "quality-gates.json"), "w", encoding="utf-8") as h:
         json.dump({"test": {"command": cmd, "timeout_seconds": 30}}, h)
     devdir = os.path.join(tmp, "docs", "development", slug)
@@ -48,6 +51,9 @@ def make_repo(test_exit=0, with_tasks=True, with_code=True, test_command=None,
         h.write("notes\n")
     with open(os.path.join(devdir, "intake.json"), "w", encoding="utf-8") as h:
         json.dump({"task_type": "feature", "missing_inputs": missing_inputs or []}, h)
+    if contract is not None:
+        with open(os.path.join(devdir, "contract.json"), "w", encoding="utf-8") as h:
+            json.dump(contract, h)
     if with_tasks:
         td = os.path.join(tmp, "openspec", "changes", slug)
         os.makedirs(td)
@@ -181,11 +187,37 @@ def test_mechanical_risk_fields():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_out_of_contract():
+    # WI-8: out_of_contract_files is now computed from contract.scope_globs.
+    g = load_gate("gate_verdict")
+    # the changed file src/cards/CardService.kt is inside the contract scope -> 0
+    root = make_repo(test_exit=0,
+                     contract={"scope_globs": ["src/cards/**"], "modules": ["cards"]})
+    try:
+        with root_at(root):
+            g.run(stop_event())
+        v = read_verdict(root)
+        check("out_of_contract_zero_in_scope", v["risk"]["out_of_contract_files"] == 0, v["risk"])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+    # the changed file is OUTSIDE the contract scope -> counted
+    root = make_repo(test_exit=0,
+                     contract={"scope_globs": ["src/other/**"], "modules": ["other"]})
+    try:
+        with root_at(root):
+            g.run(stop_event())
+        v = read_verdict(root)
+        check("out_of_contract_counted", v["risk"]["out_of_contract_files"] >= 1, v["risk"])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def main():
     test_pass()
     test_fail()
     test_no_production()
     test_mechanical_risk_fields()
+    test_out_of_contract()
     print(f"\nAll {PASSED} verdict checks passed")
 
 

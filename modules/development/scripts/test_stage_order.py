@@ -274,6 +274,29 @@ def test_intake_complete():
                  files=_intake_file("card", FULL_FEATURE)) == "block")
 
 
+def test_frozen_after():
+    """WI-8/P6: once a contract is approved its artifact is frozen — the agent
+    cannot edit it (amend goes through a fresh re-approval), so it cannot widen
+    scope past gate_scope_guard after the human froze it."""
+    g = load_gate("gate_stage_order")
+    frozen = {"version": 1,
+              "frozen_after": [{"glob": "docs/development/*/contract.json",
+                                "approval": "contract"}],
+              "stages": [{"id": "contract", "order": 0,
+                          "writes": ["docs/development/*/contract.json"],
+                          "entry_requires": []}]}
+    contract = "docs/development/card/contract.json"
+    check("contract_writable_before_approval",
+          decide(g, contract, stages_obj=frozen) == "allow")
+    check("contract_frozen_after_approval",
+          decide(g, contract, stages_obj=frozen,
+                 approvals=[("contract", "card")]) == "block")
+    # freeze is per-slug: another task's contract approval does not freeze this one
+    check("contract_freeze_per_slug",
+          decide(g, contract, stages_obj=frozen,
+                 approvals=[("contract", "other")]) == "allow")
+
+
 def test_machine_owned():
     """WI-11/P6: an agent file-tool write to a machine-owned artifact (verdict.json)
     is blocked — it is produced by gate_verdict in the router process, so the agent
@@ -409,6 +432,11 @@ def test_live_stages_deferral():
     check("live_contract_required_fields",
           isinstance(data.get("contract_required"), list) and data["contract_required"],
           data.get("contract_required"))
+    # WI-8: the live contract artifact is frozen after approval:contract.
+    check("live_contract_frozen_after_approval",
+          any("contract.json" in r.get("glob", "") and r.get("approval") == "contract"
+              for r in data.get("frozen_after", [])),
+          data.get("frozen_after"))
     check("live_contract_requires_intake_approval",
           {"type": "approval", "stage": "intake"} in by_id["contract"]["entry_requires"])
     check("live_delivery_requires_verdict_pass",
@@ -487,6 +515,7 @@ def main():
     test_matrix()
     test_intake_complete()
     test_contract_complete()
+    test_frozen_after()
     test_machine_owned()
     test_live_stages_deferral()
     test_confirm_is_agent_blocked()
