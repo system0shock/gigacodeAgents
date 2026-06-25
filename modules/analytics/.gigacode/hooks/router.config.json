@@ -44,7 +44,7 @@
     },
     {
       "event": "Stop",
-      "gates": ["validate_run_output"]
+      "gates": ["validate_run_output", "gate_integrity"]
     }
   ]
 }
