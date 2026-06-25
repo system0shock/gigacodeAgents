@@ -237,6 +237,67 @@ def test_render():
     check("render_ansi_when_on", "\x1b[" in colored)
 
 
+def test_render_decision():
+    proj = load_projection()
+    # block with reason -> two lines joined by newline: head + indent-arrow
+    obj_block = {"ts": "2026-06-25T14:03:01+0300", "kind": "gate",
+                 "decision": "block", "gate": "gate_stage_order",
+                 "tool": "Edit", "reason": "стадия 'plan' не разблокирована"}
+    out = proj.render_decision(obj_block, color=False)
+    check("render_decision_gate", "gate_stage_order" in out, out)
+    check("render_decision_block", "block" in out, out)
+    check("render_decision_reason_present", "стадия" in out, out)
+    # allow with no reason -> single line, no arrow, no newline
+    obj_allow = {"ts": "2026-06-25T14:02:30+0300", "kind": "gate",
+                 "decision": "allow", "gate": "git_guard",
+                 "tool": "Bash"}
+    out2 = proj.render_decision(obj_allow, color=False)
+    check("render_decision_no_arrow", "→" not in out2, out2)
+    check("render_decision_single_line", "\n" not in out2, repr(out2))
+
+
+def test_tail_reader():
+    proj = load_projection()
+    tmp = make_root(journal_lines=[rec(tool="A"), rec(tool="B")])
+    try:
+        with root_at(tmp):
+            path = proj.log_path()
+            recs, off = proj.read_from_offset(path, 0)
+            check("tail_reads_all", [r["tool"] for r in recs] == ["A", "B"], recs)
+            # append a line; only the new one comes back
+            with open(path, "a", encoding="utf-8") as h:
+                h.write(rec(tool="C") + "\n")
+            recs2, off2 = proj.read_from_offset(path, off)
+            check("tail_incremental", [r["tool"] for r in recs2] == ["C"], recs2)
+            check("tail_offset_advances", off2 > off)
+            # truncate below the old offset -> re-read from start
+            with open(path, "w", encoding="utf-8") as h:
+                h.write(rec(tool="Z") + "\n")
+            recs3, _ = proj.read_from_offset(path, off2)
+            check("tail_truncation_reread", [r["tool"] for r in recs3] == ["Z"], recs3)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    # missing file -> ([], offset)
+    with root_at(make_root()):
+        check("tail_missing_file", proj.read_from_offset(proj.log_path(), 0) == ([], 0))
+
+
+def test_main_oneshot(capsys=None):
+    proj = load_projection()
+    import io
+    import contextlib
+    with root_at(make_root(journal_lines=[rec(session_id="s-1", tool="A")],
+                           stages=STAGES_FIXTURE, config={"stop_block_budget": 2},
+                           dev_dirs=["card"])):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = proj.main(["--slug", "card", "--tail", "3"])
+        out = buf.getvalue()
+    check("main_returns_zero", code == 0, code)
+    check("main_prints_session", "s-1" in out, out)
+    check("main_prints_stage", "stage" in out, out)
+
+
 if __name__ == "__main__":
     test_journal_reader()
     test_budget()
@@ -245,4 +306,7 @@ if __name__ == "__main__":
     test_read_stage()
     test_collect()
     test_render()
+    test_render_decision()
+    test_tail_reader()
+    test_main_oneshot()
     print(f"\n{PASSED} checks passed")

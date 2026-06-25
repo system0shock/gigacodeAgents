@@ -15,9 +15,11 @@ Usage:
     python .gigacode/hooks/projection.py --tail 20    # last N decisions
     python .gigacode/hooks/projection.py --slug card  # narrow to one task
 """
+import argparse
 import json
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "gates"))
 import _lib  # pure reads only (root, matches_globs) — see READ-ONLY CONTRACT
@@ -155,6 +157,24 @@ def _short_ts(ts):
     return ts or "--:--:--"
 
 
+def render_decision(obj, color=False):
+    """Format a single journal record as a one- or two-line string.
+
+    First line: timestamp, decision, gate/kind, tool (colour-coded).
+    Second line (only if obj has a 'reason'): indented arrow + reason text.
+    Lines are joined with a newline so callers can append to a list directly.
+    """
+    decision = obj.get("decision", "?")
+    head = "  %s  %-5s  %-18s %s" % (
+        _short_ts(obj.get("ts")), decision,
+        obj.get("gate") or obj.get("kind") or "-", obj.get("tool") or "")
+    line = _color(head, decision, color)
+    reason = obj.get("reason")
+    if reason:
+        line = line + "\n" + "            → %s" % reason
+    return line
+
+
 def render_snapshot(snap, color=False):
     lines = []
     lines.append("GigaCode flow · session %s" % (snap.get("session") or "—"))
@@ -195,12 +215,90 @@ def render_snapshot(snap, color=False):
     lines.append("")
     lines.append("recent decisions (last %d)" % len(decisions))
     for obj in decisions:
-        decision = obj.get("decision", "?")
-        head = "  %s  %-5s  %-18s %s" % (
-            _short_ts(obj.get("ts")), decision,
-            obj.get("gate") or obj.get("kind") or "-", obj.get("tool") or "")
-        lines.append(_color(head, decision, color))
-        reason = obj.get("reason")
-        if reason:
-            lines.append("            → %s" % reason)
+        lines.append(render_decision(obj, color))
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Incremental tail reader
+# ---------------------------------------------------------------------------
+
+def read_from_offset(path, offset):
+    """Return (new_records, new_offset) reading from byte *offset*.
+
+    Truncation/rotation: if the file is now smaller than offset, re-read from 0.
+    Missing file: return ([], offset).  Never writes.
+    """
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        return [], offset
+    if size < offset:
+        offset = 0  # truncation/rotation detected
+    records = []
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            handle.seek(offset)
+            for line in handle:
+                obj = parse_line(line)
+                if obj is not None:
+                    records.append(obj)
+            new_offset = handle.tell()
+    except OSError:
+        return [], offset
+    return records, new_offset
+
+
+# ---------------------------------------------------------------------------
+# Follow / tail loop
+# ---------------------------------------------------------------------------
+
+def follow(slug=None, tail_n=8, interval=1.0, _max_polls=None):
+    """Print a full snapshot, then stream new decision lines as they arrive.
+
+    _max_polls=None runs forever (interactive); pass a small int for tests.
+    """
+    print(render_snapshot(collect(slug, tail_n), color=sys.stdout.isatty()))
+    print("\n— follow (Ctrl-C to stop) —")
+    path = log_path()
+    try:
+        offset = os.path.getsize(path)
+    except OSError:
+        offset = 0
+    polls = 0
+    while _max_polls is None or polls < _max_polls:
+        records, offset = read_from_offset(path, offset)
+        for obj in records:
+            print(render_decision(obj, color=sys.stdout.isatty()))
+        time.sleep(interval)
+        polls += 1
+
+
+# ---------------------------------------------------------------------------
+# CLI entry-point
+# ---------------------------------------------------------------------------
+
+def main(argv=None):
+    """Parse CLI args and run one-shot snapshot or follow mode."""
+    parser = argparse.ArgumentParser(description="Read-only GigaCode flow digest.")
+    parser.add_argument("--follow", action="store_true", help="tail the journal")
+    parser.add_argument("--tail", type=int, default=8,
+                        help="number of recent decisions to show (default 8)")
+    parser.add_argument("--slug", default=None,
+                        help="narrow output to one task slug")
+    args = parser.parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if args.follow:
+        try:
+            follow(args.slug, args.tail)
+        except KeyboardInterrupt:
+            pass
+        return 0
+    print(render_snapshot(collect(args.slug, args.tail),
+                          color=sys.stdout.isatty()))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
