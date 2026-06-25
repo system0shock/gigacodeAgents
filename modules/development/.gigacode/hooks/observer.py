@@ -120,8 +120,10 @@ def implement_status(snapshot, decisions, now):
         return None  # past implement — verdict already green
     stages = (snapshot.get("stage") or {}).get("stages", [])
     plan = next((s for s in stages if s.get("id") == "plan"), None)
-    if plan is not None and not plan.get("enterable", False):
-        return None  # plan not even reached yet
+    # require the plan stage to exist AND be reached; if there is no plan stage we
+    # cannot confirm "implement", so stay conservative and report nothing.
+    if plan is None or not plan.get("enterable", False):
+        return None
     last_ts = None
     for d in edits:
         ts = parse_ts(d.get("ts"))

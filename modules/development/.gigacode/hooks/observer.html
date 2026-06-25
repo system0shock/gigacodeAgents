@@ -112,7 +112,6 @@
     intake:   "Сбор задачи. Агент заполняет intake.json (тип, цель, критерии приёмки, understanding — пересказ задачи своими словами). Человек подтверждает понимание: confirm.py intake.",
     contract: "Заморозка scope. Агент драфтит contract.json (scope_globs, modules) — границы изменений. Человек подтверждает (confirm.py contract); после этого контракт заморожен.",
     plan:     "План (OpenSpec). Агент пишет proposal / design / tasks.md. Вход — только при заполненном и подтверждённом контракте.",
-    verify:   "Прогон тестов. gate_verdict пишет verdict.json из реальных тестов.",
     delivery: "Финал и сдача. Вход требует verdict.json result=pass — его пишет gate_verdict из РЕАЛЬНЫХ тестов на Stop (это верификация). Там же на Stop результат валидируется: diff ⊆ scope, тесты прогнаны, manifest ⇿ диск (validate_development_output). Стадия пишет pr-summary.md."
   };
   var SUB = { current:"текущая", done:"пройдена", ready:"готова", locked:"заблокирована" };
@@ -171,7 +170,7 @@
     var p = byId("blockPanel");
     if(!b || !b.active){ p.classList.add("hidden"); return; }
     p.classList.remove("hidden");
-    byId("blockMsg").innerHTML = "Заблокировано: стадия <b>"+esc(b.stage)+"</b> ждёт: "+esc(humanize(b.unmet));
+    byId("blockMsg").innerHTML = "Заблокировано: стадия <b>"+esc(b.stage)+"</b> ждёт: <b style=\"color:var(--warn)\">"+esc(humanize(b.unmet))+"</b>";
     var c = byId("blockCmd");
     if(b.command){ c.style.display=""; c.textContent = b.command; } else { c.style.display="none"; }
   }
@@ -207,9 +206,9 @@
       var subTxt = SUB[state] || state;
       var info = STAGE_INFO[st.id] || "";
       var unmetH = (st.unmet||[]).map(humanize), metH = (st.met||[]).map(humanize);
-      var status = unmetH.length ? "  ·  нужно: "+unmetH.join("; ")
-                 : (metH.length ? "  ·  выполнено: "+metH.join("; ") : "");
-      var tip = info + status;
+      var detail = unmetH.length ? "нужно: "+unmetH.join("; ")
+                 : (metH.length ? "выполнено: "+metH.join("; ") : "");
+      var tip = info + (info && detail ? "  ·  " : "") + detail;
       g.insertAdjacentHTML("beforeend",
         '<div class="nd" tabindex="0" data-tip="'+esc(tip)+'" style="background:'+bg+';border:'+br+';">'+
         '<div style="color:'+col+';font-weight:500;">'+mark+' '+esc(st.id)+'</div>'+
@@ -232,7 +231,7 @@
     var ago = im.last_sec==null ? "" : " · последняя правка "+im.last_sec+"с назад";
     el.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ok);background:var(--okbg);padding:3px 10px;border-radius:6px;">'+
       '<span style="width:7px;height:7px;border-radius:50%;background:var(--ok)"></span>'+
-      'implement: идёт · '+im.edits+' правок'+esc(ago)+'</span>';
+      'implement: идёт · '+esc(String(im.edits))+' правок'+esc(ago)+'</span>';
   }
 
   function renderBudget(b){
