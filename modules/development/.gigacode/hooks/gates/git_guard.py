@@ -199,7 +199,7 @@ def _norm(path):
     return p[2:] if p.startswith("./") else p
 
 
-_PATH_KEYS = ("path", "file_path", "filename", "notebook_path")
+_PATH_KEYS = ("path", "file_path", "filename", "notebook_path", "relative_path")
 
 
 def path_from_event(event):

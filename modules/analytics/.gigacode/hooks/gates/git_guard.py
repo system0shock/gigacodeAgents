@@ -198,13 +198,13 @@ def _norm(path):
 
 
 def path_from_event(event):
-    for key in ("path", "file_path", "filename", "notebook_path"):
+    for key in ("path", "file_path", "filename", "notebook_path", "relative_path"):
         v = event.get(key)
         if isinstance(v, str):
             return _norm(v)
     ti = event.get("tool_input")
     if isinstance(ti, dict):
-        for key in ("path", "file_path", "filename", "notebook_path"):
+        for key in ("path", "file_path", "filename", "notebook_path", "relative_path"):
             v = ti.get(key)
             if isinstance(v, str):
                 return _norm(v)

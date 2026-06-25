@@ -130,6 +130,20 @@ def test_routing():
         check("rt_notebookedit_routes",
               sb.run({"hook_event_name": "PreToolUse",
                       "tool_name": "NotebookEdit"})["decision"] == "block")
+        # Serena (symbol-level MCP) mutators normalize to write ids AND name the
+        # target in relative_path — a .gigacode edit / approval forge via Serena
+        # must still hit self-protect; read-only Serena tools must not over-block.
+        check("rt_serena_symbol_gigacode_block",
+              sb.run({"hook_event_name": "PreToolUse", "tool_name": "replace_symbol_body",
+                      "tool_input": {"relative_path": ".gigacode/hooks/gates/git_guard.py",
+                                     "body": "pass"}})["decision"] == "block")
+        check("rt_serena_mcp_prefixed_forge_block",
+              sb.run({"hook_event_name": "PreToolUse", "tool_name": "mcp__serena__create_text_file",
+                      "tool_input": {"relative_path": ".gigacode/approvals/x/intake.ok",
+                                     "content": "ok"}})["decision"] == "block")
+        check("rt_serena_readonly_allow",
+              sb.run({"hook_event_name": "PreToolUse", "tool_name": "mcp__serena__find_symbol",
+                      "tool_input": {"name_path": "Foo"}})["decision"] == "allow")
         check("rt_agent_match", sb.run({"hook_event_name": "SubagentStart",
                                         "agent_type": "documentation"})["decision"] == "block")
         check("rt_agent_missing_skips",
