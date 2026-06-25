@@ -209,6 +209,29 @@ def test_stop_budget_seedproof():
               sb.run({"hook_event_name": "Stop", "session_id": "s2"})["decision"] == "block")
 
 
+def test_journal_identity():
+    # WI-2: every journal record carries session_id / feature / agent. Feature is
+    # derived from the analytics path convention (docs/features/<slug>) via the
+    # config feature_patterns.
+    with Sandbox() as sb:
+        sb.config({"version": 1,
+                   "feature_patterns": ["(?:^|/)docs/features/([^/]+)/"],
+                   "routes": [{"event": "PreToolUse", "tool_pattern": "^Edit$",
+                               "gates": ["fixture_allow"]}]})
+        sb.gate("fixture_allow", ALLOW_GATE)
+        sb.run({"hook_event_name": "PreToolUse", "tool_name": "Edit",
+                "session_id": "a-7", "agent_type": "reviewer",
+                "tool_input": {"file_path": "docs/features/billing/analysis.md"}})
+        with open(os.path.join(sb.tmp, "logs", "decisions.jsonl"), encoding="utf-8") as handle:
+            recs = [json.loads(line) for line in handle if line.strip()]
+        check("a_ji_records", len(recs) >= 2, recs)
+        for rec in recs:
+            tag = rec.get("kind", "?")
+            check("a_ji_session::" + tag, rec.get("session_id") == "a-7", rec)
+            check("a_ji_feature::" + tag, rec.get("feature") == "billing", rec)
+            check("a_ji_agent::" + tag, rec.get("agent") == "reviewer", rec)
+
+
 def test_real_config():
     # No size checks: the 10k-character limit applies to agent .md files only,
     # not to Python scripts (user decision 2026-06-11).
@@ -239,6 +262,7 @@ def main():
     test_gate_failures()
     test_stop_budget()
     test_stop_budget_seedproof()
+    test_journal_identity()
     test_real_config()
     print(f"All {PASSED} router checks passed")
 
