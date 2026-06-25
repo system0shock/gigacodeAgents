@@ -100,7 +100,7 @@
     <div id="lanes"></div>
   </div>
 
-  <div id="docmodal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;">
+  <div id="docmodal" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center;padding:24px;">
     <div style="background:var(--panel);border:0.5px solid var(--info);border-radius:9px;max-width:860px;width:100%;max-height:82vh;display:flex;flex-direction:column;">
       <div class="row" style="justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--bd);">
         <span id="docmodaltitle" class="mono" style="color:var(--info);"></span>
@@ -248,7 +248,7 @@
     var prog = d.progress ? " "+esc(d.progress) : "";
     var clickable = (d.state==="present"||d.state==="approved"||d.state==="frozen");
     var name = clickable
-      ? '<a tabindex="0" onclick="openDoc(\''+esc(d.path)+'\')" style="cursor:pointer;font-family:var(--mono);font-size:10px;color:var(--info);border-bottom:1px dotted var(--info)">'+esc(d.label)+'</a>'
+      ? '<a tabindex="0" onclick="openDoc(\''+encodeURIComponent(d.path)+'\')" style="cursor:pointer;font-family:var(--mono);font-size:10px;color:var(--info);border-bottom:1px dotted var(--info)">'+esc(d.label)+'</a>'
       : '<span style="font-family:var(--mono);font-size:10px;color:var(--t3)">'+esc(d.label)+'</span>';
     return '<span style="background:var(--lock);border:0.5px solid var(--bd);border-radius:6px;padding:5px 8px;color:'+st[1]+'">'+name+' '+esc(st[0])+prog+'</span>';
   }
@@ -264,7 +264,7 @@
       '<div class="row" style="gap:5px;">'+plan.map(docChip).join("")+'</div></div>';
     // implement card
     if(im && im.steps && im.steps.length) html += '<div style="border:0.5px solid var(--bd);border-left:2px solid var(--info);border-radius:7px;padding:9px 11px;background:#13161f;margin-bottom:8px;">'+
-      '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t2);margin-bottom:7px;"><span><b style="color:var(--info)">implement</b> · код</span><span>'+im.edits+' правок · последняя '+(im.last_sec==null?"—":im.last_sec+"с")+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t2);margin-bottom:7px;"><span><b style="color:var(--info)">implement</b> · код</span><span>'+esc(String(im.edits))+' правок · последняя '+(im.last_sec==null?"—":esc(String(im.last_sec))+"с")+'</span></div>'+
       '<div class="row" style="gap:5px;">'+im.steps.map(function(s){
         var col = s.decision==="block"?"var(--bad)":(s.decision==="ask"?"var(--warn)":"var(--ok)");
         return '<span style="background:var(--lock);border:0.5px solid var(--bd);border-radius:6px;padding:5px 8px;color:'+col+'">'+esc(s.decision)+' <span class="mono" style="font-size:10px;color:var(--t2)">'+esc(s.file||s.gate)+'</span></span>';
@@ -289,7 +289,7 @@
     function line(d){
       var st = DOC_STATE[d.state] || ["?","var(--t3)"]; var prog = d.progress?" "+esc(d.progress):"";
       var clickable = (d.state==="present"||d.state==="approved"||d.state==="frozen");
-      var nm = clickable ? '<a tabindex="0" onclick="openDoc(\''+esc(d.path)+'\')" style="cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--info);border-bottom:1px dotted var(--info)">'+esc(d.label)+'</a>'
+      var nm = clickable ? '<a tabindex="0" onclick="openDoc(\''+encodeURIComponent(d.path)+'\')" style="cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--info);border-bottom:1px dotted var(--info)">'+esc(d.label)+'</a>'
                          : '<span style="font-family:var(--mono);font-size:11px;color:var(--t3)">'+esc(d.label)+'</span>';
       return '<div>'+nm+' <span style="color:'+st[1]+'">'+esc(st[0])+prog+'</span></div>';
     }
@@ -308,20 +308,21 @@
     byId("nowstrip").innerHTML = '<div style="display:flex;align-items:center;gap:10px;background:var(--infobg);border:0.5px solid var(--info);border-radius:8px;padding:9px 12px;">'+
       '<span style="width:8px;height:8px;border-radius:50%;background:var(--info)"></span>'+
       '<div style="flex:1;min-width:0;"><div style="color:var(--info);font-weight:500;">Сейчас: '+act+'</div>'+
-      '<div style="font-size:11px;color:var(--t2);margin-top:2px;">последнее: '+last+' · бюджет '+(b.used==null?"?":b.used)+'/'+(b.limit==null?"?":b.limit)+'</div></div></div>';
+      '<div style="font-size:11px;color:var(--t2);margin-top:2px;">последнее: '+last+' · бюджет '+(b.used==null?"?":esc(String(b.used)))+'/'+(b.limit==null?"?":esc(String(b.limit)))+'</div></div></div>';
   }
 
-  function openDoc(path){
+  function openDoc(enc){
+    var path = decodeURIComponent(enc);
     byId("docmodaltitle").textContent = path;
     byId("docmodalbody").textContent = "загрузка…";
-    byId("docmodal").classList.remove("hidden");
+    byId("docmodal").style.display = "flex";
     fetch("/doc?path="+encodeURIComponent(path)).then(function(r){
       if(!r.ok) throw new Error(r.status); return r.text();
     }).then(function(t){ byId("docmodalbody").textContent = t; })
       .catch(function(){ byId("docmodalbody").textContent = "не удалось открыть документ."; });
   }
   window.openDoc = openDoc;
-  function closeDoc(){ byId("docmodal").classList.add("hidden"); }
+  function closeDoc(){ byId("docmodal").style.display = "none"; }
 
   function renderBudget(b){
     if(!b){ byId("budget").innerHTML="нет данных"; return; }
