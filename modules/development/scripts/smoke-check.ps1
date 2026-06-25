@@ -40,7 +40,12 @@ $required = @(
   "scripts/test_stage_order.py",
   "scripts/test_quality_gates.py",
   "scripts/test_verdict.py",
-  "scripts/test_scope_guard.py"
+  "scripts/test_scope_guard.py",
+  "scripts/test_projection.py",
+  ".gigacode/hooks/projection.py",
+  "scripts/test_observer.py",
+  ".gigacode/hooks/observer.py",
+  ".gigacode/hooks/observer.html"
 )
 
 foreach ($path in $required) {
@@ -169,6 +174,16 @@ if ($LASTEXITCODE -ne 0) {
 python scripts/test_scope_guard.py
 if ($LASTEXITCODE -ne 0) {
   throw "scope-guard tests failed"
+}
+
+python scripts/test_projection.py
+if ($LASTEXITCODE -ne 0) {
+  throw "projection tests failed"
+}
+
+python scripts/test_observer.py
+if ($LASTEXITCODE -ne 0) {
+  throw "observer tests failed"
 }
 
 python scripts/test_module_map.py
