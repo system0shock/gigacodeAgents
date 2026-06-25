@@ -223,6 +223,17 @@ def test_server_routes():
             os.environ["GIGACODE_ROOT"] = orig
 
 
+def test_html_zero_external_assets():
+    obs_dir = HOOKS_DIR
+    with open(os.path.join(obs_dir, "observer.html"), "r", encoding="utf-8") as h:
+        html = h.read()
+    for needle in ("http://", "https://", "//cdn", "src=\"//", "href=\"//"):
+        check("html_no_external_" + needle.strip(":/\"="),
+              needle not in html, "external asset reference found: " + needle)
+    check("html_has_eventsource", "EventSource" in html, "EventSource wiring missing")
+    check("html_has_themes", "ultra-pink" in html and "localStorage" in html, "theme toggle missing")
+
+
 if __name__ == "__main__":
     test_readers()
     test_vitals()
@@ -232,4 +243,5 @@ if __name__ == "__main__":
     test_format_sse()
     test_build_snapshot()
     test_server_routes()
+    test_html_zero_external_assets()
     print(f"\n{PASSED} checks passed")
