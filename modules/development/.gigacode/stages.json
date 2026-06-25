@@ -6,6 +6,9 @@
   },
   "contract_required": ["scope_globs", "modules"],
   "machine_owned": ["docs/development/*/verdict.json"],
+  "frozen_after": [
+    {"glob": "docs/development/*/contract.json", "approval": "contract"}
+  ],
   "stages": [
     {
       "id": "intake",

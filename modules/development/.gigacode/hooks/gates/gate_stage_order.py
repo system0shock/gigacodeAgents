@@ -170,6 +170,21 @@ def run(event):
             "'%s' — машинно-производимый артефакт (его пишет gate_verdict в "
             "процессе роутера из реальных тестов). Агент его не пишет: result "
             "нельзя проставить вручную. %s" % (path, ESCAPE))}
+    # Frozen-after-approval (WI-8/P6): once a stage artifact has been approved
+    # (its scope confirmed), the agent cannot edit it — an amend must go through
+    # a fresh human re-approval. Otherwise the agent could widen contract.scope
+    # after approval and walk gate_scope_guard's frozen scope right open.
+    for rule in doc.get("frozen_after", []):
+        glob = rule.get("glob", "")
+        if glob and _lib.matches_globs(path, [glob]):
+            fslug = slug_from_path(path)
+            marker = os.path.join(_approvals_dir(), fslug, rule.get("approval", "") + ".ok")
+            if fslug and os.path.isfile(marker):
+                return {"decision": "block", "reason": (
+                    "'%s' заморожен после подтверждения (approval:%s). Правка = "
+                    "amend: нужно повторное подтверждение человеком (удалить "
+                    "approvals/%s/%s.ok и пере-подтвердить). %s"
+                    % (path, rule.get("approval"), fslug, rule.get("approval"), ESCAPE))}
     stages = doc["stages"]
     cfg = {"intake_required": doc.get("intake_required", {}),
            "contract_required": doc.get("contract_required", [])}

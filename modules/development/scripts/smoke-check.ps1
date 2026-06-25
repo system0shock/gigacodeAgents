@@ -31,6 +31,7 @@ $required = @(
   ".gigacode/hooks/gates/gate_existing_code.py",
   ".gigacode/hooks/gates/gate_stage_order.py",
   ".gigacode/hooks/gates/gate_verdict.py",
+  ".gigacode/hooks/gates/gate_scope_guard.py",
   ".gigacode/hooks/confirm.py",
   ".gigacode/stages.json",
   ".gigacode/quality-gates.json",
@@ -38,7 +39,8 @@ $required = @(
   "scripts/test_module_map.py",
   "scripts/test_stage_order.py",
   "scripts/test_quality_gates.py",
-  "scripts/test_verdict.py"
+  "scripts/test_verdict.py",
+  "scripts/test_scope_guard.py"
 )
 
 foreach ($path in $required) {
@@ -162,6 +164,11 @@ if ($LASTEXITCODE -ne 0) {
 python scripts/test_verdict.py
 if ($LASTEXITCODE -ne 0) {
   throw "verdict producer tests failed"
+}
+
+python scripts/test_scope_guard.py
+if ($LASTEXITCODE -ne 0) {
+  throw "scope-guard tests failed"
 }
 
 python scripts/test_module_map.py

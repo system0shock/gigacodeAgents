@@ -106,6 +106,21 @@ def _overshoot_asks():
     return count
 
 
+def _out_of_contract(slug, changed):
+    """Count changed code files outside the contract's scope_globs (WI-8). None
+    when no usable contract exists for the slug (the field stays null)."""
+    path = os.path.join(_lib.root(), "docs", "development", slug, "contract.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+    globs = data.get("scope_globs")
+    if not isinstance(globs, list) or not globs:
+        return None
+    return sum(1 for p in changed if not _lib.matches_globs(p, globs))
+
+
 def compute_risk(slug, event):
     changed = _lib.changed_code_files()
     return {
@@ -113,8 +128,8 @@ def compute_risk(slug, event):
         "modules_touched": len(_infer_modules(changed)),
         "open_questions": _open_questions(slug),
         "iteration_budget_left": _budget_left(event),
-        "out_of_contract_files": None,   # WI-7: needs contract.json scope_globs
-        "overshoot_asks": _overshoot_asks(),  # WI-8: gate_scope_guard asks (0 until then)
+        "out_of_contract_files": _out_of_contract(slug, changed),  # WI-8 (null w/o contract)
+        "overshoot_asks": _overshoot_asks(),  # WI-8: gate_scope_guard asks in the journal
     }
 
 

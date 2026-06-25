@@ -44,6 +44,11 @@
       "gates": ["gate_existing_code"]
     },
     {
+      "event": "PreToolUse",
+      "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
+      "gates": ["gate_scope_guard"]
+    },
+    {
       "event": "PostToolUse",
       "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
       "gates": ["gate_spec_structure", "gate_lint", "gate_clean_code"]
