@@ -323,7 +323,10 @@ def test_read_only_invariant():
             before = _hash_tree(tmp)
             snap = proj.collect(slug="card", tail_n=8)
             _ = proj.render_snapshot(snap, color=False)
-            proj.follow(slug="card", interval=0, _max_polls=2)  # exercise tail loop
+            import io
+            import contextlib
+            with contextlib.redirect_stdout(io.StringIO()):
+                proj.follow(slug="card", interval=0, _max_polls=2)  # exercise tail loop
             after = _hash_tree(tmp)
         check("read_only_no_writes", before == after,
               "projection mutated the tree (read-only invariant broken)")

@@ -258,8 +258,6 @@ def follow(slug=None, tail_n=8, interval=1.0, _max_polls=None):
 
     _max_polls=None runs forever (interactive); pass a small int for tests.
     """
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     print(render_snapshot(collect(slug, tail_n), color=sys.stdout.isatty()))
     print("\n— follow (Ctrl-C to stop) —")
     path = log_path()
