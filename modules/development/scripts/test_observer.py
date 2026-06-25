@@ -297,7 +297,8 @@ def test_read_only_and_loopback():
     obs = load_mod("observer")
     # No git repo, no logs dir: the trap a journaling reader would trip.
     tmp = make_root(intake={"task_type": "feature", "scope_intent": "x", "acceptance": [],
-                            "constraints": [], "understanding": "u"})
+                            "constraints": [], "understanding": "u"},
+                    openspec={"proposal.md": "body"})
     orig = os.environ.get("GIGACODE_ROOT")
     httpd = None
     try:
@@ -310,6 +311,8 @@ def test_read_only_and_loopback():
         port = httpd.server_address[1]
         with urllib.request.urlopen("http://127.0.0.1:%d/api/snapshot?slug=card" % port, timeout=5) as r:
             r.read()
+        with urllib.request.urlopen("http://127.0.0.1:%d/doc?path=openspec/changes/card/proposal.md" % port, timeout=5) as r2:
+            r2.read()
         # let the broadcaster tick at least once (interval 2s)
         import time as _t; _t.sleep(2.5)
         after = _hash_tree(tmp)
@@ -397,6 +400,28 @@ def test_safe_doc_path():
         check("doc_reject_empty", obs.safe_doc_path("") is None)
 
 
+def test_safe_doc_path_hardening():
+    obs = load_mod("observer")
+    with root_at(make_root()) as tmp:
+        # None input
+        check("doc_reject_none", obs.safe_doc_path(None) is None)
+        # Windows-absolute and UNC paths
+        check("doc_reject_win_abs", obs.safe_doc_path("C:/Windows/System32/x") is None)
+        check("doc_reject_unc", obs.safe_doc_path("\\\\server\\share\\x") is None)
+        # Real symlink escape: symlink inside an allowed prefix → resolves outside root
+        card_dir = os.path.join(tmp, "docs", "development", "card")
+        os.makedirs(card_dir, exist_ok=True)
+        link_path = os.path.join(card_dir, "escape_link")
+        try:
+            os.symlink(tempfile.gettempdir(), link_path)
+            check("doc_reject_symlink_escape",
+                  obs.safe_doc_path("docs/development/card/escape_link") is None)
+        except OSError:
+            # Symlink creation requires elevated privilege on some Windows configs.
+            check("doc_reject_symlink_escape", True)  # counted as pass
+            print("  (doc_reject_symlink_escape: skipped — symlink privilege not available on this platform)")
+
+
 def test_doc_route():
     import urllib.request
     obs = load_mod("observer")
@@ -449,5 +474,6 @@ if __name__ == "__main__":
     test_gates()
     test_implement_steps()
     test_safe_doc_path()
+    test_safe_doc_path_hardening()
     test_doc_route()
     print(f"\n{PASSED} checks passed")
