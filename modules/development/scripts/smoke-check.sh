@@ -14,6 +14,7 @@ required=(
   ".gigacode/hooks/hook_probe.py"
   "docs/templates/development-journal.md"
   "docs/templates/intake.json"
+  "docs/templates/contract.json"
   "rules/development-flow.md"
   "rules/language-policy.md"
   "rules/git-safety.md"
@@ -120,7 +121,11 @@ printf '%s' "$stage_block" | grep -q '"decision": "block"'
 # and the same write denied through the live router route (proves it is wired).
 stage_route="$(printf '%s' '{"tool_name":"Edit","tool_input":{"file_path":"docs/development/smoke-nope/contract.json"}}' | node .gigacode/hooks/run-hook.cjs --event PreToolUse)"
 printf '%s' "$stage_route" | grep -q '"permissionDecision": "deny"'
-echo "gate_stage_order round-trip: block + route deny OK"
+
+# plan<-contract (WI-7): an openspec proposal write without an approved contract blocks.
+plan_block="$(printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"openspec/changes/smoke-nope/proposal.md"}}' | "$python_cmd" .gigacode/hooks/gates/gate_stage_order.py)"
+printf '%s' "$plan_block" | grep -q '"decision": "block"'
+echo "gate_stage_order round-trip: contract + plan block + route deny OK"
 
 if command -v openspec >/dev/null 2>&1; then
   # Use 'list --specs' not 'validate --strict': validate requires --type change

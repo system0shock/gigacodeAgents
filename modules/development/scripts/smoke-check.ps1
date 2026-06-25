@@ -13,6 +13,7 @@ $required = @(
   ".gigacode/hooks/hook_probe.py",
   "docs/templates/development-journal.md",
   "docs/templates/intake.json",
+  "docs/templates/contract.json",
   "rules/development-flow.md",
   "rules/language-policy.md",
   "rules/git-safety.md",
@@ -180,7 +181,13 @@ $stageRoute = '{"tool_name":"Edit","tool_input":{"file_path":"docs/development/s
 if ($stageRoute -notmatch '"permissionDecision":\s*"deny"') {
   throw "router did not deny a contract write without intake approval"
 }
-Write-Host "gate_stage_order round-trip: block + route deny OK"
+
+# plan<-contract (WI-7): an openspec proposal write without an approved contract blocks.
+$planBlock = '{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"openspec/changes/smoke-nope/proposal.md"}}' | python .gigacode/hooks/gates/gate_stage_order.py
+if ($planBlock -notmatch '"decision":\s*"block"') {
+  throw "gate_stage_order did not block an openspec proposal without an approved contract"
+}
+Write-Host "gate_stage_order round-trip: contract + plan block + route deny OK"
 
 if (Get-Command openspec -ErrorAction SilentlyContinue) {
   # Use 'list --specs' not 'validate --strict': validate requires --type change
