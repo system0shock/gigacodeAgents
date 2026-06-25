@@ -78,7 +78,7 @@ def _read_json(parts):
 
 
 def resolve_slug(explicit):
-    if explicit:
+    if explicit is not None:
         return explicit, [explicit]
     base = os.path.join(_lib.root(), *DEV_REL)
     try:
@@ -126,8 +126,9 @@ def read_stage(slug):
 
 
 def collect(slug=None, tail_n=8):
-    decisions = read_decisions(tail_n)
-    session = latest_session(read_decisions(0))  # scan whole log for session id
+    all_decisions = read_decisions(0)            # full journal, single pass
+    decisions = all_decisions[-tail_n:] if tail_n else all_decisions
+    session = latest_session(all_decisions)
     resolved, candidates = resolve_slug(slug)
     return {
         "session": session,

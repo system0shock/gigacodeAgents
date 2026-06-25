@@ -115,6 +115,10 @@ def predicate_holds(pred, slug, cfg):
             return False, "verdict:pass"
         return data.get("result") == "pass", "verdict:pass"
     if ptype == "intake_complete":
+        # WI-20/ADR-7: the questions are DERIVED from the empty required fields of
+        # intake.json (per task_type), not from prompt keyword-sniffing. An absent/
+        # unreadable intake, an unknown task_type, or any empty required field
+        # blocks the intake->contract transition and names exactly what to fill.
         target = artifact_path("docs/development/<slug>/intake.json", slug)
         try:
             with open(target, "r", encoding="utf-8") as handle:
@@ -131,6 +135,10 @@ def predicate_holds(pred, slug, cfg):
             return False, "заполни required-поля intake.json: " + ", ".join(missing)
         return True, "intake_complete"
     if ptype == "contract_complete":
+        # WI-7/ADR-2: the scope freeze must be substantive before plan. Absent/
+        # unreadable contract or an empty required field (scope_globs/modules)
+        # blocks plan and names what to fill. The human then confirms the scope
+        # (approval:contract) — the second checkpoint, after understanding.
         target = artifact_path("docs/development/<slug>/contract.json", slug)
         try:
             with open(target, "r", encoding="utf-8") as handle:
