@@ -61,16 +61,21 @@
   </div>
 
   <div class="panel">
-    <span class="help" tabindex="0" data-tip="Стадии флоу из stages.json. Цвет = статус (пройдена / текущая / заблокирована), считается из артефактов и подтверждений на диске. Наведи на узел — что в стадии происходит. Строка ниже — что нужно для следующего перехода.">?</span>
-    <div class="lbl">граф стадий</div>
-    <div class="row" style="align-items:stretch;gap:4px;" id="graph"></div>
-    <div id="trans" style="border-top:0.5px solid var(--bd);margin-top:12px;padding-top:8px;font-size:12px;"></div>
-    <div id="implBadge" style="margin-top:8px;"></div>
-    <div style="margin-top:8px;font-size:11px;color:var(--t3);line-height:1.45;">
-      Между <b style="color:var(--t2)">plan</b> и <b style="color:var(--t2)">delivery</b> нет отдельной стадии:
-      здесь идёт <b style="color:var(--t2)">implement</b> — агент пишет код (петля coder, каждая правка проходит git_guard / gate_scope_guard / gate_lint);
-      затем на Stop тесты пишут <code style="padding:1px 5px">verdict.json</code> (<b style="color:var(--t2)">верификация</b>),
-      и только при <b style="color:var(--t2)">result=pass</b> открывается delivery, где результат <b style="color:var(--t2)">валидируется</b> (diff ⊆ scope, тесты, manifest) и пишется pr-summary.
+    <span class="help" tabindex="0" data-tip="Фазы флоу: intake → contract → plan → implement → delivery. implement — производная фаза (нет в stages.json), выводится из правок кода; verify — внутри delivery. Карточки фаз раскрывают шаги и документы.">?</span>
+    <div class="lbl">граф флоу</div>
+    <div id="nowstrip" style="margin-bottom:12px;"></div>
+    <div class="row" style="align-items:stretch;gap:4px;" id="phases"></div>
+    <div id="cards" style="margin-top:12px;"></div>
+    <div style="margin-top:12px;border-top:0.5px solid var(--bd);padding-top:9px;">
+      <div class="row" style="justify-content:space-between;">
+        <div class="lbl" style="margin:0;">прохождение гейтов</div>
+        <div style="font-size:10px;color:var(--t3);"><span style="color:var(--ok)">●</span> ок · <span style="color:var(--warn)">●</span> ask · <span style="color:var(--bad)">●</span> block · <span style="color:var(--t3)">●</span> —</div>
+      </div>
+      <div id="gates" style="display:flex;gap:5px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;margin-top:7px;"></div>
+    </div>
+    <div style="margin-top:12px;border-top:0.5px solid var(--bd);padding-top:9px;">
+      <div id="docshdr" style="font-size:11px;color:var(--info);cursor:pointer;" tabindex="0">▾ документы флоу</div>
+      <div id="docs" style="margin-top:8px;"></div>
     </div>
   </div>
 
@@ -93,6 +98,16 @@
       <div class="row" style="gap:6px;" id="filters"></div>
     </div>
     <div id="lanes"></div>
+  </div>
+
+  <div id="docmodal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;">
+    <div style="background:var(--panel);border:0.5px solid var(--info);border-radius:9px;max-width:860px;width:100%;max-height:82vh;display:flex;flex-direction:column;">
+      <div class="row" style="justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--bd);">
+        <span id="docmodaltitle" class="mono" style="color:var(--info);"></span>
+        <span id="docmodalclose" tabindex="0" style="cursor:pointer;color:var(--t2);">✕ закрыть</span>
+      </div>
+      <pre id="docmodalbody" class="mono" style="margin:0;padding:12px 14px;overflow:auto;font-size:12px;color:var(--t1);white-space:pre-wrap;"></pre>
+    </div>
   </div>
 
 </div>
@@ -190,49 +205,123 @@
       tile("инструменты", '<span style="font-size:12px;">'+tools+'</span>');
   }
 
-  function renderGraph(stage){
-    var g = byId("graph"); g.innerHTML = "";
-    var stages = (stage && stage.stages) || [];
-    var current = stage && stage.current;
-    stages.slice().sort(function(a,b){ return a.order-b.order; }).forEach(function(st, i){
-      if(i>0) g.insertAdjacentHTML("beforeend", '<div style="display:flex;align-items:center;color:var(--t3);font-size:16px;">→</div>');
-      var isCur = st.id === current;
-      var done = !isCur && st.enterable && current && st.order < stagesOrder(stages,current);
-      var state = isCur?"current":(done?"done":(st.enterable?"ready":"locked"));
-      var bg = isCur?"var(--infobg)":(st.enterable?"var(--okbg)":"var(--lock)");
-      var col = isCur?"var(--info)":(st.enterable?"var(--ok)":"var(--t3)");
-      var br = isCur?"2px solid var(--info)":"0.5px solid "+(st.enterable?"var(--ok)":"var(--bd)");
-      var mark = isCur?"●":(st.enterable?"✓":"🔒");
-      var subTxt = SUB[state] || state;
-      var info = STAGE_INFO[st.id] || "";
-      var unmetH = (st.unmet||[]).map(humanize), metH = (st.met||[]).map(humanize);
-      var detail = unmetH.length ? "нужно: "+unmetH.join("; ")
-                 : (metH.length ? "выполнено: "+metH.join("; ") : "");
-      var tip = info + (info && detail ? "  ·  " : "") + detail;
-      g.insertAdjacentHTML("beforeend",
-        '<div class="nd" tabindex="0" data-tip="'+esc(tip)+'" style="background:'+bg+';border:'+br+';">'+
-        '<div style="color:'+col+';font-weight:500;">'+mark+' '+esc(st.id)+'</div>'+
-        '<div style="font-size:11px;color:'+col+';opacity:.85">'+esc(subTxt)+'</div></div>');
-    });
-    var next = stages.filter(function(s){ return !s.enterable; }).sort(function(a,b){ return a.order-b.order; })[0];
-    byId("trans").innerHTML = next ?
-      '<span style="color:var(--t3)">для перехода к '+esc(next.id)+':</span> ' +
-      (next.met||[]).map(function(m){ return '<span style="color:var(--ok)">✓ '+esc(humanize(m))+'</span>'; }).join(" ") + " " +
-      (next.unmet||[]).map(function(u){ return '<span style="color:var(--warn)">☐ '+esc(humanize(u))+'</span>'; }).join(" ")
-      : '<span style="color:var(--t3)">все стадии разблокированы</span>';
-  }
-  function stagesOrder(stages, id){ var f=stages.filter(function(s){return s.id===id;})[0]; return f?f.order:99; }
+  var DOC_STATE = { present:["✓","var(--ok)"], approved:["✓ approved","var(--ok)"],
+    frozen:["✓ заморожен","var(--ok)"], pending:["☐ ещё нет","var(--t3)"],
+    optional:["☐ опц.","var(--t3)"] };
+  var PHASE_ORDER = ["intake","contract","plan","implement","delivery"];
 
-  // Live "implement is happening" badge — there is no implement stage node, so
-  // backend infers it from code-edit gate activity (snap.implement).
-  function renderImplement(im){
-    var el = byId("implBadge");
-    if(!im || !im.active){ el.innerHTML=""; return; }
-    var ago = im.last_sec==null ? "" : " · последняя правка "+im.last_sec+"с назад";
-    el.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ok);background:var(--okbg);padding:3px 10px;border-radius:6px;">'+
-      '<span style="width:7px;height:7px;border-radius:50%;background:var(--ok)"></span>'+
-      'implement: идёт · '+esc(String(im.edits))+' правок'+esc(ago)+'</span>';
+  // Build the 5-phase view: real stages from snapshot + synthetic implement.
+  function phaseModel(snap){
+    var byId2 = {}; ((snap.stage&&snap.stage.stages)||[]).forEach(function(s){ byId2[s.id]=s; });
+    var current = snap.stage && snap.stage.current;
+    var im = snap.implement;
+    return PHASE_ORDER.map(function(id){
+      if(id==="implement"){
+        var active = im && im.active;
+        return {id:id, state: active?"current":(byId2.delivery&&byId2.delivery.enterable?"done":"locked")};
+      }
+      var st = byId2[id];
+      if(!st) return {id:id, state:"locked"};
+      var isCur = st.id===current && !(im&&im.active);
+      var done = st.enterable && current && st.order < ((byId2[current]||{}).order||99);
+      return {id:id, state: isCur?"current":(done?"done":(st.enterable?"ready":"locked"))};
+    });
   }
+  function pcolors(state){
+    if(state==="current") return ["var(--infobg)","var(--info)","2px solid var(--info)","●"];
+    if(state==="done"||state==="ready") return ["var(--okbg)","var(--ok)","0.5px solid var(--ok)","✓"];
+    return ["var(--lock)","var(--t3)","0.5px solid var(--bd)","🔒"];
+  }
+  function renderPhases(snap){
+    var g = byId("phases"); g.innerHTML = "";
+    phaseModel(snap).forEach(function(p, i){
+      if(i>0) g.insertAdjacentHTML("beforeend", '<div style="display:flex;align-items:center;color:var(--t3);">→</div>');
+      var c = pcolors(p.state);
+      g.insertAdjacentHTML("beforeend",
+        '<div class="nd" tabindex="0" data-tip="'+esc(STAGE_INFO[p.id]||p.id)+'" style="background:'+c[0]+';border:'+c[2]+';">'+
+        '<div style="color:'+c[1]+';font-weight:500;">'+c[3]+' '+esc(p.id)+'</div>'+
+        '<div style="font-size:11px;color:'+c[1]+';opacity:.85">'+esc(SUB[p.state]||p.state)+'</div></div>');
+    });
+  }
+  function docChip(d){
+    var st = DOC_STATE[d.state] || ["?","var(--t3)"];
+    var prog = d.progress ? " "+esc(d.progress) : "";
+    var clickable = (d.state==="present"||d.state==="approved"||d.state==="frozen");
+    var name = clickable
+      ? '<a tabindex="0" onclick="openDoc(\''+esc(d.path)+'\')" style="cursor:pointer;font-family:var(--mono);font-size:10px;color:var(--info);border-bottom:1px dotted var(--info)">'+esc(d.label)+'</a>'
+      : '<span style="font-family:var(--mono);font-size:10px;color:var(--t3)">'+esc(d.label)+'</span>';
+    return '<span style="background:var(--lock);border:0.5px solid var(--bd);border-radius:6px;padding:5px 8px;color:'+st[1]+'">'+name+' '+esc(st[0])+prog+'</span>';
+  }
+  function renderCards(snap){
+    var docs = snap.documents || [];
+    function ofPhase(p){ return docs.filter(function(d){ return d.phase===p; }); }
+    var im = snap.implement;
+    var html = "";
+    // plan card (OpenSpec)
+    var plan = docs.filter(function(d){ return d.family==="openspec"; });
+    if(plan.length) html += '<div style="border:0.5px solid var(--bd);border-left:2px solid var(--ok);border-radius:7px;padding:9px 11px;background:#13161f;margin-bottom:8px;">'+
+      '<div style="font-size:11px;color:var(--t2);margin-bottom:7px;"><b style="color:var(--ok)">plan</b> · OpenSpec</div>'+
+      '<div class="row" style="gap:5px;">'+plan.map(docChip).join("")+'</div></div>';
+    // implement card
+    if(im && im.steps && im.steps.length) html += '<div style="border:0.5px solid var(--bd);border-left:2px solid var(--info);border-radius:7px;padding:9px 11px;background:#13161f;margin-bottom:8px;">'+
+      '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t2);margin-bottom:7px;"><span><b style="color:var(--info)">implement</b> · код</span><span>'+im.edits+' правок · последняя '+(im.last_sec==null?"—":im.last_sec+"с")+'</span></div>'+
+      '<div class="row" style="gap:5px;">'+im.steps.map(function(s){
+        var col = s.decision==="block"?"var(--bad)":(s.decision==="ask"?"var(--warn)":"var(--ok)");
+        return '<span style="background:var(--lock);border:0.5px solid var(--bd);border-radius:6px;padding:5px 8px;color:'+col+'">'+esc(s.decision)+' <span class="mono" style="font-size:10px;color:var(--t2)">'+esc(s.file||s.gate)+'</span></span>';
+      }).join("")+'</div></div>';
+    // delivery card
+    var deliv = ofPhase("delivery");
+    html += '<div style="border:0.5px solid var(--bd);border-left:2px solid var(--t3);border-radius:7px;padding:9px 11px;background:#13161f;">'+
+      '<div style="font-size:11px;color:var(--t2);margin-bottom:7px;"><b>delivery</b> · verify + validate + сдача</div>'+
+      '<div class="row" style="gap:5px;">'+deliv.map(docChip).join("")+
+      '<span style="background:var(--lock);border:0.5px dashed var(--bd);border-radius:6px;padding:5px 8px;color:var(--t3)">☐ validate: diff⊆scope · тесты · manifest</span></div></div>';
+    byId("cards").innerHTML = html;
+  }
+  function renderGates(snap){
+    byId("gates").innerHTML = (snap.gates||[]).map(function(g){
+      var m = {allow:["var(--okbg)","var(--ok)"], ask:["var(--warnbg)","var(--warn)"], block:["var(--badbg)","var(--bad)"]}[g.decision] || ["var(--lock)","var(--t3)"];
+      return '<span style="border-radius:5px;padding:3px 8px;background:'+m[0]+';color:'+m[1]+';border:0.5px solid '+m[1]+'">'+esc(g.gate)+'</span>';
+    }).join("");
+  }
+  function renderDocs(snap){
+    var docs = snap.documents || [];
+    function fam(f){ return docs.filter(function(d){ return d.family===f; }); }
+    function line(d){
+      var st = DOC_STATE[d.state] || ["?","var(--t3)"]; var prog = d.progress?" "+esc(d.progress):"";
+      var clickable = (d.state==="present"||d.state==="approved"||d.state==="frozen");
+      var nm = clickable ? '<a tabindex="0" onclick="openDoc(\''+esc(d.path)+'\')" style="cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--info);border-bottom:1px dotted var(--info)">'+esc(d.label)+'</a>'
+                         : '<span style="font-family:var(--mono);font-size:11px;color:var(--t3)">'+esc(d.label)+'</span>';
+      return '<div>'+nm+' <span style="color:'+st[1]+'">'+esc(st[0])+prog+'</span></div>';
+    }
+    byId("docs").innerHTML =
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 18px;font-size:12px;">'+
+      '<div style="color:var(--t3);font-size:10px;text-transform:uppercase;">OpenSpec</div>'+
+      '<div style="color:var(--t3);font-size:10px;text-transform:uppercase;">артефакты флоу</div>'+
+      '<div>'+fam("openspec").map(line).join("")+'</div><div>'+fam("flow").map(line).join("")+'</div></div>';
+  }
+  function renderNow(snap){
+    var im = snap.implement, d = (snap.decisions||[])[ (snap.decisions||[]).length-1 ];
+    var cur = (snap.stage&&snap.stage.current)||"—";
+    var act = (im&&im.active) ? "implement — правка "+esc((im.steps&&im.steps.length?im.steps[im.steps.length-1].file:"")||"кода") : "фаза "+esc(cur);
+    var last = d ? esc(d.gate||d.kind||"")+" "+esc(d.decision||"") : "—";
+    var b = snap.budget||{};
+    byId("nowstrip").innerHTML = '<div style="display:flex;align-items:center;gap:10px;background:var(--infobg);border:0.5px solid var(--info);border-radius:8px;padding:9px 12px;">'+
+      '<span style="width:8px;height:8px;border-radius:50%;background:var(--info)"></span>'+
+      '<div style="flex:1;min-width:0;"><div style="color:var(--info);font-weight:500;">Сейчас: '+act+'</div>'+
+      '<div style="font-size:11px;color:var(--t2);margin-top:2px;">последнее: '+last+' · бюджет '+(b.used==null?"?":b.used)+'/'+(b.limit==null?"?":b.limit)+'</div></div></div>';
+  }
+
+  function openDoc(path){
+    byId("docmodaltitle").textContent = path;
+    byId("docmodalbody").textContent = "загрузка…";
+    byId("docmodal").classList.remove("hidden");
+    fetch("/doc?path="+encodeURIComponent(path)).then(function(r){
+      if(!r.ok) throw new Error(r.status); return r.text();
+    }).then(function(t){ byId("docmodalbody").textContent = t; })
+      .catch(function(){ byId("docmodalbody").textContent = "не удалось открыть документ."; });
+  }
+  window.openDoc = openDoc;
+  function closeDoc(){ byId("docmodal").classList.add("hidden"); }
 
   function renderBudget(b){
     if(!b){ byId("budget").innerHTML="нет данных"; return; }
@@ -296,8 +385,11 @@
     renderTask(snap.intake);
     renderBlocker(snap.blocker);
     renderVitals(snap.vitals);
-    renderGraph(snap.stage);
-    renderImplement(snap.implement);
+    renderNow(snap);
+    renderPhases(snap);
+    renderCards(snap);
+    renderGates(snap);
+    renderDocs(snap);
     renderBudget(snap.budget);
     renderScope(snap.scope);
     renderVerdict(snap.verdict);
@@ -305,6 +397,19 @@
   }
 
   renderFilters();
+
+  byId("docmodalclose").addEventListener("click", closeDoc);
+  byId("docmodal").addEventListener("click", function(e){ if(e.target===byId("docmodal")) closeDoc(); });
+  document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeDoc(); });
+  (function(){
+    var hdr = byId("docshdr"), box = byId("docs");
+    var open = true; try { open = localStorage.getItem("observer-docs")!=="0"; } catch(e){}
+    function apply(){ box.style.display = open?"":"none"; hdr.textContent = (open?"▾":"▸")+" документы флоу"; }
+    function tog(){ open=!open; try{ localStorage.setItem("observer-docs", open?"1":"0"); }catch(e){} apply(); }
+    hdr.addEventListener("click", tog);
+    hdr.addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); tog(); } });
+    apply();
+  })();
 
   // --- SSE ---
   function setLive(on){

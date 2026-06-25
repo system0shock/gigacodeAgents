@@ -283,6 +283,15 @@ def _hash_tree(root):
     return digest.hexdigest()
 
 
+def test_html_flow_zones():
+    with open(os.path.join(HOOKS_DIR, "observer.html"), "r", encoding="utf-8") as h:
+        html = h.read()
+    for needle in ("http://", "https://", "//cdn", "src=\"//", "href=\"//"):
+        check("flow_no_external_" + needle.strip(":/\"="), needle not in html, needle)
+    for marker in ("renderPhases", "renderGates", "renderDocs", "openDoc", "/doc?path="):
+        check("flow_has_" + marker.strip("/?=").replace("renderD", "rD"), marker in html, marker + " missing")
+
+
 def test_read_only_and_loopback():
     import urllib.request
     obs = load_mod("observer")
@@ -433,6 +442,7 @@ if __name__ == "__main__":
     test_build_snapshot()
     test_server_routes()
     test_html_zero_external_assets()
+    test_html_flow_zones()
     test_read_only_and_loopback()
     test_tasks_progress()
     test_documents()
