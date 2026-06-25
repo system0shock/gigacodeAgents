@@ -21,6 +21,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "gates"))
 import _lib  # pure reads only (root, matches_globs) — see READ-ONLY CONTRACT
+import _stage  # shared stage resolver (gate + projection share one definition)
 
 LOG_REL = (".gigacode", "logs", "decisions.jsonl")
 
@@ -58,3 +59,80 @@ def latest_session(decisions):
         if sid:
             return sid
     return None
+
+
+STATE_REL = (".gigacode", "logs", "router-state.json")
+CONFIG_REL = (".gigacode", "hooks", "router.config.json")
+DEV_REL = ("docs", "development")
+
+
+def _read_json(parts):
+    """Read a stdlib-JSON file under root(); None on absence/parse error."""
+    try:
+        with open(os.path.join(_lib.root(), *parts), "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+
+
+def resolve_slug(explicit):
+    if explicit:
+        return explicit, [explicit]
+    base = os.path.join(_lib.root(), *DEV_REL)
+    try:
+        entries = [(name, os.path.getmtime(os.path.join(base, name)))
+                   for name in os.listdir(base)
+                   if os.path.isdir(os.path.join(base, name))]
+    except OSError:
+        return None, []
+    entries.sort(key=lambda pair: pair[1], reverse=True)
+    slugs = [name for name, _ in entries]
+    return (slugs[0] if slugs else None), slugs
+
+
+def read_budget(session):
+    config = _read_json(CONFIG_REL) or {}
+    limit = config.get("stop_block_budget")
+    used = None
+    state = _read_json(STATE_REL)
+    if isinstance(state, dict) and session:
+        raw = state.get("stop:" + session)
+        used = raw if isinstance(raw, int) else None
+    return {"used": used, "limit": limit if isinstance(limit, int) else None}
+
+
+def read_scope(slug):
+    if not slug:
+        return None
+    data = _read_json(("docs", "development", slug, "contract.json"))
+    if not isinstance(data, dict):
+        return None
+    return {"scope_globs": data.get("scope_globs", []),
+            "modules": data.get("modules", [])}
+
+
+def read_stage(slug):
+    empty = {"current": None, "stages": []}
+    if not slug:
+        return empty
+    try:
+        doc = _stage.load_doc()
+    except (OSError, json.JSONDecodeError, ValueError):
+        return empty
+    status = _stage.stage_status(slug, doc)
+    return {"current": _stage.current_stage(status), "stages": status}
+
+
+def collect(slug=None, tail_n=8):
+    decisions = read_decisions(tail_n)
+    session = latest_session(read_decisions(0))  # scan whole log for session id
+    resolved, candidates = resolve_slug(slug)
+    return {
+        "session": session,
+        "slug": resolved,
+        "slug_candidates": candidates,
+        "stage": read_stage(resolved),
+        "budget": read_budget(session),
+        "decisions": decisions,
+        "scope": read_scope(resolved),
+    }

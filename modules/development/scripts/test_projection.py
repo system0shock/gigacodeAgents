@@ -52,16 +52,52 @@ class root_at:
         return False
 
 
-def make_root(journal_lines=None):
-    """Temp root with an optional .gigacode/logs/decisions.jsonl.
-    journal_lines is a list of raw strings (already including any broken ones)."""
+def make_root(journal_lines=None, state=None, config=None, stages=None,
+              contracts=None, dev_dirs=None):
+    """Temp root. All args optional:
+      journal_lines: list[str] -> .gigacode/logs/decisions.jsonl
+      state:   dict -> .gigacode/logs/router-state.json
+      config:  dict -> .gigacode/hooks/router.config.json
+      stages:  dict -> .gigacode/stages.json
+      contracts: {slug: dict} -> docs/development/<slug>/contract.json
+      dev_dirs: list[str] -> empty docs/development/<slug>/ dirs (for slug resolve)
+    """
     tmp = tempfile.mkdtemp(prefix="projection-test-")
+
+    def _write(rel, obj):
+        dest = os.path.join(tmp, *rel.split("/"))
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "w", encoding="utf-8") as h:
+            h.write(obj if isinstance(obj, str) else json.dumps(obj))
+
     if journal_lines is not None:
         logs = os.path.join(tmp, ".gigacode", "logs")
         os.makedirs(logs)
         with open(os.path.join(logs, "decisions.jsonl"), "w", encoding="utf-8") as h:
             h.write("\n".join(journal_lines) + ("\n" if journal_lines else ""))
+    if state is not None:
+        _write(".gigacode/logs/router-state.json", state)
+    if config is not None:
+        _write(".gigacode/hooks/router.config.json", config)
+    if stages is not None:
+        _write(".gigacode/stages.json", stages)
+    for slug, body in (contracts or {}).items():
+        _write(f"docs/development/{slug}/contract.json", body)
+    for slug in (dev_dirs or []):
+        os.makedirs(os.path.join(tmp, "docs", "development", slug), exist_ok=True)
     return tmp
+
+
+STAGES_FIXTURE = {
+    "version": 1,
+    "stages": [
+        {"id": "intake", "order": 0,
+         "writes": ["docs/development/*/intake.json"], "entry_requires": []},
+        {"id": "contract", "order": 1,
+         "writes": ["docs/development/*/contract.json"],
+         "entry_requires": [{"type": "approval", "stage": "intake"}]},
+    ],
+}
 
 
 def rec(**kw):
@@ -97,6 +133,75 @@ def test_journal_reader():
         check("latest_session_none", proj.latest_session([]) is None)
 
 
+def test_budget():
+    proj = load_projection()
+    with root_at(make_root(config={"stop_block_budget": 2},
+                           state={"stop:s-9": 1})):
+        b = proj.read_budget("s-9")
+        check("budget_used_limit", b == {"used": 1, "limit": 2}, b)
+    with root_at(make_root()):  # nothing present
+        b = proj.read_budget("s-9")
+        check("budget_no_data", b == {"used": None, "limit": None}, b)
+
+
+def test_scope():
+    proj = load_projection()
+    contract = {"scope_globs": ["src/cards/**"], "modules": ["cards"]}
+    with root_at(make_root(contracts={"card": contract})):
+        s = proj.read_scope("card")
+        check("scope_present",
+              s == {"scope_globs": ["src/cards/**"], "modules": ["cards"]}, s)
+    with root_at(make_root()):
+        check("scope_absent", proj.read_scope("card") is None)
+        check("scope_no_slug", proj.read_scope(None) is None)
+
+
+def test_resolve_slug():
+    proj = load_projection()
+    with root_at(make_root(dev_dirs=["alpha", "beta"])):
+        slug, cands = proj.resolve_slug(None)
+        check("slug_auto_picks_one", slug in ("alpha", "beta"), slug)
+        check("slug_lists_all", sorted(cands) == ["alpha", "beta"], cands)
+    with root_at(make_root(dev_dirs=["alpha"])):
+        check("slug_explicit", proj.resolve_slug("zzz") == ("zzz", ["zzz"]))
+    with root_at(make_root()):
+        check("slug_none", proj.resolve_slug(None) == (None, []))
+
+
+def test_read_stage():
+    proj = load_projection()
+    with root_at(make_root(stages=STAGES_FIXTURE)):
+        st = proj.read_stage("card")  # no intake approval -> contract not enterable
+        ids = [s["id"] for s in st["stages"]]
+        check("stage_lists_stages", ids == ["intake", "contract"], ids)
+        check("stage_current_intake", st["current"] == "intake", st["current"])
+    with root_at(make_root()):  # no stages.json
+        check("stage_no_data", proj.read_stage("card") == {"current": None, "stages": []})
+
+
+def test_collect():
+    proj = load_projection()
+    lines = [rec(session_id="s-7", kind="gate", gate="gate_lint", decision="block",
+                 reason="ktlint", tool="Edit")]
+    with root_at(make_root(journal_lines=lines, stages=STAGES_FIXTURE,
+                           config={"stop_block_budget": 2}, state={"stop:s-7": 1},
+                           contracts={"card": {"scope_globs": ["src/**"], "modules": ["c"]}},
+                           dev_dirs=["card"])):
+        snap = proj.collect(tail_n=5)
+        check("collect_session", snap["session"] == "s-7", snap["session"])
+        check("collect_slug", snap["slug"] == "card", snap["slug"])
+        check("collect_budget", snap["budget"] == {"used": 1, "limit": 2}, snap["budget"])
+        check("collect_decisions", len(snap["decisions"]) == 1, snap["decisions"])
+        check("collect_scope", snap["scope"]["modules"] == ["c"], snap["scope"])
+        check("collect_stage_current", snap["stage"]["current"] == "intake",
+              snap["stage"])
+
+
 if __name__ == "__main__":
     test_journal_reader()
+    test_budget()
+    test_scope()
+    test_resolve_slug()
+    test_read_stage()
+    test_collect()
     print(f"\n{PASSED} checks passed")
