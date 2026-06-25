@@ -151,10 +151,35 @@ def test_parse_ts():
     check("parse_ts_empty", obs.parse_ts("") is None)
 
 
+def test_format_sse():
+    obs = load_mod("observer")
+    msg = obs.format_sse("decision", {"decision": "block", "reason": "стоп"})
+    check("sse_event_line", msg.startswith("event: decision\n"), msg)
+    check("sse_data_line", "\ndata: " in msg, msg)
+    check("sse_terminator", msg.endswith("\n\n"), repr(msg))
+    check("sse_utf8", "стоп" in msg, msg)  # ensure_ascii=False keeps Cyrillic
+    payload = json.loads(msg.split("data: ", 1)[1].strip())
+    check("sse_roundtrip", payload["decision"] == "block", payload)
+
+
+def test_build_snapshot():
+    obs = load_mod("observer")
+    # build_snapshot reads the live tree via projection.collect; an empty fixture
+    # must still yield a well-formed enriched snapshot (fail-open), not raise.
+    with root_at(make_root()):
+        snap = obs.build_snapshot(slug="card", now=NOW)
+    check("build_contract", snap["_contract"] == "wi15/1", snap.get("_contract"))
+    for key in ("session", "slug", "stage", "budget", "scope", "decisions",
+                "intake", "verdict", "blocker", "vitals"):
+        check("build_has_" + key, key in snap, key)
+
+
 if __name__ == "__main__":
     test_readers()
     test_vitals()
     test_blocker()
     test_enrich()
     test_parse_ts()
+    test_format_sse()
+    test_build_snapshot()
     print(f"\n{PASSED} checks passed")

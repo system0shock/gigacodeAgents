@@ -107,3 +107,15 @@ def enrich(snapshot, decisions, now):
     out["blocker"] = blocker(snapshot, decisions)
     out["vitals"] = vitals(decisions, now)
     return out
+
+
+def build_snapshot(slug=None, tail_n=12, now=None):
+    if now is None:
+        now = datetime.now().astimezone()
+    snapshot = projection.collect(slug, tail_n)
+    decisions = projection.read_decisions(0)   # full journal for vitals/blocker
+    return enrich(snapshot, decisions, now)
+
+
+def format_sse(event, data):
+    return "event: %s\ndata: %s\n\n" % (event, json.dumps(data, ensure_ascii=False))
