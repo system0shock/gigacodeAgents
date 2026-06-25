@@ -112,10 +112,39 @@ CODE_GATES = ("gate_lint", "gate_scope_guard", "gate_clean_code",
               "gate_existing_code", "gate_build")
 
 
+GATE_ORDER = ("git_guard", "gate_scope_guard", "gate_lint", "gate_clean_code",
+              "gate_existing_code", "gate_stage_order", "gate_spec_structure",
+              "gate_build", "gate_verdict", "validate_development_output")
+
+
+_FILE_RE = re.compile(r"[\w./-]+\.[A-Za-z0-9]+")
+
+
+def gates(decisions):
+    latest = {}
+    for d in decisions:
+        g = d.get("gate")
+        if g:
+            latest[g] = d            # journal is in order → last write wins
+    out = [{"gate": g, "decision": latest[g].get("decision") if g in latest else None,
+            "ts": latest[g].get("ts") if g in latest else None} for g in GATE_ORDER]
+    for g, d in latest.items():
+        if g not in GATE_ORDER:
+            out.append({"gate": g, "decision": d.get("decision"), "ts": d.get("ts")})
+    return out
+
+
+def _step_file(reason):
+    if not isinstance(reason, str):
+        return ""
+    matches = _FILE_RE.findall(reason)
+    return matches[-1] if matches else ""
+
+
 def implement_status(snapshot, decisions, now):
     """Live 'implement is happening' signal, or None. Active when there are
     code-edit gate decisions, the plan stage has been reached, and no passing
-    verdict exists yet. Returns {active, edits, last_sec}."""
+    verdict exists yet. Returns {active, edits, last_sec, steps}."""
     edits = [d for d in decisions if d.get("gate") in CODE_GATES]
     if not edits:
         return None
@@ -133,7 +162,9 @@ def implement_status(snapshot, decisions, now):
         if ts and (last_ts is None or ts > last_ts):
             last_ts = ts
     last_sec = int((now - last_ts).total_seconds()) if last_ts else None
-    return {"active": True, "edits": len(edits), "last_sec": last_sec}
+    steps = [{"gate": d.get("gate"), "decision": d.get("decision"),
+              "file": _step_file(d.get("reason")), "ts": d.get("ts")} for d in edits[-8:]]
+    return {"active": True, "edits": len(edits), "last_sec": last_sec, "steps": steps}
 
 
 ALLOWED_DOC_PREFIXES = ("docs/development/", "openspec/changes/")
@@ -208,6 +239,7 @@ def enrich(snapshot, decisions, now):
     out["vitals"] = vitals(decisions, now)
     out["implement"] = implement_status(out, decisions, now)
     out["documents"] = documents(slug)
+    out["gates"] = gates(decisions)
     return out
 
 
@@ -216,7 +248,7 @@ def _empty_snapshot(slug):
             "stage": {"current": None, "stages": []},
             "budget": {"used": None, "limit": None}, "scope": None, "decisions": [],
             "intake": None, "verdict": None, "blocker": None, "implement": None,
-            "documents": [],
+            "documents": [], "gates": [],
             "vitals": {"total": 0, "block": 0, "ask": 0, "allow": 0, "per_min": 0,
                        "idle_sec": None, "session_sec": 0, "tools": {}}}
 

@@ -348,6 +348,33 @@ def test_documents():
     check("documents_no_slug", obs.documents(None) == [])
 
 
+def test_gates():
+    obs = load_mod("observer")
+    decs = [rec("2026-06-25T15:00:00+0300", "allow", gate="git_guard"),
+            rec("2026-06-25T15:00:05+0300", "ask", gate="gate_scope_guard"),
+            rec("2026-06-25T15:00:09+0300", "allow", gate="git_guard")]  # git_guard fired twice
+    g = obs.gates(decs)
+    by = {x["gate"]: x for x in g}
+    check("gate_latest_wins", by["git_guard"]["decision"] == "allow", by.get("git_guard"))
+    check("gate_scope_ask", by["gate_scope_guard"]["decision"] == "ask", by.get("gate_scope_guard"))
+    check("gate_never_fired", by["gate_verdict"]["decision"] is None, by.get("gate_verdict"))
+    check("gate_order_first", g[0]["gate"] == obs.GATE_ORDER[0], g[0])
+
+
+def test_implement_steps():
+    obs = load_mod("observer")
+    plan_ready = {"current": "plan", "stages": [
+        {"id": "plan", "order": 2, "enterable": True, "met": [], "unmet": []}]}
+    edits = [dict(rec("2026-06-25T15:00:00+0300", "allow", gate="gate_lint"),
+                  reason="edited src/cards/CardService.kt"),
+             dict(rec("2026-06-25T15:00:20+0300", "ask", gate="gate_scope_guard"),
+                  reason="overshoot: src/billing/Fee.kt")]
+    im = obs.implement_status({"stage": plan_ready, "verdict": None}, edits, NOW)
+    check("steps_present", len(im["steps"]) == 2, im)
+    check("steps_file_parsed", im["steps"][0]["file"].endswith("CardService.kt"), im["steps"][0])
+    check("steps_gate", im["steps"][1]["gate"] == "gate_scope_guard", im["steps"][1])
+
+
 if __name__ == "__main__":
     test_readers()
     test_vitals()
@@ -362,4 +389,6 @@ if __name__ == "__main__":
     test_read_only_and_loopback()
     test_tasks_progress()
     test_documents()
+    test_gates()
+    test_implement_steps()
     print(f"\n{PASSED} checks passed")
