@@ -16,9 +16,9 @@
   .seg .pill.on{ background:var(--infobg); color:var(--info); border:0.5px solid var(--info); }
   .help{ position:absolute; top:9px; right:11px; width:16px; height:16px; border-radius:50%; border:0.5px solid var(--bd); color:var(--t3); font-size:11px; line-height:15px; text-align:center; cursor:help; }
   .help:hover, .help:focus{ color:var(--info); border-color:var(--info); outline:none; }
-  .help:hover::after, .help:focus::after{ content:attr(data-tip); position:absolute; top:135%; right:0; background:var(--tipbg); color:var(--t1); border:0.5px solid var(--info); padding:7px 10px; border-radius:7px; font:12px/1.35 system-ui,sans-serif; width:max-content; max-width:290px; white-space:normal; z-index:60; box-shadow:0 8px 24px -8px #000; }
+  .help:hover::after, .help:focus::after{ content:attr(data-tip); position:absolute; top:135%; right:0; background:var(--tipbg); color:var(--t1); border:0.5px solid var(--info); padding:7px 10px; border-radius:7px; font:12px/1.35 system-ui,sans-serif; width:max-content; max-width:300px; white-space:normal; z-index:60; box-shadow:0 8px 24px -8px #000; }
   .nd{ position:relative; flex:1; min-width:110px; border-radius:7px; padding:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-  .nd:hover::after, .nd:focus::after{ content:attr(data-tip); position:absolute; top:112%; left:50%; transform:translateX(-50%); background:var(--tipbg); color:var(--t1); border:0.5px solid var(--info); padding:7px 10px; border-radius:7px; font:11.5px/1.35 system-ui,sans-serif; width:max-content; max-width:240px; white-space:normal; z-index:55; box-shadow:0 8px 24px -8px #000; text-align:left; }
+  .nd:hover::after, .nd:focus::after{ content:attr(data-tip); position:absolute; top:112%; left:50%; transform:translateX(-50%); background:var(--tipbg); color:var(--t1); border:0.5px solid var(--info); padding:7px 10px; border-radius:7px; font:11.5px/1.35 system-ui,sans-serif; width:max-content; max-width:280px; white-space:normal; z-index:55; box-shadow:0 8px 24px -8px #000; text-align:left; }
   .grid5{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
   .grid3{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:10px; }
   .row{ display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
@@ -34,55 +34,61 @@
   <div class="row" style="justify-content:space-between;padding-bottom:12px;border-bottom:0.5px solid var(--bd);margin-bottom:12px;">
     <div class="row">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><path d="M4 12a8 8 0 0 1 8-8M4 12a8 8 0 0 0 8 8"/><circle cx="12" cy="12" r="2" fill="var(--info)" stroke="none"/></svg>
-      <div><div style="font-weight:500;">GigaCode flow · observer</div><div class="mono" style="font-size:12px;color:var(--t2);" id="sess">session — · /stream</div></div>
+      <div><div style="font-weight:500;">GigaCode flow · observer</div><div class="mono" style="font-size:12px;color:var(--t2);" id="sess">сессия — · /stream</div></div>
     </div>
     <div class="row">
       <div class="seg"><span class="pill on" data-theme="mint" tabindex="0">mint</span><span class="pill" data-theme="pink" tabindex="0">ultra-pink ♥</span></div>
-      <span id="live" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ok);background:var(--okbg);padding:4px 10px;border-radius:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok)"></span><span id="livetxt">live</span></span>
+      <span id="live" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ok);background:var(--okbg);padding:4px 10px;border-radius:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok)"></span><span id="livetxt">онлайн</span></span>
     </div>
   </div>
 
   <div class="panel hidden" id="taskPanel">
-    <span class="help" tabindex="0" data-tip="Задача из intake.json (WI-20): тип, slug, scope_intent, acceptance, understanding (рестейт агента, ADR-7).">?</span>
+    <span class="help" tabindex="0" data-tip="Задача из intake.json: тип, цель (scope_intent), критерии приёмки и understanding — пересказ задачи агентом своими словами.">?</span>
     <div class="row" style="margin-bottom:8px;" id="taskHead"></div>
     <div class="row" style="margin-bottom:8px;" id="taskAcc"></div>
     <div id="taskUnd" style="font-size:12px;color:var(--t2);border-left:2px solid var(--bd);padding-left:8px;"></div>
   </div>
 
   <div class="panel hidden" id="blockPanel" style="background:var(--badbg);border-color:var(--bad);">
-    <span class="help" tabindex="0" data-tip="Текущий блокер: непройденный предикат стадии. Команда снимает блок — подтверждение человеком out-of-band (агент не может, .gigacode защищён, P6).">?</span>
+    <span class="help" tabindex="0" data-tip="Текущий блокер: невыполненное условие входа в стадию. Команда снимает блок — подтверждение человеком вне сессии агента (сам агент не может: .gigacode защищён гейтом).">?</span>
     <div class="row"><span style="font-size:20px;">⛔</span><div style="flex:1;min-width:200px;"><div style="font-weight:500;color:var(--bad);" id="blockMsg"></div></div><code id="blockCmd"></code></div>
   </div>
 
   <div class="panel">
-    <span class="help" tabindex="0" data-tip="Агрегаты сессии из decisions.jsonl: счётчики block/ask/allow, темп (решений/мин), idle (сек с последней записи), длительность, инструменты.">?</span>
-    <div class="lbl">vital signs</div>
+    <span class="help" tabindex="0" data-tip="Сводка по сессии из журнала решений: счётчики block/ask/allow, темп (решений в минуту), простой (сек с последнего решения), длительность сессии, инструменты.">?</span>
+    <div class="lbl">пульс сессии</div>
     <div class="grid5" id="vitals"></div>
   </div>
 
   <div class="panel">
-    <span class="help" tabindex="0" data-tip="Граф стадий. Цвет = stage_status (done/current/locked) из артефактов и approval-маркеров (_stage). Наведи на узел — entry-предикаты. Строка внизу — переход.">?</span>
-    <div class="lbl">stage graph</div>
+    <span class="help" tabindex="0" data-tip="Стадии флоу из stages.json. Цвет = статус (пройдена / текущая / заблокирована), считается из артефактов и подтверждений на диске. Наведи на узел — что в стадии происходит. Строка ниже — что нужно для следующего перехода.">?</span>
+    <div class="lbl">граф стадий</div>
     <div class="row" style="align-items:stretch;gap:4px;" id="graph"></div>
     <div id="trans" style="border-top:0.5px solid var(--bd);margin-top:12px;padding-top:8px;font-size:12px;"></div>
+    <div style="margin-top:8px;font-size:11px;color:var(--t3);line-height:1.45;">
+      Между <b style="color:var(--t2)">plan</b> и <b style="color:var(--t2)">delivery</b> нет отдельной стадии:
+      здесь идёт <b style="color:var(--t2)">implement</b> — агент пишет код (петля coder, каждая правка проходит git_guard / gate_scope_guard / gate_lint);
+      затем на Stop тесты пишут <code style="padding:1px 5px">verdict.json</code> (<b style="color:var(--t2)">верификация</b>),
+      и только при <b style="color:var(--t2)">result=pass</b> открывается delivery, где результат <b style="color:var(--t2)">валидируется</b> (diff ⊆ scope, тесты, manifest) и пишется pr-summary.
+    </div>
   </div>
 
   <div class="grid3">
     <div class="panel" style="margin-bottom:0;">
-      <span class="help" tabindex="0" data-tip="stop-блоки сессии (router-state.json) против stop_block_budget (router.config.json). Лимит живой.">?</span>
-      <div class="lbl">stop budget</div><div id="budget"></div></div>
+      <span class="help" tabindex="0" data-tip="Сколько раз агента останавливали на Stop в этой сессии против лимита stop_block_budget (router.config.json). Лимит читается живьём.">?</span>
+      <div class="lbl">бюджет остановок</div><div id="budget"></div></div>
     <div class="panel" style="margin-bottom:0;">
-      <span class="help" tabindex="0" data-tip="contract.scope_globs / modules. Пофайловая адгезия — задел (см. спеку).">?</span>
-      <div class="lbl">scope vs contract</div><div class="mono" style="font-size:12px;" id="scope"></div></div>
+      <span class="help" tabindex="0" data-tip="Границы изменений из контракта: scope_globs и modules. Пофайловая адгезия (зелёный/красный по каждому файлу) — в планах.">?</span>
+      <div class="lbl">scope против контракта</div><div class="mono" style="font-size:12px;" id="scope"></div></div>
     <div class="panel" style="margin-bottom:0;">
-      <span class="help" tabindex="0" data-tip="verdict.json (WI-11): pass/fail + risk-поля. Появляется после verify.">?</span>
-      <div class="lbl">verdict</div><div style="font-size:12px;" id="verdict"></div></div>
+      <span class="help" tabindex="0" data-tip="verdict.json: pass/fail + механические risk-поля. Пишет gate_verdict из реальных тестов на Stop (это верификация, не отдельная стадия).">?</span>
+      <div class="lbl">вердикт</div><div style="font-size:12px;" id="verdict"></div></div>
   </div>
 
   <div class="panel">
-    <span class="help" tabindex="0" data-tip="Лента решений из decisions.jsonl по дорожкам session/feature/agent (WI-2). block/ask подсвечены. Чипы — фильтр.">?</span>
+    <span class="help" tabindex="0" data-tip="Лента решений из журнала, сгруппирована по дорожкам сессия / фича / агент. block и ask подсвечены. Чипы — фильтр по типу решения.">?</span>
     <div class="row" style="justify-content:space-between;margin-bottom:10px;">
-      <div class="lbl" style="margin:0;">decision swimlanes</div>
+      <div class="lbl" style="margin:0;">решения по дорожкам</div>
       <div class="row" style="gap:6px;" id="filters"></div>
     </div>
     <div id="lanes"></div>
@@ -97,6 +103,34 @@
   var esc = function(s){ var d=document.createElement("div"); d.textContent = (s==null?"":String(s)); return d.innerHTML.replace(/"/g, "&quot;"); };
   var filter = "all";
   var lastSnap = null;
+
+  // Plain-language description of what happens in each flow stage (keyed by stage id
+  // from stages.json). Delivery is the opaque one: it folds verification + validation
+  // + delivery, and implement has no node — both are spelled out here.
+  var STAGE_INFO = {
+    intake:   "Сбор задачи. Агент заполняет intake.json (тип, цель, критерии приёмки, understanding — пересказ задачи своими словами). Человек подтверждает понимание: confirm.py intake.",
+    contract: "Заморозка scope. Агент драфтит contract.json (scope_globs, modules) — границы изменений. Человек подтверждает (confirm.py contract); после этого контракт заморожен.",
+    plan:     "План (OpenSpec). Агент пишет proposal / design / tasks.md. Вход — только при заполненном и подтверждённом контракте.",
+    verify:   "Прогон тестов. gate_verdict пишет verdict.json из реальных тестов.",
+    delivery: "Финал и сдача. Вход требует verdict.json result=pass — его пишет gate_verdict из РЕАЛЬНЫХ тестов на Stop (это верификация). Там же на Stop результат валидируется: diff ⊆ scope, тесты прогнаны, manifest ⇿ диск (validate_development_output). Стадия пишет pr-summary.md."
+  };
+  var SUB = { current:"текущая", done:"пройдена", ready:"готова", locked:"заблокирована" };
+
+  // Turn a machine predicate label into plain Russian for humans.
+  function humanize(label){
+    var H = {
+      "intake_complete":   "intake.json заполнен (обязательные поля)",
+      "contract_complete": "contract.json заполнен (scope_globs, modules)",
+      "approval:intake":   "человек подтвердил понимание задачи (confirm.py intake)",
+      "approval:contract": "человек подтвердил контракт / scope (confirm.py contract)",
+      "verdict:pass":      "вердикт тестов = pass (verdict.json)",
+      "verdict_pass":      "вердикт тестов = pass (verdict.json)"
+    };
+    if(H[label]) return H[label];
+    if(label && label.indexOf("approval:")===0) return "подтверждение человеком: "+label.slice(9);
+    if(label && label.indexOf("file_exists:")===0) return "есть файл "+label.slice(12);
+    return label;
+  }
 
   // --- theme ---
   var saved = null;
@@ -129,14 +163,14 @@
     byId("taskAcc").innerHTML = (ik.acceptance||[]).map(function(a){
       return '<span style="font-size:11px;color:var(--t2);background:var(--chip);padding:2px 8px;border-radius:5px;">✓ '+esc(a)+'</span>'; }).join("");
     byId("taskUnd").innerHTML = ik.understanding ?
-      '<span style="color:var(--t3)">understanding:</span> '+esc(ik.understanding) : "";
+      '<span style="color:var(--t3)">понимание задачи:</span> '+esc(ik.understanding) : "";
   }
 
   function renderBlocker(b){
     var p = byId("blockPanel");
     if(!b || !b.active){ p.classList.add("hidden"); return; }
     p.classList.remove("hidden");
-    byId("blockMsg").innerHTML = "Заблокировано: стадия <b>"+esc(b.stage)+"</b> ждёт <b>"+esc(b.unmet)+"</b>";
+    byId("blockMsg").innerHTML = "Заблокировано: стадия <b>"+esc(b.stage)+"</b> ждёт: "+esc(humanize(b.unmet));
     var c = byId("blockCmd");
     if(b.command){ c.style.display=""; c.textContent = b.command; } else { c.style.display="none"; }
   }
@@ -150,10 +184,10 @@
     var tools = Object.keys(v.tools||{}).map(function(k){ return esc(k)+" "+v.tools[k]; }).join(" · ") || "—";
     byId("vitals").innerHTML =
       tile("решения", v.total, '<span style="color:var(--bad)">'+v.block+'b</span> · <span style="color:var(--warn)">'+v.ask+'a</span> · <span style="color:var(--ok)">'+v.allow+'✓</span>') +
-      tile("темп", v.per_min+'<span style="font-size:11px;color:var(--t2)">/м</span>') +
-      tile("последнее", (v.idle_sec==null?"—":v.idle_sec+"с")) +
+      tile("темп", v.per_min+'<span style="font-size:11px;color:var(--t2)">/мин</span>') +
+      tile("простой", (v.idle_sec==null?"—":v.idle_sec+"с")) +
       tile("сессия", Math.round((v.session_sec||0)/60)+"м") +
-      tile("tools", '<span style="font-size:12px;">'+tools+'</span>');
+      tile("инструменты", '<span style="font-size:12px;">'+tools+'</span>');
   }
 
   function renderGraph(stage){
@@ -164,22 +198,27 @@
       if(i>0) g.insertAdjacentHTML("beforeend", '<div style="display:flex;align-items:center;color:var(--t3);font-size:16px;">→</div>');
       var isCur = st.id === current;
       var done = !isCur && st.enterable && current && st.order < stagesOrder(stages,current);
+      var state = isCur?"current":(done?"done":(st.enterable?"ready":"locked"));
       var bg = isCur?"var(--infobg)":(st.enterable?"var(--okbg)":"var(--lock)");
       var col = isCur?"var(--info)":(st.enterable?"var(--ok)":"var(--t3)");
       var br = isCur?"2px solid var(--info)":"0.5px solid "+(st.enterable?"var(--ok)":"var(--bd)");
       var mark = isCur?"●":(st.enterable?"✓":"🔒");
-      var sub = isCur?"current":(done?"done":(st.enterable?"ready":"locked"));
-      var tip = st.id+" — "+sub+". met: "+(st.met||[]).join(", ")+" | unmet: "+(st.unmet||[]).join(", ");
+      var subTxt = SUB[state] || state;
+      var info = STAGE_INFO[st.id] || "";
+      var unmetH = (st.unmet||[]).map(humanize), metH = (st.met||[]).map(humanize);
+      var status = unmetH.length ? "  ·  нужно: "+unmetH.join("; ")
+                 : (metH.length ? "  ·  выполнено: "+metH.join("; ") : "");
+      var tip = info + status;
       g.insertAdjacentHTML("beforeend",
         '<div class="nd" tabindex="0" data-tip="'+esc(tip)+'" style="background:'+bg+';border:'+br+';">'+
         '<div style="color:'+col+';font-weight:500;">'+mark+' '+esc(st.id)+'</div>'+
-        '<div style="font-size:11px;color:'+col+';opacity:.85">'+sub+'</div></div>');
+        '<div style="font-size:11px;color:'+col+';opacity:.85">'+esc(subTxt)+'</div></div>');
     });
     var next = stages.filter(function(s){ return !s.enterable; }).sort(function(a,b){ return a.order-b.order; })[0];
     byId("trans").innerHTML = next ?
       '<span style="color:var(--t3)">для перехода к '+esc(next.id)+':</span> ' +
-      (next.met||[]).map(function(m){ return '<span style="color:var(--ok)">✓ '+esc(m)+'</span>'; }).join(" ") + " " +
-      (next.unmet||[]).map(function(u){ return '<span style="color:var(--warn)">☐ '+esc(u)+'</span>'; }).join(" ")
+      (next.met||[]).map(function(m){ return '<span style="color:var(--ok)">✓ '+esc(humanize(m))+'</span>'; }).join(" ") + " " +
+      (next.unmet||[]).map(function(u){ return '<span style="color:var(--warn)">☐ '+esc(humanize(u))+'</span>'; }).join(" ")
       : '<span style="color:var(--t3)">все стадии разблокированы</span>';
   }
   function stagesOrder(stages, id){ var f=stages.filter(function(s){return s.id===id;})[0]; return f?f.order:99; }
@@ -195,11 +234,11 @@
   function renderScope(s){
     if(!s){ byId("scope").innerHTML='<span style="color:var(--t3);font-style:italic;">нет contract.json</span>'; return; }
     byId("scope").innerHTML = (s.scope_globs||[]).map(function(g){ return '<div style="color:var(--ok)">✓ '+esc(g)+'</div>'; }).join("") +
-      '<div style="color:var(--t2);margin-top:4px;">modules: '+esc((s.modules||[]).join(", "))+'</div>';
+      '<div style="color:var(--t2);margin-top:4px;">модули: '+esc((s.modules||[]).join(", "))+'</div>';
   }
 
   function renderVerdict(v){
-    if(!v){ byId("verdict").innerHTML='<span style="color:var(--t3);font-style:italic;">ещё нет — verify не достигнута.</span>'; return; }
+    if(!v){ byId("verdict").innerHTML='<span style="color:var(--t3);font-style:italic;">ещё нет — появится после прогона тестов на Stop (gate_verdict).</span>'; return; }
     var col = v.result==="pass"?"var(--ok)":"var(--bad)";
     var risk = Object.keys(v.risk||{}).map(function(k){ return esc(k)+": "+esc(v.risk[k]); }).join(", ");
     byId("verdict").innerHTML = '<div style="color:'+col+';font-weight:600;text-transform:uppercase;">'+esc(v.result)+'</div><div style="color:var(--t2);margin-top:4px;font-size:11px;">'+esc(risk)+'</div>';
@@ -242,7 +281,7 @@
 
   function render(snap){
     lastSnap = snap;
-    byId("sess").textContent = "session "+(snap.session||"—")+" · /stream";
+    byId("sess").textContent = "сессия "+(snap.session||"—")+" · /stream";
     renderTask(snap.intake);
     renderBlocker(snap.blocker);
     renderVitals(snap.vitals);
@@ -258,7 +297,7 @@
   // --- SSE ---
   function setLive(on){
     var el=byId("live"), t=byId("livetxt");
-    t.textContent = on?"live":"reconnecting…";
+    t.textContent = on?"онлайн":"переподключение…";
     el.style.color = on?"var(--ok)":"var(--t3)";
     el.style.background = on?"var(--okbg)":"var(--chip)";
   }
