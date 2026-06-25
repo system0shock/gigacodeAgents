@@ -94,7 +94,7 @@
 (function(){
   var dash = document.getElementById("dash");
   var byId = function(i){ return document.getElementById(i); };
-  var esc = function(s){ var d=document.createElement("div"); d.textContent = (s==null?"":String(s)); return d.innerHTML; };
+  var esc = function(s){ var d=document.createElement("div"); d.textContent = (s==null?"":String(s)); return d.innerHTML.replace(/"/g, "&quot;"); };
   var filter = "all";
   var lastSnap = null;
 
@@ -162,13 +162,13 @@
     var current = stage && stage.current;
     stages.slice().sort(function(a,b){ return a.order-b.order; }).forEach(function(st, i){
       if(i>0) g.insertAdjacentHTML("beforeend", '<div style="display:flex;align-items:center;color:var(--t3);font-size:16px;">→</div>');
-      var done = st.enterable && current && st.order < stagesOrder(stages,current);
       var isCur = st.id === current;
+      var done = !isCur && st.enterable && current && st.order < stagesOrder(stages,current);
       var bg = isCur?"var(--infobg)":(st.enterable?"var(--okbg)":"var(--lock)");
       var col = isCur?"var(--info)":(st.enterable?"var(--ok)":"var(--t3)");
       var br = isCur?"2px solid var(--info)":"0.5px solid "+(st.enterable?"var(--ok)":"var(--bd)");
       var mark = isCur?"●":(st.enterable?"✓":"🔒");
-      var sub = isCur?"current":(st.enterable?"ready":"locked");
+      var sub = isCur?"current":(done?"done":(st.enterable?"ready":"locked"));
       var tip = st.id+" — "+sub+". met: "+(st.met||[]).join(", ")+" | unmet: "+(st.unmet||[]).join(", ");
       g.insertAdjacentHTML("beforeend",
         '<div class="nd" tabindex="0" data-tip="'+esc(tip)+'" style="background:'+bg+';border:'+br+';">'+
@@ -210,7 +210,7 @@
     var hi = (d.decision==="block"||d.decision==="ask");
     var why = d.reason ? '<div style="font-size:12px;color:var(--t2);margin-top:2px;">→ '+esc(d.reason)+'</div>' : "";
     return '<div style="padding:6px 8px;border-left:2px solid '+(hi?c:"var(--bd)")+';'+(hi?'background:'+(d.decision==="block"?"var(--badbg)":"var(--warnbg)")+';':'')+'margin-bottom:4px;">'+
-      '<div class="row"><span class="mono" style="color:var(--t3);font-size:12px;">'+esc((d.ts||"").substr(11,8))+'</span>'+
+      '<div class="row"><span class="mono" style="color:var(--t3);font-size:12px;">'+esc((d.ts||"").slice(11,19))+'</span>'+
       '<span class="badge" style="color:'+c+';">'+esc(d.decision)+'</span>'+
       '<span style="font-weight:500;">'+esc(d.gate||d.kind||"-")+'</span>'+
       '<span class="mono" style="color:var(--t2);font-size:12px;">'+esc(d.tool||"")+'</span></div>'+why+'</div>';
@@ -234,7 +234,9 @@
       return '<span class="pill'+(on?" on":"")+'" data-f="'+f[0]+'" tabindex="0" style="font-size:12px;padding:3px 11px;border-radius:6px;'+(on?"":"color:var(--t2);")+'">'+f[1]+'</span>';
     }).join("");
     Array.prototype.forEach.call(byId("filters").querySelectorAll(".pill"), function(b){
-      b.addEventListener("click", function(){ filter=b.getAttribute("data-f"); renderFilters(); if(lastSnap) renderLanes(lastSnap.decisions); });
+      function act(){ filter=b.getAttribute("data-f"); renderFilters(); if(lastSnap) renderLanes(lastSnap.decisions); }
+      b.addEventListener("click", act);
+      b.addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); act(); } });
     });
   }
 
