@@ -120,6 +120,97 @@ def decide(gate, path, **kw):
         return gate.run(ev(path))["decision"]
 
 
+def decide_full(gate, path, **kw):
+    with root_at(make_root(**kw)):
+        return gate.run(ev(path))
+
+
+# WI-20/ADR-7: intake_complete predicate — empty required fields derive the questions.
+INTAKE_STAGES = {
+    "version": 1,
+    "intake_required": {
+        "feature": ["scope_intent", "acceptance", "understanding"],
+        "bug": ["repro", "expected", "actual", "severity", "understanding"],
+    },
+    "stages": [
+        {"id": "intake", "order": 0,
+         "writes": ["docs/development/*/intake.json"], "entry_requires": []},
+        {"id": "contract", "order": 1,
+         "writes": ["docs/development/*/contract.json"],
+         "entry_requires": [{"type": "intake_complete"},
+                            {"type": "approval", "stage": "intake"}]},
+    ],
+}
+FULL_FEATURE = {"task_type": "feature", "scope_intent": "block card on fraud",
+                "acceptance": ["status -> BLOCKED"], "understanding": "restate ..."}
+FULL_BUG = {"task_type": "bug", "repro": "POST /x 500", "expected": "200",
+            "actual": "500", "severity": "high", "understanding": "restate ..."}
+
+
+def _intake_file(slug, obj):
+    return {"docs/development/%s/intake.json" % slug: json.dumps(obj)}
+
+
+def test_intake_complete():
+    g = load_gate("gate_stage_order")
+    contract = "docs/development/card/contract.json"
+
+    # complete feature intake + approval -> allow
+    check("intake_feature_complete_allow",
+          decide(g, contract, stages_obj=INTAKE_STAGES,
+                 files=_intake_file("card", FULL_FEATURE),
+                 approvals=[("intake", "card")]) == "allow")
+
+    # complete bug intake + approval -> allow
+    check("intake_bug_complete_allow",
+          decide(g, contract, stages_obj=INTAKE_STAGES,
+                 files=_intake_file("card", FULL_BUG),
+                 approvals=[("intake", "card")]) == "allow")
+
+    # missing a required field -> block, and the missing field is NAMED (the question)
+    no_acc = {k: v for k, v in FULL_FEATURE.items() if k != "acceptance"}
+    res = decide_full(g, contract, stages_obj=INTAKE_STAGES,
+                      files=_intake_file("card", no_acc), approvals=[("intake", "card")])
+    check("intake_missing_field_block", res["decision"] == "block", res)
+    check("intake_missing_field_named", "acceptance" in res.get("reason", ""), res)
+
+    # empty list / whitespace-only count as MISSING
+    empty_acc = dict(FULL_FEATURE, acceptance=[])
+    check("intake_empty_list_block",
+          decide(g, contract, stages_obj=INTAKE_STAGES,
+                 files=_intake_file("card", empty_acc),
+                 approvals=[("intake", "card")]) == "block")
+    blank_under = dict(FULL_FEATURE, understanding="   ")
+    check("intake_blank_string_block",
+          decide(g, contract, stages_obj=INTAKE_STAGES,
+                 files=_intake_file("card", blank_under),
+                 approvals=[("intake", "card")]) == "block")
+
+    # bug missing severity -> block (per-task_type required set)
+    no_sev = {k: v for k, v in FULL_BUG.items() if k != "severity"}
+    check("intake_bug_missing_severity_block",
+          decide(g, contract, stages_obj=INTAKE_STAGES,
+                 files=_intake_file("card", no_sev),
+                 approvals=[("intake", "card")]) == "block")
+
+    # intake.json absent entirely -> block
+    check("intake_absent_block",
+          decide(g, contract, stages_obj=INTAKE_STAGES,
+                 approvals=[("intake", "card")]) == "block")
+
+    # unknown / missing task_type -> block (fail-closed: cannot derive required set)
+    check("intake_unknown_tasktype_block",
+          decide(g, contract, stages_obj=INTAKE_STAGES,
+                 files=_intake_file("card", {"task_type": "chore", "scope_intent": "x"}),
+                 approvals=[("intake", "card")]) == "block")
+
+    # complete intake but NO approval -> still block (the approval predicate);
+    # a complete intake does not let the agent skip the human understanding ack
+    check("intake_complete_no_approval_block",
+          decide(g, contract, stages_obj=INTAKE_STAGES,
+                 files=_intake_file("card", FULL_FEATURE)) == "block")
+
+
 def test_matrix():
     g = load_gate("gate_stage_order")
 
@@ -230,6 +321,16 @@ def test_live_stages_deferral():
     check("live_delivery_requires_verdict_pass",
           any(p.get("type") == "verdict_pass"
               for p in by_id["delivery"]["entry_requires"]))
+    # WI-20: the live contract stage gates on intake completeness, and the
+    # required-field map covers both task types.
+    check("live_contract_requires_intake_complete",
+          any(p.get("type") == "intake_complete"
+              for p in by_id["contract"]["entry_requires"]))
+    req = data.get("intake_required", {})
+    check("live_intake_required_feature",
+          isinstance(req.get("feature"), list) and req["feature"], req)
+    check("live_intake_required_bug",
+          isinstance(req.get("bug"), list) and req["bug"], req)
 
 
 def test_confirm_is_agent_blocked():
@@ -281,6 +382,7 @@ def test_confirm_records_marker():
 
 def main():
     test_matrix()
+    test_intake_complete()
     test_live_stages_deferral()
     test_confirm_is_agent_blocked()
     test_confirm_records_marker()

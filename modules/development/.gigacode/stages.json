@@ -1,5 +1,9 @@
 {
   "version": 1,
+  "intake_required": {
+    "feature": ["scope_intent", "acceptance", "understanding"],
+    "bug": ["repro", "expected", "actual", "severity", "understanding"]
+  },
   "stages": [
     {
       "id": "intake",
@@ -12,6 +16,7 @@
       "order": 1,
       "writes": ["docs/development/*/contract.json"],
       "entry_requires": [
+        {"type": "intake_complete"},
         {"type": "approval", "stage": "intake"}
       ]
     },

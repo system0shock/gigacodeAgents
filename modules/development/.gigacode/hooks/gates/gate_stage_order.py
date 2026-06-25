@@ -40,13 +40,28 @@ def _norm(p):
     return p[2:] if p.startswith("./") else p
 
 
-def load_stages():
+def load_doc():
     with open(_stages_path(), "r", encoding="utf-8") as handle:
         data = json.load(handle)
-    stages = data.get("stages")
-    if not isinstance(stages, list):
+    if not isinstance(data.get("stages"), list):
         raise ValueError("stages.json: 'stages' must be a list")
-    return stages
+    return data
+
+
+def load_stages():
+    return load_doc()["stages"]
+
+
+def _intake_empty(value):
+    """A required intake field counts as MISSING when it is null, a blank/
+    whitespace-only string, or an empty list/dict. Numbers/bools count as set."""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, (list, dict, tuple)):
+        return len(value) == 0
+    return False
 
 
 def slug_from_path(path):
@@ -71,7 +86,7 @@ def _artifact_path(rel, slug):
     return os.path.join(_lib.root(), *rel.split("/"))
 
 
-def predicate_holds(pred, slug):
+def predicate_holds(pred, slug, intake_required):
     """Return (ok, label). Unknown type raises -> caller fails closed."""
     ptype = pred.get("type")
     if ptype == "approval":
@@ -89,6 +104,26 @@ def predicate_holds(pred, slug):
         except (OSError, json.JSONDecodeError):
             return False, "verdict:pass"
         return data.get("result") == "pass", "verdict:pass"
+    if ptype == "intake_complete":
+        # WI-20/ADR-7: the questions are DERIVED from the empty required fields of
+        # intake.json (per task_type), not from prompt keyword-sniffing. An absent/
+        # unreadable intake, an unknown task_type, or any empty required field
+        # blocks the intake->contract transition and names exactly what to fill.
+        target = _artifact_path("docs/development/<slug>/intake.json", slug)
+        try:
+            with open(target, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except (OSError, json.JSONDecodeError):
+            return False, "intake.json отсутствует или не читается — заполни его"
+        ttype = data.get("task_type")
+        required = intake_required.get(ttype) if isinstance(ttype, str) else None
+        if required is None:
+            return False, ("intake.json: task_type должен быть одним из %s"
+                           % ", ".join(sorted(intake_required)) or "(не задано)")
+        missing = [field for field in required if _intake_empty(data.get(field))]
+        if missing:
+            return False, "заполни required-поля intake.json: " + ", ".join(missing)
+        return True, "intake_complete"
     raise ValueError("unknown predicate type: " + repr(ptype))
 
 
@@ -98,7 +133,7 @@ def run(event):
         return {"decision": "allow"}
     in_flow_tree = bool(DEV_SLUG_RE.search(path) or OSX_SLUG_RE.search(path))
     try:
-        stages = load_stages()
+        doc = load_doc()
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         # fail-closed ONLY if the write targets the workflow tree; otherwise a
         # missing stages.json must not brick unrelated edits.
@@ -106,6 +141,8 @@ def run(event):
             return {"decision": "block",
                     "reason": "stages.json unreadable: %s. %s" % (exc, ESCAPE)}
         return {"decision": "allow"}
+    stages = doc["stages"]
+    intake_required = doc.get("intake_required", {})
     st = target_stage(path, stages)
     if not st:
         return {"decision": "allow"}  # not a governed artifact (journal, notes, src)
@@ -117,7 +154,7 @@ def run(event):
     unmet = []
     try:
         for pred in st.get("entry_requires", []):
-            ok, label = predicate_holds(pred, slug)
+            ok, label = predicate_holds(pred, slug, intake_required)
             if not ok:
                 unmet.append(label)
     except ValueError as exc:

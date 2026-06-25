@@ -1,0 +1,15 @@
+{
+  "task_type": "feature",
+  "mode": "plan-only",
+  "slug": "<task-slug>",
+  "scope_intent": "",
+  "acceptance": [],
+  "repro": null,
+  "expected": null,
+  "actual": null,
+  "severity": null,
+  "constraints": [],
+  "missing_inputs": [],
+  "understanding": "",
+  "understanding_ack": false
+}

@@ -13,6 +13,7 @@ required=(
   ".gigacode/hooks/router.config.json"
   ".gigacode/hooks/hook_probe.py"
   "docs/templates/development-journal.md"
+  "docs/templates/intake.json"
   "rules/development-flow.md"
   "rules/language-policy.md"
   "rules/git-safety.md"
