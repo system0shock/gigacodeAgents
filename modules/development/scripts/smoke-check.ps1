@@ -29,7 +29,8 @@ $required = @(
   ".gigacode/hooks/gates/gate_existing_code.py",
   ".gigacode/quality-gates.json",
   "scripts/build_module_map.py",
-  "scripts/test_module_map.py"
+  "scripts/test_module_map.py",
+  "scripts/test_quality_gates.py"
 )
 
 foreach ($path in $required) {
@@ -133,6 +134,11 @@ if ($LASTEXITCODE -ne 0) {
 python scripts/test_gates.py
 if ($LASTEXITCODE -ne 0) {
   throw "gate tests failed"
+}
+
+python scripts/test_quality_gates.py
+if ($LASTEXITCODE -ne 0) {
+  throw "quality-gates profile tests failed"
 }
 
 python scripts/test_module_map.py

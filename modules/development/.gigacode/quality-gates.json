@@ -1,15 +1,15 @@
 {
   "lint": {
-    "command": "",
+    "command": "./gradlew detekt ktlintCheck",
     "applies_to": ["**/*.kt", "**/*.kts", "**/*.java"],
-    "timeout_seconds": 120
+    "timeout_seconds": 180
   },
   "build": {
-    "command": "",
+    "command": "./gradlew build -x test",
     "timeout_seconds": 600
   },
   "test": {
-    "command": ""
+    "command": "./gradlew test"
   },
   "clean_code": {
     "max_file_lines": 400,
