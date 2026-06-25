@@ -41,7 +41,28 @@ TOOL_NAME_MAP = {
     "edit": "Edit",
     "edit_file": "Edit",
     "notebook_edit": "NotebookEdit",
+    # Symbol-level MCP servers (Serena) mutate files through their OWN tool ids,
+    # not write_file/replace. Map the MUTATORS to canonical write ids so the same
+    # PreToolUse gates (git_guard, gate_stage_order, gate_scope_guard) fire —
+    # else the agent could edit .gigacode or forge an approval marker via Serena.
+    # Read-only Serena tools (find_symbol, get_symbols_overview, read_file) are
+    # deliberately absent so they stay unmatched → allow (no over-block).
+    "replace_symbol_body": "Edit",
+    "insert_after_symbol": "Edit",
+    "insert_before_symbol": "Edit",
+    "replace_regex": "Edit",
+    "create_text_file": "WriteFile",
 }
+
+
+def normalize_tool_name(raw):
+    """Canonicalize a raw tool id. MCP runtimes prefix the id
+    (``mcp__serena__replace_symbol_body``, ``serena__...``, ``serena.replace``);
+    strip the prefix to the bare tool name before mapping. Unknown ids pass
+    through unchanged (unmatched → allow, as before)."""
+    raw = str(raw)
+    base = raw.split("__")[-1].rsplit(".", 1)[-1] if ("__" in raw or "." in raw) else raw
+    return TOOL_NAME_MAP.get(base, TOOL_NAME_MAP.get(raw, raw))
 
 
 # WI-2: every journal record carries session_id/feature/agent so the read-model
@@ -305,7 +326,7 @@ def main():
         return
 
     event_name = ev_name_from_arg or str(event.get("hook_event_name", ""))
-    tool_name = TOOL_NAME_MAP.get(str(event.get("tool_name", "")), str(event.get("tool_name", "")))
+    tool_name = normalize_tool_name(event.get("tool_name", ""))
     event["hook_event_name"] = event_name  # canonical name so gates can branch on it
     event["tool_name"] = tool_name         # canonical tool id for gates that read it
 

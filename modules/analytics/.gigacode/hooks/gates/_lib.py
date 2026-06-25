@@ -63,7 +63,9 @@ def _norm_path(value):
 
 # notebook_path: NotebookEdit names its target there, not under path/file_path —
 # without it a NotebookEdit slips past the write gates with no recognized path.
-_PATH_KEYS = ("path", "file_path", "filename", "notebook_path")
+# relative_path: Serena (symbol-level MCP) names its write target there — without
+# it a normalized replace_symbol_body/create_text_file has no recognized path.
+_PATH_KEYS = ("path", "file_path", "filename", "notebook_path", "relative_path")
 
 
 def path_from_event(event):

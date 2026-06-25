@@ -122,6 +122,24 @@ def main():
     result = run_router("PreToolUse", {"tool_name": "write_file", "tool_input": {"file_path": ".gigacode/settings.json"}})
     check("raw_write_normalized_block", result["decision"] == "block", result)
 
+    # 3c. S1: symbol-level MCP servers (Serena) mutate files through their OWN
+    # tool ids, not write_file/replace, AND name the target in `relative_path`,
+    # AND the MCP runtime prefixes the id (mcp__serena__...). All three are
+    # normalized so the same PreToolUse gates (git_guard et al.) still fire —
+    # else the agent could edit .gigacode or forge an approval marker via Serena.
+    result = run_router("PreToolUse", {"tool_name": "replace_symbol_body",
+                                       "tool_input": {"relative_path": ".gigacode/hooks/gates/git_guard.py",
+                                                      "name_path": "main", "body": "pass"}})
+    check("serena_replace_symbol_gigacode_block", result["decision"] == "block", result)
+    result = run_router("PreToolUse", {"tool_name": "mcp__serena__create_text_file",
+                                       "tool_input": {"relative_path": ".gigacode/approvals/x/intake.ok",
+                                                      "content": "ok"}})
+    check("serena_mcp_prefixed_forge_block", result["decision"] == "block", result)
+    # read-only Serena tools must NOT be force-mapped to a write id (no over-block)
+    result = run_router("PreToolUse", {"tool_name": "mcp__serena__find_symbol",
+                                       "tool_input": {"name_path": "Foo"}})
+    check("serena_readonly_allow", result["decision"] == "allow", result)
+
     # 4. Protected path write asks
     result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": ".github/workflows/deploy.yml"}})
     check("protected_path_ask", result["decision"] == "ask", result)
