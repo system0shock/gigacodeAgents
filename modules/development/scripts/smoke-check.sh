@@ -30,6 +30,7 @@ required=(
   ".gigacode/hooks/gates/gate_clean_code.py"
   ".gigacode/hooks/gates/gate_existing_code.py"
   ".gigacode/hooks/gates/gate_stage_order.py"
+  ".gigacode/hooks/gates/gate_verdict.py"
   ".gigacode/hooks/confirm.py"
   ".gigacode/stages.json"
   ".gigacode/quality-gates.json"
@@ -37,6 +38,7 @@ required=(
   "scripts/test_module_map.py"
   "scripts/test_stage_order.py"
   "scripts/test_quality_gates.py"
+  "scripts/test_verdict.py"
 )
 
 for path in "${required[@]}"; do
@@ -107,6 +109,7 @@ printf '%s' "$missing" | grep -q '"decision": "block"'
 "$python_cmd" scripts/test_gates.py
 "$python_cmd" scripts/test_stage_order.py
 "$python_cmd" scripts/test_quality_gates.py
+"$python_cmd" scripts/test_verdict.py
 "$python_cmd" scripts/test_module_map.py
 
 # gate_stage_order: a contract-stage write without the intake approval is a hard

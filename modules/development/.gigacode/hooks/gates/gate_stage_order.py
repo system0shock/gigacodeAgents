@@ -141,6 +141,15 @@ def run(event):
             return {"decision": "block",
                     "reason": "stages.json unreadable: %s. %s" % (exc, ESCAPE)}
         return {"decision": "allow"}
+    # Machine-owned artifacts (e.g. verdict.json) are produced by a gate in the
+    # router process, never by the agent — a verdict the agent could write would
+    # let it self-grant `result: pass` and make the delivery stop theater (P6).
+    machine_owned = doc.get("machine_owned", [])
+    if machine_owned and _lib.matches_globs(path, machine_owned):
+        return {"decision": "block", "reason": (
+            "'%s' — машинно-производимый артефакт (его пишет gate_verdict в "
+            "процессе роутера из реальных тестов). Агент его не пишет: result "
+            "нельзя проставить вручную. %s" % (path, ESCAPE))}
     stages = doc["stages"]
     intake_required = doc.get("intake_required", {})
     st = target_stage(path, stages)

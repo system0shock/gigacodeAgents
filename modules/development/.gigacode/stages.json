@@ -4,6 +4,7 @@
     "feature": ["scope_intent", "acceptance", "understanding"],
     "bug": ["repro", "expected", "actual", "severity", "understanding"]
   },
+  "machine_owned": ["docs/development/*/verdict.json"],
   "stages": [
     {
       "id": "intake",
@@ -30,14 +31,6 @@
       ],
       "entry_requires": [],
       "_todo": "WI-7: add {type:file_exists, artifact:docs/development/<slug>/contract.json} once a contract.json producer exists. Deferred in v1 so the current openspec flow is not blocked by a contract nothing produces yet."
-    },
-    {
-      "id": "verify",
-      "order": 3,
-      "writes": ["docs/development/*/verdict.json"],
-      "entry_requires": [
-        {"type": "file_exists", "artifact": "openspec/changes/<slug>/tasks.md"}
-      ]
     },
     {
       "id": "delivery",
