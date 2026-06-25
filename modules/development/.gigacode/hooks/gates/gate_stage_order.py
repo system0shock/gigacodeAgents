@@ -10,10 +10,17 @@ until its confirmation exists. Not under stop_block_budget (PreToolUse, not Stop
 
 Self-contained except _lib and _stage. The stage resolver (slug, stages.json,
 predicates) lives in _stage so the projection read-model and this enforcer share
-one definition of "stage" and cannot drift. Governs file-tool writes to the
-workflow tree only; shell-channel writes are covered by git_guard (path
-protection) — stage-order on shell is a documented residual. Source-code writes
-are governed by gate_scope_guard.
+one definition of "stage" and cannot drift.
+
+TWO layers:
+- PreToolUse (file-tool writes): early, per-write block — fast feedback.
+- Stop (`_stop_invariant`): channel-INDEPENDENT. Derives truth from the working
+  tree, so a write through ANY channel (notably a shell `echo > artifact`, which
+  the PreToolUse path never sees) cannot COMPLETE the flow out of order. A present
+  stage artifact with unmet entry_requires, or changed source without a complete
+  approved contract covering it, blocks Stop. This closes the former shell-channel
+  residual AND the WI-8 source-ordering deferral. (PreToolUse alone was bypassable
+  via shell — found live on petclinic, 2026-06-25.)
 """
 import json
 import os
@@ -27,7 +34,109 @@ ESCAPE = ('If stages.json itself is broken, set "disableAllHooks": true in '
           ".gigacode/settings.json temporarily and report the issue.")
 
 
+def _active_slugs():
+    """Slugs with an uncommitted change under docs/development/<slug>/ or
+    openspec/changes/<slug>/ — the CURRENT task(s). Scoping to changed paths
+    avoids false-blocking on stale, already-completed task dirs."""
+    slugs = set()
+    for p in _lib.git_changed_paths():
+        norm = p.replace("\\", "/")
+        for rx in (_stage.DEV_SLUG_RE, _stage.OSX_SLUG_RE):
+            m = rx.search(norm)
+            if m:
+                slugs.add(m.group(1))
+    return slugs
+
+
+def _concrete(glob, slug):
+    """Resolve a writes-glob to a slug-concrete relative path (the '*' segment is
+    the slug)."""
+    return (glob.replace("docs/development/*/", "docs/development/%s/" % slug)
+                .replace("openspec/changes/*/", "openspec/changes/%s/" % slug))
+
+
+def _approved_contract_scope(slug, cfg):
+    """(scope_globs, approved): the contract's scope if it is COMPLETE and
+    human-approved (approval:contract), else ([], False)."""
+    try:
+        complete, _ = _stage.predicate_holds({"type": "contract_complete"}, slug, cfg)
+    except ValueError:
+        complete = False
+    marker = os.path.join(_stage.approvals_dir(), slug, "contract.ok")
+    if not (complete and os.path.isfile(marker)):
+        return [], False
+    try:
+        with open(_stage.artifact_path("docs/development/<slug>/contract.json", slug),
+                  "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return [], False
+    sg = data.get("scope_globs")
+    return ([g for g in sg if isinstance(g, str)] if isinstance(sg, list) else []), True
+
+
+def _stop_invariant():
+    """Channel-INDEPENDENT enforcement at Stop: derive the flow's truth from the
+    working tree, not from a tool call. Closes the gap that gate_stage_order's
+    PreToolUse path only sees file-tool writes — a shell write (echo > artifact)
+    slips past it. Here a present stage artifact whose entry_requires are unmet,
+    or changed source code without an approved contract covering it, blocks Stop —
+    so the flow cannot be COMPLETED out of order regardless of write channel."""
+    active = _active_slugs()
+    try:
+        doc = _stage.load_doc()
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        return ({"decision": "block",
+                 "reason": "stages.json unreadable at Stop: %s. %s" % (exc, ESCAPE)}
+                if active else {"decision": "allow"})
+    stages = doc["stages"]
+    cfg = _stage.cfg_from_doc(doc)
+    root = _lib.root()
+    bad = []
+    for slug in sorted(active):
+        for st in stages:
+            present = any(
+                os.path.isfile(os.path.join(root, *_concrete(g, slug).split("/")))
+                for g in st.get("writes", []))
+            if not present:
+                continue
+            try:
+                for pred in st.get("entry_requires", []):
+                    ok, label = _stage.predicate_holds(pred, slug, cfg)
+                    if not ok:
+                        bad.append("артефакт стадии '%s' (%s) есть, но НЕ выполнено %s"
+                                   % (st.get("id"), slug, label))
+            except ValueError as exc:
+                bad.append("предикат стадии '%s' сломан: %s" % (st.get("id"), exc))
+    # Source-ordering (closes the WI-8 deferral): changed product code requires a
+    # complete, approved contract whose scope covers it.
+    changed = _lib.changed_code_files()
+    if changed:
+        union, approved = [], False
+        for slug in active:
+            sg, ok = _approved_contract_scope(slug, cfg)
+            if ok:
+                union.extend(sg)
+                approved = True
+        if not approved:
+            bad.append("изменён код (%d файлов), но нет полного одобренного "
+                       "contract.json — заморозь scope и подтверди "
+                       "(python .gigacode/hooks/confirm.py contract <slug>)" % len(changed))
+        else:
+            oos = [p for p in changed if not _lib.matches_globs(p, union)]
+            if oos:
+                bad.append("код вне scope контракта: " + ", ".join(oos[:4]))
+    if bad:
+        return {"decision": "block", "reason": (
+            "Stop: порядок флоу нарушен (возможна запись мимо стопов, напр. через "
+            "shell): " + " | ".join(bad[:4]) + ". Приведи стадии/одобрения в "
+            "порядок или удали преждевременные артефакты. " + ESCAPE)}
+    return {"decision": "allow"}
+
+
 def run(event):
+    if event.get("hook_event_name") == "Stop":
+        return _stop_invariant()
     path = _stage.norm(_lib.path_from_event(event))
     if not path:
         return {"decision": "allow"}

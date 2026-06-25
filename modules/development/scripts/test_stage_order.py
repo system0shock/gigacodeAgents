@@ -511,12 +511,105 @@ def test_confirm_records_marker():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# Stop-invariant: channel-independent enforcement from the working tree (closes
+# the shell-channel bypass + source-ordering, found live on petclinic).
+STOP_STAGES = {
+    "version": 1,
+    "intake_required": {"feature": ["scope_intent", "acceptance", "understanding"]},
+    "contract_required": ["scope_globs", "modules"],
+    "machine_owned": ["docs/development/*/verdict.json"],
+    "stages": [
+        {"id": "intake", "order": 0, "writes": ["docs/development/*/intake.json"],
+         "entry_requires": []},
+        {"id": "contract", "order": 1, "writes": ["docs/development/*/contract.json"],
+         "entry_requires": [{"type": "intake_complete"},
+                            {"type": "approval", "stage": "intake"}]},
+        {"id": "delivery", "order": 4, "writes": ["docs/development/*/pr-summary.md"],
+         "entry_requires": [{"type": "verdict_pass",
+                             "artifact": "docs/development/<slug>/verdict.json"}]},
+    ],
+}
+_STOP_FEAT = json.dumps({"task_type": "feature", "scope_intent": "x",
+                         "acceptance": ["a"], "understanding": "u"})
+_STOP_CONTRACT = json.dumps({"feature": "card", "status": "active",
+                             "scope_globs": ["src/cards/**"], "modules": ["cards"]})
+
+
+def _git_fixture(files=None, approvals=None):
+    tmp = tempfile.mkdtemp(prefix="stopinv-")
+    gig = os.path.join(tmp, ".gigacode")
+    os.makedirs(gig)
+    with open(os.path.join(gig, "stages.json"), "w", encoding="utf-8") as h:
+        json.dump(STOP_STAGES, h)
+    for rel, content in (files or {}).items():
+        dest = os.path.join(tmp, *rel.split("/"))
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "w", encoding="utf-8") as h:
+            h.write(content)
+    for stage, slug in (approvals or []):
+        ad = os.path.join(gig, "approvals", slug)
+        os.makedirs(ad, exist_ok=True)
+        with open(os.path.join(ad, stage + ".ok"), "w", encoding="utf-8") as h:
+            h.write("{}")
+    subprocess.run(["git", "init", "-q"], cwd=tmp,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return tmp
+
+
+def test_stop_invariant():
+    g = load_gate("gate_stage_order")
+
+    def stop_decide(**kw):
+        tmp = _git_fixture(**kw)
+        try:
+            with root_at(tmp):
+                return g.run({"hook_event_name": "Stop"})["decision"]
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    # THE bypass scenario: pr-summary present without a passing verdict -> block
+    check("stop_premature_delivery_block",
+          stop_decide(files={"docs/development/card/pr-summary.md": "done"}) == "block")
+    # contract present without the intake approval -> block
+    check("stop_contract_without_intake_block",
+          stop_decide(files={"docs/development/card/contract.json": _STOP_CONTRACT}) == "block")
+    # in order (intake filled + approved, nothing premature) -> allow
+    check("stop_in_order_allow",
+          stop_decide(files={"docs/development/card/intake.json": _STOP_FEAT},
+                      approvals=[("intake", "card")]) == "allow")
+    # delivery in order: pr-summary + a passing verdict -> allow
+    check("stop_delivery_in_order_allow",
+          stop_decide(files={"docs/development/card/pr-summary.md": "done",
+                             "docs/development/card/verdict.json": json.dumps({"result": "pass"})})
+          == "allow")
+    # source-ordering: changed code without an approved contract -> block
+    check("stop_source_without_contract_block",
+          stop_decide(files={"docs/development/card/intake.json": _STOP_FEAT,
+                             "src/cards/X.kt": "class X"},
+                      approvals=[("intake", "card")]) == "block")
+    # source in an approved contract's scope -> allow
+    check("stop_source_in_scope_allow",
+          stop_decide(files={"docs/development/card/intake.json": _STOP_FEAT,
+                             "docs/development/card/contract.json": _STOP_CONTRACT,
+                             "src/cards/X.kt": "class X"},
+                      approvals=[("intake", "card"), ("contract", "card")]) == "allow")
+    # source OUTSIDE the contract scope -> block
+    check("stop_source_out_of_scope_block",
+          stop_decide(files={"docs/development/card/intake.json": _STOP_FEAT,
+                             "docs/development/card/contract.json": _STOP_CONTRACT,
+                             "src/other/Y.kt": "class Y"},
+                      approvals=[("intake", "card"), ("contract", "card")]) == "block")
+    # no active task -> allow (don't brick unrelated Stops)
+    check("stop_no_task_allow", stop_decide() == "allow")
+
+
 def main():
     test_matrix()
     test_intake_complete()
     test_contract_complete()
     test_frozen_after()
     test_machine_owned()
+    test_stop_invariant()
     test_live_stages_deferral()
     test_confirm_is_agent_blocked()
     test_confirm_records_marker()
