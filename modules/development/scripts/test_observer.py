@@ -234,6 +234,50 @@ def test_html_zero_external_assets():
     check("html_has_themes", "ultra-pink" in html and "localStorage" in html, "theme toggle missing")
 
 
+def _hash_tree(root):
+    import hashlib
+    digest = hashlib.sha256()
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames.sort()
+        for name in sorted(filenames):
+            full = os.path.join(dirpath, name)
+            digest.update(os.path.relpath(full, root).encode("utf-8"))
+            with open(full, "rb") as h:
+                digest.update(h.read())
+    return digest.hexdigest()
+
+
+def test_read_only_and_loopback():
+    import urllib.request
+    obs = load_mod("observer")
+    # No git repo, no logs dir: the trap a journaling reader would trip.
+    tmp = make_root(intake={"task_type": "feature", "scope_intent": "x", "acceptance": [],
+                            "constraints": [], "understanding": "u"})
+    orig = os.environ.get("GIGACODE_ROOT")
+    httpd = None
+    try:
+        os.environ["GIGACODE_ROOT"] = tmp
+        before = _hash_tree(tmp)
+        httpd = obs.make_server(0, slug="card")
+        check("loopback_only", httpd.server_address[0] == "127.0.0.1", httpd.server_address)
+        import threading
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        port = httpd.server_address[1]
+        with urllib.request.urlopen("http://127.0.0.1:%d/api/snapshot?slug=card" % port, timeout=5) as r:
+            r.read()
+        # let the broadcaster tick at least once (interval 2s)
+        import time as _t; _t.sleep(2.5)
+        after = _hash_tree(tmp)
+        check("read_only_no_writes", before == after,
+              "observer mutated the tree (read-only invariant broken)")
+    finally:
+        if httpd is not None:
+            httpd._broadcaster_stop.set(); httpd.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+        if orig is None: os.environ.pop("GIGACODE_ROOT", None)
+        else: os.environ["GIGACODE_ROOT"] = orig
+
+
 if __name__ == "__main__":
     test_readers()
     test_vitals()
@@ -244,4 +288,5 @@ if __name__ == "__main__":
     test_build_snapshot()
     test_server_routes()
     test_html_zero_external_assets()
+    test_read_only_and_loopback()
     print(f"\n{PASSED} checks passed")
