@@ -45,6 +45,17 @@ Output for `docs/development/<task-slug>/pr-summary.md`:
 
 Write prose in Russian by default. Keep paths, commands, code symbols, and raw command output unchanged.
 
+## Машинный вердикт (verdict.json)
+
+`docs/development/<slug>/verdict.json` производит **`gate_verdict` на Stop**, а не
+ты: он запускает `test.command` и проставляет `result` по реальному exit-коду
+(P4 — не самооценка). Артефакт machine-owned — попытка записать его файловым
+инструментом блокируется. Твоя задача — добиться, чтобы тесты **реально
+выполнялись** настроенной командой (иначе `result` будет `fail`), и описать
+evidence в `verification.md`. `result: "pass"` разблокирует запись `pr-summary.md`
+(стадия delivery). Risk-поля вердикта механические (из диффа/журнала).
+
 Do not claim tests passed unless command output proves it.
+Do not write or edit verdict.json — it is machine-produced.
 Do not invent commits, pushes, PR URLs, CI status, or deployment status.
 Do not commit. Do not push.

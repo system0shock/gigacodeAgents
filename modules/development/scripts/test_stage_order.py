@@ -211,6 +211,28 @@ def test_intake_complete():
                  files=_intake_file("card", FULL_FEATURE)) == "block")
 
 
+def test_machine_owned():
+    """WI-11/P6: an agent file-tool write to a machine-owned artifact (verdict.json)
+    is blocked — it is produced by gate_verdict in the router process, so the agent
+    cannot self-grant result:pass."""
+    g = load_gate("gate_stage_order")
+    mo = {"version": 1,
+          "machine_owned": ["docs/development/*/verdict.json"],
+          "stages": [{"id": "delivery", "order": 0,
+                      "writes": ["docs/development/*/pr-summary.md"],
+                      "entry_requires": []}]}
+    check("verdict_agent_write_block",
+          decide(g, "docs/development/card/verdict.json", stages_obj=mo) == "block")
+    # a non-machine-owned path under the same tree is unaffected
+    check("journal_not_machine_owned",
+          decide(g, "docs/development/card/journal.md", stages_obj=mo) == "allow")
+    # machine_owned blocks via any write tool form
+    with root_at(make_root(stages_obj=mo)):
+        ev2 = {"hook_event_name": "PreToolUse", "tool_name": "Write",
+               "tool_input": {"file_path": "docs/development/card/verdict.json"}}
+        check("verdict_machine_owned_any_tool", g.run(ev2)["decision"] == "block")
+
+
 def test_matrix():
     g = load_gate("gate_stage_order")
 
@@ -321,6 +343,16 @@ def test_live_stages_deferral():
     check("live_delivery_requires_verdict_pass",
           any(p.get("type") == "verdict_pass"
               for p in by_id["delivery"]["entry_requires"]))
+    # WI-11: verdict.json is machine-owned (agent writes blocked); the verify
+    # stage no longer governs an agent-written artifact (gate_verdict produces it).
+    g = load_gate("gate_stage_order")
+    check("live_verdict_machine_owned",
+          any("verdict.json" in glob for glob in data.get("machine_owned", [])),
+          data.get("machine_owned"))
+    check("live_verdict_agent_write_blocked",
+          g.run({"hook_event_name": "PreToolUse", "tool_name": "Edit",
+                 "tool_input": {"file_path": "docs/development/x/verdict.json"}})["decision"]
+          == "block")
     # WI-20: the live contract stage gates on intake completeness, and the
     # required-field map covers both task types.
     check("live_contract_requires_intake_complete",
@@ -383,6 +415,7 @@ def test_confirm_records_marker():
 def main():
     test_matrix()
     test_intake_complete()
+    test_machine_owned()
     test_live_stages_deferral()
     test_confirm_is_agent_blocked()
     test_confirm_records_marker()
