@@ -102,6 +102,35 @@ def blocker(snapshot, decisions):
             "command": command, "reason": last_block.get("reason") if last_block else None}
 
 
+# Gates that fire on a source-code edit. There is no "implement" STAGE in
+# stages.json (the agent codes between plan-approval and the verdict), so
+# implement activity is inferred from these gates' decisions in the journal.
+CODE_GATES = ("gate_lint", "gate_scope_guard", "gate_clean_code",
+              "gate_existing_code", "gate_build")
+
+
+def implement_status(snapshot, decisions, now):
+    """Live 'implement is happening' signal, or None. Active when there are
+    code-edit gate decisions, the plan stage has been reached, and no passing
+    verdict exists yet. Returns {active, edits, last_sec}."""
+    edits = [d for d in decisions if d.get("gate") in CODE_GATES]
+    if not edits:
+        return None
+    if (snapshot.get("verdict") or {}).get("result") == "pass":
+        return None  # past implement — verdict already green
+    stages = (snapshot.get("stage") or {}).get("stages", [])
+    plan = next((s for s in stages if s.get("id") == "plan"), None)
+    if plan is not None and not plan.get("enterable", False):
+        return None  # plan not even reached yet
+    last_ts = None
+    for d in edits:
+        ts = parse_ts(d.get("ts"))
+        if ts and (last_ts is None or ts > last_ts):
+            last_ts = ts
+    last_sec = int((now - last_ts).total_seconds()) if last_ts else None
+    return {"active": True, "edits": len(edits), "last_sec": last_sec}
+
+
 def enrich(snapshot, decisions, now):
     slug = snapshot.get("slug")
     out = dict(snapshot)
@@ -110,6 +139,7 @@ def enrich(snapshot, decisions, now):
     out["verdict"] = read_verdict(slug)
     out["blocker"] = blocker(snapshot, decisions)
     out["vitals"] = vitals(decisions, now)
+    out["implement"] = implement_status(out, decisions, now)
     return out
 
 
@@ -117,7 +147,7 @@ def _empty_snapshot(slug):
     return {"_contract": CONTRACT, "session": None, "slug": slug, "slug_candidates": [],
             "stage": {"current": None, "stages": []},
             "budget": {"used": None, "limit": None}, "scope": None, "decisions": [],
-            "intake": None, "verdict": None, "blocker": None,
+            "intake": None, "verdict": None, "blocker": None, "implement": None,
             "vitals": {"total": 0, "block": 0, "ask": 0, "allow": 0, "per_min": 0,
                        "idle_sec": None, "session_sec": 0, "tools": {}}}
 

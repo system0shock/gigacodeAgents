@@ -140,6 +140,31 @@ def test_enrich():
     check("enrich_vitals", out["vitals"]["total"] == 1)
     check("enrich_blocker", out["blocker"]["active"] is True)
     check("enrich_verdict_none", out["verdict"] is None)
+    check("enrich_implement_key", "implement" in out, out)
+
+
+def test_implement_status():
+    obs = load_mod("observer")
+    plan_ready = {"current": "plan", "stages": [
+        {"id": "plan", "order": 2, "enterable": True, "met": [], "unmet": []}]}
+    edits = [rec("2026-06-25T15:00:00+0300", "allow", "Edit", gate="gate_lint"),
+             rec("2026-06-25T15:00:20+0300", "ask", "Edit", gate="gate_scope_guard")]
+    im = obs.implement_status({"stage": plan_ready, "verdict": None}, edits, NOW)
+    check("impl_active", im["active"] is True and im["edits"] == 2, im)
+    check("impl_last_sec", im["last_sec"] == 10, im)  # NOW(15:00:30) - 15:00:20
+    # no code-edit gates -> None
+    check("impl_none_no_edits",
+          obs.implement_status({"stage": plan_ready, "verdict": None},
+                               [rec(TS, "allow", gate="git_guard")], NOW) is None)
+    # passing verdict -> past implement -> None
+    check("impl_none_verdict_pass",
+          obs.implement_status({"stage": plan_ready, "verdict": {"result": "pass"}},
+                               edits, NOW) is None)
+    # plan not reached -> None
+    plan_locked = {"current": "contract", "stages": [
+        {"id": "plan", "order": 2, "enterable": False, "met": [], "unmet": ["approval:contract"]}]}
+    check("impl_none_plan_locked",
+          obs.implement_status({"stage": plan_locked, "verdict": None}, edits, NOW) is None)
 
 
 def test_parse_ts():
@@ -283,6 +308,7 @@ if __name__ == "__main__":
     test_vitals()
     test_blocker()
     test_enrich()
+    test_implement_status()
     test_parse_ts()
     test_format_sse()
     test_build_snapshot()

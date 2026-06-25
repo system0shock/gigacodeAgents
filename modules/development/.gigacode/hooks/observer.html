@@ -65,6 +65,7 @@
     <div class="lbl">граф стадий</div>
     <div class="row" style="align-items:stretch;gap:4px;" id="graph"></div>
     <div id="trans" style="border-top:0.5px solid var(--bd);margin-top:12px;padding-top:8px;font-size:12px;"></div>
+    <div id="implBadge" style="margin-top:8px;"></div>
     <div style="margin-top:8px;font-size:11px;color:var(--t3);line-height:1.45;">
       Между <b style="color:var(--t2)">plan</b> и <b style="color:var(--t2)">delivery</b> нет отдельной стадии:
       здесь идёт <b style="color:var(--t2)">implement</b> — агент пишет код (петля coder, каждая правка проходит git_guard / gate_scope_guard / gate_lint);
@@ -223,6 +224,17 @@
   }
   function stagesOrder(stages, id){ var f=stages.filter(function(s){return s.id===id;})[0]; return f?f.order:99; }
 
+  // Live "implement is happening" badge — there is no implement stage node, so
+  // backend infers it from code-edit gate activity (snap.implement).
+  function renderImplement(im){
+    var el = byId("implBadge");
+    if(!im || !im.active){ el.innerHTML=""; return; }
+    var ago = im.last_sec==null ? "" : " · последняя правка "+im.last_sec+"с назад";
+    el.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ok);background:var(--okbg);padding:3px 10px;border-radius:6px;">'+
+      '<span style="width:7px;height:7px;border-radius:50%;background:var(--ok)"></span>'+
+      'implement: идёт · '+im.edits+' правок'+esc(ago)+'</span>';
+  }
+
   function renderBudget(b){
     if(!b){ byId("budget").innerHTML="нет данных"; return; }
     var used = b.used==null?"?":b.used, lim = b.limit==null?"?":b.limit;
@@ -286,6 +298,7 @@
     renderBlocker(snap.blocker);
     renderVitals(snap.vitals);
     renderGraph(snap.stage);
+    renderImplement(snap.implement);
     renderBudget(snap.budget);
     renderScope(snap.scope);
     renderVerdict(snap.verdict);
