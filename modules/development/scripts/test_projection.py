@@ -298,6 +298,39 @@ def test_main_oneshot(capsys=None):
     check("main_prints_stage", "stage" in out, out)
 
 
+def _hash_tree(root):
+    import hashlib
+    digest = hashlib.sha256()
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames.sort()
+        for name in sorted(filenames):
+            full = os.path.join(dirpath, name)
+            digest.update(os.path.relpath(full, root).encode("utf-8"))
+            with open(full, "rb") as h:
+                digest.update(h.read())
+    return digest.hexdigest()
+
+
+def test_read_only_invariant():
+    proj = load_projection()
+    # A fixture WITHOUT a git repo and WITHOUT logs is the trap: a journaling
+    # reader would CREATE decisions.jsonl on a git miss. Prove nothing appears.
+    tmp = make_root(stages=STAGES_FIXTURE, config={"stop_block_budget": 2},
+                    contracts={"card": {"scope_globs": ["src/**"], "modules": ["c"]}},
+                    dev_dirs=["card"])
+    try:
+        with root_at(tmp):
+            before = _hash_tree(tmp)
+            snap = proj.collect(slug="card", tail_n=8)
+            _ = proj.render_snapshot(snap, color=False)
+            proj.follow(slug="card", interval=0, _max_polls=2)  # exercise tail loop
+            after = _hash_tree(tmp)
+        check("read_only_no_writes", before == after,
+              "projection mutated the tree (read-only invariant broken)")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_journal_reader()
     test_budget()
@@ -309,4 +342,5 @@ if __name__ == "__main__":
     test_render_decision()
     test_tail_reader()
     test_main_oneshot()
+    test_read_only_invariant()
     print(f"\n{PASSED} checks passed")

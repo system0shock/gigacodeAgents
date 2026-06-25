@@ -42,6 +42,8 @@ required=(
   "scripts/test_quality_gates.py"
   "scripts/test_verdict.py"
   "scripts/test_scope_guard.py"
+  "scripts/test_projection.py"
+  ".gigacode/hooks/projection.py"
 )
 
 for path in "${required[@]}"; do
@@ -114,6 +116,7 @@ printf '%s' "$missing" | grep -q '"decision": "block"'
 "$python_cmd" scripts/test_quality_gates.py
 "$python_cmd" scripts/test_verdict.py
 "$python_cmd" scripts/test_scope_guard.py
+"$python_cmd" scripts/test_projection.py
 "$python_cmd" scripts/test_module_map.py
 
 # gate_stage_order: a contract-stage write without the intake approval is a hard
