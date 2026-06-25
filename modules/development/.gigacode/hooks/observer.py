@@ -229,6 +229,23 @@ def documents(slug):
     return docs
 
 
+def safe_doc_path(rel):
+    """Absolute path for a /doc request, or None if it escapes the allowlist.
+    Rejects absolutes, '..', non-flow-doc prefixes, and symlink escapes out of root."""
+    if not rel or rel.startswith("/") or rel.startswith("\\"):
+        return None
+    norm = os.path.normpath(rel).replace("\\", "/")
+    if os.path.isabs(norm) or norm == ".." or norm.startswith("../") or "/../" in norm:
+        return None
+    if not norm.startswith(ALLOWED_DOC_PREFIXES):
+        return None
+    root = os.path.realpath(_root())
+    full = os.path.realpath(os.path.join(root, *norm.split("/")))
+    if os.path.commonpath([root, full]) != root:
+        return None
+    return full
+
+
 def enrich(snapshot, decisions, now):
     slug = snapshot.get("slug")
     out = dict(snapshot)
@@ -352,6 +369,24 @@ def _make_handler(observer):
                 self._send_json(build_snapshot(self._slug()))
             elif route == "/stream":
                 self._serve_stream(self._slug())
+            elif route == "/doc":
+                from urllib.parse import urlparse, parse_qs
+                rel = (parse_qs(urlparse(self.path).query).get("path") or [""])[0]
+                target = safe_doc_path(rel)
+                if target is None:
+                    self.send_error(400)
+                    return
+                try:
+                    with open(target, "rb") as h:
+                        body = h.read(512 * 1024)
+                except OSError:
+                    self.send_error(404)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
             else:
                 self.send_error(404)
 

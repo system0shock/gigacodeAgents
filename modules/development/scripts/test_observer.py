@@ -375,6 +375,53 @@ def test_implement_steps():
     check("steps_gate", im["steps"][1]["gate"] == "gate_scope_guard", im["steps"][1])
 
 
+def test_safe_doc_path():
+    obs = load_mod("observer")
+    with root_at(make_root(openspec={"proposal.md": "hi"})):
+        ok = obs.safe_doc_path("openspec/changes/card/proposal.md")
+        check("doc_ok", ok is not None and ok.endswith("proposal.md"), ok)
+        check("doc_flow_ok", obs.safe_doc_path("docs/development/card/intake.json") is not None)
+        check("doc_reject_abs", obs.safe_doc_path("/etc/passwd") is None)
+        check("doc_reject_dotdot", obs.safe_doc_path("openspec/changes/card/../../../secret") is None)
+        check("doc_reject_outside_prefix", obs.safe_doc_path("src/cards/CardService.kt") is None)
+        check("doc_reject_gigacode", obs.safe_doc_path("docs/development/card/../../../.gigacode/settings.json") is None)
+        check("doc_reject_empty", obs.safe_doc_path("") is None)
+
+
+def test_doc_route():
+    import urllib.request
+    obs = load_mod("observer")
+    tmp = make_root(openspec={"proposal.md": "PROPOSAL BODY"})
+    orig = os.environ.get("GIGACODE_ROOT")
+    httpd = None
+    try:
+        os.environ["GIGACODE_ROOT"] = tmp
+        httpd = obs.make_server(0, slug="card")
+        import threading
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        port = httpd.server_address[1]
+        base = "http://127.0.0.1:%d" % port
+        with urllib.request.urlopen(base + "/doc?path=openspec/changes/card/proposal.md", timeout=5) as r:
+            body = r.read().decode("utf-8")
+        check("doc_route_serves", "PROPOSAL BODY" in body, body)
+        try:
+            urllib.request.urlopen(base + "/doc?path=src/x.kt", timeout=5); bad = 0
+        except urllib.error.HTTPError as e:
+            bad = e.code
+        check("doc_route_rejects_400", bad == 400, bad)
+        try:
+            urllib.request.urlopen(base + "/doc?path=docs/development/card/nope.json", timeout=5); nf = 0
+        except urllib.error.HTTPError as e:
+            nf = e.code
+        check("doc_route_404", nf == 404, nf)
+    finally:
+        if httpd is not None:
+            httpd._broadcaster_stop.set(); httpd.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+        if orig is None: os.environ.pop("GIGACODE_ROOT", None)
+        else: os.environ["GIGACODE_ROOT"] = orig
+
+
 if __name__ == "__main__":
     test_readers()
     test_vitals()
@@ -391,4 +438,6 @@ if __name__ == "__main__":
     test_documents()
     test_gates()
     test_implement_steps()
+    test_safe_doc_path()
+    test_doc_route()
     print(f"\n{PASSED} checks passed")
