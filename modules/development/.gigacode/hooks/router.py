@@ -44,9 +44,64 @@ TOOL_NAME_MAP = {
 }
 
 
+# WI-2: every journal record carries session_id/feature/agent so the read-model
+# (projection/observer) can draw swimlanes, attribute per-agent activity, and
+# separate fan-out lines. Set once per run in main() from the event; empty
+# strings when unknown so the schema is stable. The feature (task slug) is
+# derived from the write path via config-declared patterns — the convention is
+# module-specific (dev: docs/development/<slug>; analytics: docs/features/<slug>),
+# so the shared router stays generic and reads `feature_patterns` from the config.
+_IDENTITY = {}
+_PATH_KEYS = ("path", "file_path", "filename", "notebook_path")
+
+
+def _event_path(event):
+    for key in _PATH_KEYS:
+        value = event.get(key)
+        if isinstance(value, str):
+            return value.replace("\\", "/")
+    tool_input = event.get("tool_input")
+    if isinstance(tool_input, dict):
+        for key in _PATH_KEYS:
+            value = tool_input.get(key)
+            if isinstance(value, str):
+                return value.replace("\\", "/")
+    return ""
+
+
+def _feature_of(event, feature_patterns):
+    path = _event_path(event)
+    if not path:
+        return ""
+    for pattern in feature_patterns or []:
+        try:
+            match = re.search(pattern, path, re.IGNORECASE)
+        except re.error:
+            continue  # a broken pattern must not break journaling
+        if match and match.groups():
+            return match.group(1)
+    return ""
+
+
+def identity_of(event, feature_patterns=()):
+    """WI-2 line identifiers: session_id + feature (task slug from the path via
+    config patterns) + agent (subagent type). Always present (empty when unknown)."""
+    sid = event.get("session_id")
+    agent = ""
+    for key in ("agent_type", "subagent_type", "agent_name"):
+        value = event.get(key)
+        if isinstance(value, str) and value:
+            agent = value
+            break
+    return {"session_id": sid if isinstance(sid, str) else "",
+            "feature": _feature_of(event, feature_patterns),
+            "agent": agent}
+
+
 def journal(record):
     try:
         os.makedirs(LOGS_DIR, exist_ok=True)
+        record = {**_IDENTITY, **record}  # WI-2 identity; record fields win on conflict
         record["ts"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")  # FIX 7: timezone
         with open(JOURNAL_PATH, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -263,6 +318,9 @@ def main():
         emit(ev_name_from_arg, {"decision": "block",
                                 "reason": f"router.config.json unreadable: {exc}. {ESCAPE_HATCH}"})
         return
+
+    global _IDENTITY  # WI-2: stamp every subsequent journal record for this run
+    _IDENTITY = identity_of(event, config.get("feature_patterns", []))
 
     try:
         final = decide(event, event_name, tool_name, config)

@@ -1,6 +1,10 @@
 {
   "version": 1,
   "stop_block_budget": 2,
+  "feature_patterns": [
+    "(?:^|/)docs/features/([^/]+)/",
+    "(?:^|/)openspec/changes/([^/]+)/"
+  ],
   "routes": [
     {
       "event": "UserPromptSubmit",

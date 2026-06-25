@@ -717,6 +717,45 @@ def main():
         result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
         check(f"r7_allow::{cmd[:34]}", result["decision"] == "allow", (cmd, result))
 
+    # 25. WI-2: every journal record carries session_id / feature / agent.
+    tmp, tmp_router, tmp_config = temp_hooks_copy()
+    with open(os.path.join(tmp, "hooks", "gates", "fixture_allow.py"), "w", encoding="utf-8") as handle:
+        handle.write("def run(event):\n    return {'decision': 'allow'}\n")
+    with open(tmp_config, "w", encoding="utf-8") as handle:
+        json.dump({"version": 1,
+                   "feature_patterns": ["(?:^|/)docs/development/([^/]+)/"],
+                   "routes": [{"event": "PreToolUse", "tool_pattern": "^Edit$",
+                               "gates": ["fixture_allow"]}]}, handle)
+    run_router("PreToolUse",
+               {"tool_name": "Edit", "session_id": "s-42", "agent_type": "coder",
+                "tool_input": {"file_path": "docs/development/card-blocking/contract.json"}},
+               router=tmp_router)
+    with open(os.path.join(tmp, "logs", "decisions.jsonl"), encoding="utf-8") as handle:
+        recs = [json.loads(line) for line in handle if line.strip()]
+    check("ji_has_records", len(recs) >= 2, recs)  # at least a gate + a final
+    for rec in recs:
+        tag = rec.get("kind", "?")
+        check(f"ji_session::{tag}", rec.get("session_id") == "s-42", rec)
+        check(f"ji_feature::{tag}", rec.get("feature") == "card-blocking", rec)
+        check(f"ji_agent::{tag}", rec.get("agent") == "coder", rec)
+    shutil.rmtree(tmp, ignore_errors=True)
+
+    # 25b. WI-2: pathless event (Stop) -> session stamped, feature/agent empty.
+    tmp2, tmp_router2, tmp_config2 = temp_hooks_copy()
+    with open(os.path.join(tmp2, "hooks", "gates", "fixture_allow.py"), "w", encoding="utf-8") as handle:
+        handle.write("def run(event):\n    return {'decision': 'allow'}\n")
+    with open(tmp_config2, "w", encoding="utf-8") as handle:
+        json.dump({"version": 1, "routes": [
+            {"event": "Stop", "gates": ["fixture_allow"]}]}, handle)
+    run_router("Stop", {"session_id": "s-9"}, router=tmp_router2)
+    with open(os.path.join(tmp2, "logs", "decisions.jsonl"), encoding="utf-8") as handle:
+        recs2 = [json.loads(line) for line in handle if line.strip()]
+    final2 = [r for r in recs2 if r.get("kind") == "final"][0]
+    check("ji_stop_session", final2.get("session_id") == "s-9", final2)
+    check("ji_stop_feature_empty", final2.get("feature") == "", final2)
+    check("ji_stop_agent_empty", final2.get("agent") == "", final2)
+    shutil.rmtree(tmp2, ignore_errors=True)
+
     print(f"\nAll {PASSED} router checks passed")
 
 
