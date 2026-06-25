@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GigaCode Developer Flow — основные фичи</title>
+<style>
+  :root{
+    --bg:#0a0d14;
+    --bg2:#0e1320;
+    --surface:#141a28;
+    --surface2:#1b2333;
+    --line:#26304a;
+    --ink:#e8edf7;
+    --muted:#8a96ad;
+    --faint:#5a6580;
+    --accent:#5b8cff;
+    --accent2:#a78bff;
+    --green:#42d392;
+    --amber:#ffb454;
+    --red:#ff6b6b;
+    --grad:linear-gradient(120deg,#5b8cff 0%,#a78bff 55%,#ff8fb0 100%);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:radial-gradient(1200px 800px at 80% -10%,#16203a 0%,transparent 60%),
+               radial-gradient(900px 700px at -10% 110%,#1a1530 0%,transparent 55%),
+               var(--bg);
+    color:var(--ink);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  .deck{height:100vh;width:100vw;position:relative}
+  .slide{
+    position:absolute;inset:0;
+    display:none;
+    flex-direction:column;
+    padding:6vh 8vw 9vh;
+    animation:fade .55s cubic-bezier(.2,.7,.2,1);
+    overflow-y:auto;
+  }
+  .slide.active{display:flex}
+  @keyframes fade{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+  @keyframes pop{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);margin-bottom:18px;
+  }
+  .eyebrow::before{content:"";width:26px;height:2px;border-radius:2px;background:var(--grad)}
+  h1{font-size:clamp(34px,5.4vw,76px);line-height:1.03;font-weight:800;letter-spacing:-.02em}
+  h2{font-size:clamp(26px,3.4vw,46px);line-height:1.08;font-weight:780;letter-spacing:-.015em;margin-bottom:6px}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,20px);font-weight:450;line-height:1.5;margin-top:18px;max-width:60ch}
+  .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  .head{margin-bottom:30px}
+  .lead{color:var(--muted);font-size:clamp(14px,1.4vw,18px);max-width:72ch;line-height:1.55;margin-top:4px}
+
+  /* cover */
+  .cover{justify-content:center}
+  .cover .badge{
+    display:inline-flex;align-items:center;gap:10px;align-self:flex-start;
+    padding:8px 16px;border:1px solid var(--line);border-radius:100px;
+    background:rgba(91,140,255,.06);font-size:13px;color:var(--muted);margin-bottom:30px;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}
+  .cover h1{max-width:18ch}
+  .cover .tags{display:flex;gap:10px;flex-wrap:wrap;margin-top:34px}
+  .tag{padding:7px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13.5px;color:var(--muted)}
+  .tag b{color:var(--ink);font-weight:600}
+
+  /* grids & cards */
+  .grid{display:grid;gap:18px;margin-top:6px}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .card{
+    background:linear-gradient(180deg,var(--surface) 0%,var(--bg2) 100%);
+    border:1px solid var(--line);border-radius:16px;padding:22px 22px 20px;
+    animation:pop .5s both;position:relative;overflow:hidden;
+  }
+  .card::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:var(--grad);opacity:.7}
+  .card .ic{font-size:24px;margin-bottom:12px;display:block}
+  .card h3{font-size:18px;font-weight:700;margin-bottom:7px;letter-spacing:-.01em}
+  .card p{color:var(--muted);font-size:14px;line-height:1.5}
+  .card.mini{padding:18px}
+  .card.mini h3{font-size:15.5px}
+  .card.mini p{font-size:13px}
+  .num{font-size:13px;font-weight:700;color:var(--accent);background:rgba(91,140,255,.1);border:1px solid rgba(91,140,255,.2);
+       width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+
+  /* pipeline */
+  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin-top:10px}
+  .step{
+    flex:1;min-width:150px;background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:18px 16px;position:relative;animation:pop .5s both;
+  }
+  .step .k{font-size:12px;color:var(--faint);font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+  .step .t{font-size:16px;font-weight:700;margin:8px 0 6px}
+  .step .d{font-size:12.5px;color:var(--muted);line-height:1.45}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:22px;padding:0 6px;flex:0 0 auto}
+  .step.stop{border-color:rgba(255,107,107,.4);background:linear-gradient(180deg,rgba(255,107,107,.08),var(--surface))}
+  .step.stop .k{color:var(--red)}
+
+  /* table */
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:14px;animation:pop .5s both}
+  th,td{text-align:left;padding:13px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--faint);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+  td:first-child{font-weight:600}
+  tr:hover td{background:rgba(255,255,255,.015)}
+  code,.mono{font-family:"SF Mono",ui-monospace,"Cascadia Code",Consolas,monospace}
+  td code,p code,li code{background:var(--surface2);border:1px solid var(--line);border-radius:6px;padding:1.5px 6px;font-size:.86em;color:#cdd7ee}
+  .pill{display:inline-block;padding:3px 10px;border-radius:7px;font-size:12px;font-weight:700;white-space:nowrap}
+  .pill.block{background:rgba(255,107,107,.14);color:#ff8f8f;border:1px solid rgba(255,107,107,.3)}
+  .pill.ask{background:rgba(255,180,84,.14);color:var(--amber);border:1px solid rgba(255,180,84,.3)}
+  .pill.adv{background:rgba(91,140,255,.14);color:#8fb0ff;border:1px solid rgba(91,140,255,.3)}
+  .pill.inject{background:rgba(66,211,146,.14);color:var(--green);border:1px solid rgba(66,211,146,.3)}
+
+  /* split */
+  .split{display:grid;grid-template-columns:1.05fr .95fr;gap:42px;align-items:center;flex:1}
+  .checks{list-style:none;display:flex;flex-direction:column;gap:14px;margin-top:8px}
+  .checks li{display:flex;gap:14px;align-items:flex-start;animation:pop .5s both}
+  .checks .ck{flex:0 0 auto;width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+              font-size:14px;font-weight:800;background:rgba(66,211,146,.12);color:var(--green);border:1px solid rgba(66,211,146,.3)}
+  .checks .x{background:rgba(255,107,107,.12);color:var(--red);border-color:rgba(255,107,107,.3)}
+  .checks b{font-weight:650}
+  .checks span{color:var(--muted);font-size:14.5px;line-height:1.5}
+  .checks .t{color:var(--ink);font-weight:600;font-size:15.5px;display:block;margin-bottom:2px}
+
+  .codebox{
+    background:#080b12;border:1px solid var(--line);border-radius:14px;overflow:hidden;animation:pop .5s both;
+    box-shadow:0 24px 60px -30px rgba(0,0,0,.8);
+  }
+  .codebox .bar{display:flex;gap:7px;padding:13px 16px;border-bottom:1px solid var(--line);background:var(--bg2);align-items:center}
+  .codebox .bar i{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .codebox .bar i:nth-child(1){background:#ff5f57}.codebox .bar i:nth-child(2){background:#febc2e}.codebox .bar i:nth-child(3){background:#28c840}
+  .codebox .bar span{margin-left:10px;font-size:12px;color:var(--faint);font-family:ui-monospace,monospace}
+  .codebox pre{padding:18px 20px;font-size:13.5px;line-height:1.65;overflow-x:auto;font-family:"SF Mono",ui-monospace,Consolas,monospace}
+  .c-key{color:#a78bff}.c-str{color:#7ee0a8}.c-com{color:#5a6580;font-style:italic}.c-fn{color:#5b8cff}.c-pun{color:#8a96ad}
+
+  /* principle banner */
+  .banner{
+    margin-top:auto;padding:22px 26px;border-radius:16px;border:1px solid var(--line);
+    background:linear-gradient(120deg,rgba(91,140,255,.08),rgba(167,139,255,.06));
+    display:flex;gap:18px;align-items:center;
+  }
+  .banner .big{font-size:30px}
+  .banner p{font-size:16px;line-height:1.5}
+  .banner b{color:var(--ink)}
+
+  .stat{display:flex;gap:30px;flex-wrap:wrap;margin-top:30px}
+  .stat .s{animation:pop .5s both}
+  .stat .v{font-size:clamp(30px,4vw,52px);font-weight:800;letter-spacing:-.02em;line-height:1}
+  .stat .l{color:var(--muted);font-size:13.5px;margin-top:8px}
+
+  /* flow map diagram */
+  .legend{display:flex;gap:20px;flex-wrap:wrap;margin:0 0 16px}
+  .legend span{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+  .legend i{width:12px;height:12px;border-radius:4px;display:inline-block;flex:0 0 auto}
+  .lg-q{background:var(--red)}.lg-s{background:var(--accent2)}.lg-h{background:var(--amber)}.lg-a{background:var(--accent)}.lg-i{background:var(--green)}
+  .flowmap{display:flex;flex-direction:column;flex:1;justify-content:center}
+  .frow{display:grid;grid-template-columns:208px 1fr;align-items:stretch;animation:pop .45s both}
+  .fevent{padding:9px 18px 9px 0;border-right:2px solid var(--line);position:relative;display:flex;flex-direction:column;justify-content:center}
+  .fevent::after{content:"";position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:var(--surface2);border:2px solid var(--accent);z-index:2}
+  .fk{font-size:10px;color:var(--faint);font-weight:700;letter-spacing:.08em;text-transform:uppercase;display:block}
+  .ft{font-size:14.5px;font-weight:700;margin-top:1px;display:block;letter-spacing:-.01em}
+  .ft small{font-weight:500;color:var(--muted);font-size:11.5px}
+  .fgates{padding:9px 0 9px 22px;display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+  .gate{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:9px;font-size:12px;font-weight:600;border:1px solid}
+  .gate b{font-weight:700}
+  .gate.q{background:rgba(255,107,107,.1);border-color:rgba(255,107,107,.32);color:#ff9a9a}
+  .gate.s{background:rgba(167,139,255,.1);border-color:rgba(167,139,255,.34);color:#c2b0ff}
+  .gate.h{background:rgba(255,180,84,.1);border-color:rgba(255,180,84,.32);color:var(--amber)}
+  .gate.a{background:rgba(91,140,255,.1);border-color:rgba(91,140,255,.32);color:#8fb0ff}
+  .gate.i{background:rgba(66,211,146,.1);border-color:rgba(66,211,146,.32);color:var(--green)}
+  .frow.stoprow .fevent::after{background:var(--red);border-color:var(--red);box-shadow:0 0 12px rgba(255,107,107,.6)}
+  .frow.stoprow .ft{color:#ff9a9a}
+
+  /* progress + nav */
+  .progress{position:fixed;top:0;left:0;height:3px;background:var(--grad);transition:width .4s cubic-bezier(.2,.7,.2,1);z-index:50;box-shadow:0 0 14px rgba(91,140,255,.5)}
+  .nav{position:fixed;bottom:22px;right:30px;display:flex;align-items:center;gap:14px;z-index:50}
+  .nav button{
+    width:42px;height:42px;border-radius:11px;border:1px solid var(--line);background:var(--surface);
+    color:var(--ink);font-size:18px;cursor:pointer;transition:.2s;display:flex;align-items:center;justify-content:center;
+  }
+  .nav button:hover{background:var(--surface2);border-color:var(--accent);transform:translateY(-2px)}
+  .nav button:disabled{opacity:.32;cursor:default;transform:none;border-color:var(--line)}
+  .counter{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:46px;text-align:center}
+  .counter b{color:var(--ink)}
+  .hint{position:fixed;bottom:26px;left:30px;font-size:12px;color:var(--faint);z-index:50}
+  .hint kbd{background:var(--surface);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 7px;font-family:inherit;font-size:11px;color:var(--muted)}
+
+  .foot{position:absolute;bottom:3.4vh;left:8vw;font-size:12.5px;color:var(--faint);letter-spacing:.02em}
+  .foot b{color:var(--muted)}
+  @media(max-width:880px){
+    .split{grid-template-columns:1fr;gap:24px}
+    .g3,.g4{grid-template-columns:repeat(2,1fr)}
+    .slide{padding:5vh 7vw 12vh}
+  }
+</style>
+</head>
+<body>
+<div class="progress" id="prog"></div>
+<div class="deck" id="deck">
+
+  <!-- 1 COVER -->
+  <section class="slide active cover">
+    <div class="badge"><span class="dot"></span> GigaCode · Developer Template · v1</div>
+    <h1>Флоу разработки,<br>который <span class="grad">нельзя обойти</span></h1>
+    <p class="sub">Обычная сессия GigaCode превращается в управляемый процесс: агент сначала пишет спецификацию, ищет существующий код перед созданием нового, проходит проверки качества и git-безопасности — и <b style="color:var(--ink)">не может завершить ход</b>, пока работа не оформлена и не доказана.</p>
+    <div class="tags">
+      <div class="tag"><b>OpenSpec</b> как истина</div>
+      <div class="tag"><b>git_guard</b> безопасность</div>
+      <div class="tag"><b>Serena · Context7 · Graphify</b></div>
+      <div class="tag">Kotlin · Java · JUnit 5 · Kafka</div>
+    </div>
+    <div class="foot"><b>Презентация основных фич</b> · modules/development</div>
+  </section>
+
+  <!-- 2 PROBLEM / IDEA -->
+  <section class="slide">
+    <div class="head">
+      <div class="eyebrow">Главная идея</div>
+      <h2>Блокирует только <span class="grad">детерминированное</span></h2>
+      <p class="lead">Граница проведена жёстко: то, что можно проверить машиной — останавливает работу; то, что лишь похоже на проблему — только подсказывает. Никаких ложных стопов на эвристиках.</p>
+    </div>
+    <div class="grid g2" style="flex:1;align-content:center">
+      <div class="card" style="animation-delay:.05s">
+        <span class="ic">🛑</span>
+        <h3>Детерминированные проверки → блок</h3>
+        <p>У которых есть машинный вердикт: <b style="color:var(--ink)">линтер</b> (<code>gate_lint</code>), <b style="color:var(--ink)">сборка</b> (<code>gate_build</code>), strict-валидация спеки, полнота артефактов, git-безопасность. Зелёное или нет — третьего нет. На них флоу останавливается.</p>
+      </div>
+      <div class="card" style="animation-delay:.13s">
+        <span class="ic">💡</span>
+        <h3>Эвристики → подсказка</h3>
+        <p>Где «правильность» субъективна: размер файла/функции, <code>TODO</code>/<code>FIXME</code>, <code>Thread.sleep</code> в тестах, «похожий символ уже есть». Это advisory: предупреждают, но никогда не стопорят работу.</p>
+      </div>
+    </div>
+    <div class="banner">
+      <span class="big">⚖️</span>
+      <p><b>Принцип:</b> предотвратить нарушение <b>до</b> того, как оно написано, дешевле, чем ловить постфактум. Поэтому правила и контекст заземляются в агента ещё до генерации кода.</p>
+    </div>
+  </section>
+
+  <!-- 3 COMMANDS -->
+  <section class="slide">
+    <div class="head">
+      <div class="eyebrow">Точка входа</div>
+      <h2>Две команды · два режима</h2>
+      <p class="lead">Запуск задачи — одна slash-команда. Или просто опишите задачу обычным запросом — скилл <code>development-flow</code> подхватит её сам.</p>
+    </div>
+    <div class="grid g2">
+      <div class="card" style="animation-delay:.05s">
+        <span class="ic">✨</span>
+        <h3><code>/develop-feature "&lt;описание&gt;"</code></h3>
+        <p>Фичи и техулучшения. На входе: цель, критерии приёмки, что в скоупе / вне, ограничения.</p>
+      </div>
+      <div class="card" style="animation-delay:.12s">
+        <span class="ic">🐛</span>
+        <h3><code>/fix-bug "&lt;симптом&gt;"</code></h3>
+        <p>Дефекты и регрессии. На входе: симптом, ожидаемое vs фактическое, шаги воспроизведения, окружение, severity.</p>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:18px">
+      <div class="card mini" style="animation-delay:.18s">
+        <h3 style="color:var(--accent)">🔍 plan-only <span style="color:var(--faint);font-weight:500;font-size:13px">· по умолчанию</span></h3>
+        <p>Анализ, карта влияния и Markdown-артефакты — <b style="color:var(--ink)">без правок кода</b>. Безопасный режим по умолчанию, когда скоуп или критерии неясны.</p>
+      </div>
+      <div class="card mini" style="animation-delay:.24s">
+        <h3 style="color:var(--green)">⚙️ implement</h3>
+        <p>Полный plan-only + прохождение git-safety + точечные правки + проверка поведения + PR-заметки. Включается явно или после согласования плана.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 PIPELINE -->
+  <section class="slide">
+    <div class="head">
+      <div class="eyebrow">Конвейер</div>
+      <h2>От запроса до PR — по этапам</h2>
+      <p class="lead">Intake и план живут в главной сессии (вопросы пользователю задаёт только она). В <code>plan-only</code> конвейер останавливается на <b style="color:var(--ink)">STOP</b> — кода ещё нет.</p>
+    </div>
+    <div class="pipe">
+      <div class="step" style="animation-delay:.05s"><div class="k">главная сессия</div><div class="t">intake</div><div class="d">Тип задачи, режим, слаг, скоуп, недостающие вводные — спрашивает только главная сессия.</div></div>
+      <div class="arrow">→</div>
+      <div class="step" style="animation-delay:.12s"><div class="k">субагент</div><div class="t">repo-context</div><div class="d">Project intelligence + карта влияния, включая потоки событий producer → topic → consumer.</div></div>
+      <div class="arrow">→</div>
+      <div class="step" style="animation-delay:.19s"><div class="k">спека</div><div class="t">OpenSpec propose</div><div class="d">change с proposal / design / tasks / дельтами. Не идёт в работу без <code>--strict</code>.</div></div>
+      <div class="arrow">→</div>
+      <div class="step stop" style="animation-delay:.26s"><div class="k">plan-only</div><div class="t">⛔ STOP</div><div class="d">Граница плана. Дальше — только в режиме implement, по согласованию.</div></div>
+      <div class="arrow">→</div>
+      <div class="step" style="animation-delay:.33s"><div class="k">субагент</div><div class="t">coder</div><div class="d">Точечные правки. Search Before Create перед каждым новым символом.</div></div>
+      <div class="arrow">→</div>
+      <div class="step" style="animation-delay:.4s"><div class="k">субагент</div><div class="t">verifier</div><div class="d">Прогон проверок, фиксация доказательств, PR-сводка для ревьюера.</div></div>
+    </div>
+    <div class="banner" style="margin-top:34px">
+      <span class="big">📌</span>
+      <p><b>preflight</b> на отправке запроса блокирует пустую dev-задачу без минимальных вводных — агент не фантазирует, а просит уточнить.</p>
+    </div>
+  </section>
+
+  <!-- 5 FLOW DIAGRAM: quality gates + human gates -->
+  <section class="slide">
+    <div class="head">
+      <div class="eyebrow">Полная картина</div>
+      <h2>Диаграмма флоу · quality gates · human gates</h2>
+      <p class="lead">Слева — событие или этап сессии, справа — какие гейты на нём срабатывают. Цвет = тип контроля: машинный блок, безопасность, решение человека или подсказка.</p>
+    </div>
+    <div class="legend">
+      <span><i class="lg-q"></i> 🛑 Quality gate — детерминированный блок</span>
+      <span><i class="lg-s"></i> 🛡️ Safety gate — git-безопасность</span>
+      <span><i class="lg-h"></i> 👤 Human gate — решение человека (ask / согласование)</span>
+      <span><i class="lg-a"></i> 💡 Advisory — эвристика, не блокирует</span>
+      <span><i class="lg-i"></i> ⬇ Inject — инъекция контекста</span>
+    </div>
+    <div class="flowmap">
+      <div class="frow" style="animation-delay:.04s">
+        <div class="fevent"><span class="fk">событие</span><span class="ft">SessionStart <small>/ subagent coder</small></span></div>
+        <div class="fgates"><span class="gate i">⬇ <b>context_inject</b> · правила + карта модулей</span></div>
+      </div>
+      <div class="frow" style="animation-delay:.1s">
+        <div class="fevent"><span class="fk">событие</span><span class="ft">UserPromptSubmit</span></div>
+        <div class="fgates"><span class="gate q">🛑 <b>preflight_check</b> · BLOCK пустой dev-задачи</span></div>
+      </div>
+      <div class="frow" style="animation-delay:.16s">
+        <div class="fevent"><span class="fk">главная сессия</span><span class="ft">Intake</span></div>
+        <div class="fgates"><span class="gate h">👤 уточнение вводных у пользователя</span></div>
+      </div>
+      <div class="frow" style="animation-delay:.22s">
+        <div class="fevent"><span class="fk">plan-only</span><span class="ft">OpenSpec propose</span></div>
+        <div class="fgates"><span class="gate q">🛑 <b>validate --strict</b> · BLOCK невалидной спеки</span></div>
+      </div>
+      <div class="frow stoprow" style="animation-delay:.28s">
+        <div class="fevent"><span class="fk">граница плана</span><span class="ft">⛔ STOP → implement</span></div>
+        <div class="fgates"><span class="gate h">👤 согласование плана перед правками кода</span></div>
+      </div>
+      <div class="frow" style="animation-delay:.34s">
+        <div class="fevent"><span class="fk">PreToolUse</span><span class="ft">Bash / Shell</span></div>
+        <div class="fgates"><span class="gate s">🛡️ <b>git_guard</b> · BLOCK деструктива</span><span class="gate h">👤 ask: protected paths · CI · секреты</span></div>
+      </div>
+      <div class="frow" style="animation-delay:.4s">
+        <div class="fevent"><span class="fk">PreToolUse</span><span class="ft">Write / Edit</span></div>
+        <div class="fgates"><span class="gate a">💡 <b>existing_code</b> · дубликаты</span><span class="gate h">👤 ask: <code>openspec/specs</code></span></div>
+      </div>
+      <div class="frow" style="animation-delay:.46s">
+        <div class="fevent"><span class="fk">PostToolUse</span><span class="ft">Write / Edit</span></div>
+        <div class="fgates"><span class="gate q">🛑 <b>gate_lint</b> · BLOCK</span><span class="gate q">🛑 spec validate</span><span class="gate a">💡 clean_code</span></div>
+      </div>
+      <div class="frow stoprow" style="animation-delay:.52s">
+        <div class="fevent"><span class="fk">завершение</span><span class="ft">Stop</span></div>
+        <div class="fgates"><span class="gate q">🛑 <b>validate_output</b></span><span class="gate q">🛑 spec_structure</span><span class="gate q">🛑 <b>gate_build</b></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 CONTROL LAYER / GATES -->
+  <section class="slide">
+    <div class="head">
+      <div class="eyebrow">Слой контроля</div>
+      <h2>Роутер + гейты</h2>
+      <p class="lead">Один диспетчер <code>router.py</code> на все события. Маршруты — в <code>router.config.json</code>: новый гейт = новый файл в <code>gates/</code> + строка в конфиге. Каждое решение пишется в <code>decisions.jsonl</code>.</p>
+    </div>
+    <table>
+      <thead><tr><th>Гейт</th><th>Когда</th><th>Действие</th></tr></thead>
+      <tbody>
+        <tr><td><code>git_guard</code></td><td>перед Bash/Shell и записью файла</td><td><span class="pill block">BLOCK</span> деструктивный git, разрушение/правка репо и <code>.gigacode</code>/<code>.git</code></td></tr>
+        <tr><td><code>gate_spec_structure</code></td><td>запись файла · завершение</td><td><span class="pill ask">ASK</span> на <code>openspec/specs</code> · <span class="pill block">BLOCK</span> невалидный change</td></tr>
+        <tr><td><code>validate_development_output</code></td><td>завершение (Stop)</td><td><span class="pill block">BLOCK</span> неполные / «пустые» артефакты задачи</td></tr>
+        <tr><td><code>gate_build</code></td><td>завершение (Stop)</td><td><span class="pill block">BLOCK</span> при провале сборки (если настроена)</td></tr>
+        <tr><td><code>gate_lint</code></td><td>после записи файла</td><td><span class="pill block">BLOCK</span> при ненулевом exit линтера</td></tr>
+        <tr><td><code>gate_clean_code</code></td><td>после записи файла</td><td><span class="pill adv">ADVISORY</span> размер файла/функции, TODO, <code>Thread.sleep</code></td></tr>
+        <tr><td><code>gate_existing_code</code></td><td>перед созданием нового файла</td><td><span class="pill adv">ADVISORY</span> «похожий символ / Kafka-топик уже есть»</td></tr>
+        <tr><td><code>gate_context_inject</code></td><td>старт сессии / субагента</td><td><span class="pill inject">INJECT</span> правила, карта модулей, активные changes</td></tr>
+        <tr><td><code>preflight_check</code></td><td>отправка запроса</td><td><span class="pill block">BLOCK</span> пустой / невалидной dev-задачи</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 6 GIT GUARD -->
+  <section class="slide">
+    <div class="head">
+      <div class="eyebrow">Safety-critical</div>
+      <h2><code>git_guard</code> — самозащита флоу</h2>
+      <p class="lead">Единственный safety-critical гейт. Распознаёт опасное <b style="color:var(--ink)">сквозь обёртки и маскировку</b>: chaining, env-префиксы, <code>bash -c</code>, кавычки, абсолютные пути, перенаправления, PowerShell-командлеты, подстановки <code>$(...)</code>, Unicode-разделители.</p>
+    </div>
+    <div class="split" style="flex:1;align-items:start">
+      <ul class="checks" style="margin-top:4px">
+        <li style="animation-delay:.05s"><span class="ck x">⛔</span><span><b class="t">Защищённые ветки</b>запись на <code>main</code>, <code>master</code>, <code>develop</code>, <code>release/*</code>, <code>hotfix/*</code>, <code>production</code>, <code>staging</code></span></li>
+        <li style="animation-delay:.12s"><span class="ck x">⛔</span><span><b class="t">Деструктивный git</b><code>reset --hard</code>, <code>clean -fd</code>, force-push, удаление веток, <code>remote set-url</code>, <code>checkout --</code></span></li>
+        <li style="animation-delay:.19s"><span class="ck x">⛔</span><span><b class="t">Разрушение репозитория</b>удаление <code>.git</code> / <code>.gigacode</code> через <code>rm</code>, <code>Remove-Item</code>, <code>find -delete</code></span></li>
+        <li style="animation-delay:.26s"><span class="ck x">⛔</span><span><b class="t">Правка слоя контроля</b>любая запись в <code>.gigacode/**</code> и <code>.git/**</code> — агент не отключит ограничивающий его enforcement</span></li>
+        <li style="animation-delay:.33s"><span class="ck" style="background:rgba(255,180,84,.12);color:var(--amber);border-color:rgba(255,180,84,.3)">?</span><span><b class="t">Истина спеки · CI · секреты</b><span class="pill ask" style="margin-right:6px">ASK</span><code>openspec/specs</code>, <code>.github/workflows</code>, <code>secrets/</code>, <code>terraform/</code>, <code>.env</code></span></li>
+      </ul>
+      <div>
+        <div class="codebox" style="animation-delay:.2s">
+          <div class="bar"><i></i><i></i><i></i><span>defense-in-depth · самозащита .gigacode/.git</span></div>
+<pre><span class="c-com"># любая попытка спрятать опасное — ловится</span>
+<span class="c-pun">$</span> rm -rf .gigacode        <span class="c-com"># → BLOCK</span>
+<span class="c-pun">$</span> bash -c "git push -f"   <span class="c-com"># → BLOCK</span>
+<span class="c-pun">$</span> echo x <span class="c-fn">&gt;</span> .git/config     <span class="c-com"># → BLOCK</span>
+<span class="c-pun">$</span> python -c "<span class="c-str">shutil...gigacode</span>" <span class="c-com"># → BLOCK</span>
+
+<span class="c-com"># детектор не зависит от идеального</span>
+<span class="c-com"># парсинга shell: любая не-read-only</span>
+<span class="c-com"># команда, лишь упоминающая такой</span>
+<span class="c-com"># путь, — блокируется backstop'ом</span></pre>
+        </div>
+        <p style="color:var(--faint);font-size:13px;margin-top:14px;line-height:1.5">⚠️ v1 не делает auto-commit / auto-push. «PR-ready» = готовые заметки и доказательства; коммит/пуш — руками или по явной команде.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 OPENSPEC + SEARCH BEFORE CREATE -->
+  <section class="slide">
+    <div class="head">
+      <div class="eyebrow">Спека как истина + анти-дубли</div>
+      <h2>OpenSpec и Search Before Create</h2>
+      <p class="lead">Авторитетная спека ведётся отдельно от рабочих заметок и накапливает «текущую истину» по каждой capability. Перед новым кодом — обязательный поиск существующего.</p>
+    </div>
+    <div class="split" style="flex:1">
+      <div>
+        <h3 style="font-size:17px;margin-bottom:14px;color:var(--accent)">📐 Жизненный цикл спеки</h3>
+        <div class="pipe" style="flex-direction:column;gap:10px">
+          <div class="step" style="min-width:auto;animation-delay:.05s"><div class="t" style="margin-top:0">/opsx:propose</div><div class="d">change в <code>openspec/changes/&lt;id&gt;/</code>: proposal, design, tasks, дельты требований</div></div>
+          <div class="step" style="min-width:auto;animation-delay:.12s"><div class="t" style="margin-top:0">validate --strict</div><div class="d">не идёт в работу, пока валидация не зелёная</div></div>
+          <div class="step" style="min-width:auto;animation-delay:.19s"><div class="t" style="margin-top:0">/opsx:apply → archive</div><div class="d">после мержа change архивируется в <code>openspec/specs/</code></div></div>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:17px;margin-bottom:14px;color:var(--green)">🔎 Search Before Create</h3>
+        <div class="codebox" style="animation-delay:.18s">
+          <div class="bar"><i></i><i></i><i></i><span>перед каждым новым символом</span></div>
+<pre><span class="c-com"># 1. семантический поиск (Serena)</span>
+<span class="c-fn">find_symbol</span>(name=<span class="c-str">"PaymentRetry"</span>)
+
+<span class="c-com"># fallback без Serena — ripgrep</span>
+<span class="c-pun">$</span> rg <span class="c-str">"class PaymentRetry"</span> -t code
+
+<span class="c-com"># нашёл? → читай и расширяй,</span>
+<span class="c-com">#          не пиши дубликат</span>
+<span class="c-com"># для Kafka — ищи по имени топика,</span>
+<span class="c-com"># не только по имени класса</span></pre>
+        </div>
+        <p style="color:var(--muted);font-size:13.5px;margin-top:14px;line-height:1.5">Дубликат консьюмера на тот же топик — ровно тот класс дубликатов, который болит. <code>gate_existing_code</code> подсказывает, если похожее уже есть.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 ARTIFACTS -->
+  <section class="slide">
+    <div class="head">
+      <div class="eyebrow">На выходе</div>
+      <h2>Артефакты задачи</h2>
+      <p class="lead">Человекочитаемые заметки лежат в <code>docs/development/&lt;task-slug&gt;/</code> и <b style="color:var(--ink)">ссылаются</b> на OpenSpec-спеку, не дублируя её.</p>
+    </div>
+    <div class="grid g3" style="flex:1;align-content:center">
+      <div class="card" style="animation-delay:.05s"><span class="ic">📓</span><h3>journal.md</h3><p>Контекст, карта влияния, план и ход работы. Человекочитаемо, ссылается на спеку.</p></div>
+      <div class="card" style="animation-delay:.11s"><span class="ic">✅</span><h3>verification.md</h3><p>Какие проверки прогнали, их вывод, что пропущено и почему. Без доказательств тут — завершение блокируется.</p></div>
+      <div class="card" style="animation-delay:.17s"><span class="ic">📝</span><h3>pr-summary.md</h3><p>Готовый текст для PR — для ревьюера, без лишней работы.</p></div>
+      <div class="card" style="animation-delay:.23s"><span class="ic">📐</span><h3>openspec/changes/&lt;id&gt;/</h3><p>Авторитетная спека: зачем, дизайн, чеклист, дельты. После мержа → <code>specs/</code>.</p></div>
+      <div class="card" style="animation-delay:.29s"><span class="ic">🌿</span><h3>feature-ветка</h3><p>Только правки кода. Commit/push — руками или по явной команде, не автоматом.</p></div>
+      <div class="card" style="animation-delay:.35s"><span class="ic">🧾</span><h3>logs/decisions.jsonl</h3><p>Каждое решение каждого гейта — для тюнинга системы и разбора, почему сработало.</p></div>
+    </div>
+  </section>
+
+  <!-- 9 MCP -->
+  <section class="slide">
+    <div class="head">
+      <div class="eyebrow">Усиление контекста</div>
+      <h2>MCP-серверы · все с фолбэком</h2>
+      <p class="lead">Каждый сервер включает дополнительную возможность. Нет сервера — graceful fallback. Для работы флоу и smoke-проверок не требуется ни один.</p>
+    </div>
+    <div class="grid g3" style="flex:1;align-content:center">
+      <div class="card" style="animation-delay:.05s">
+        <span class="ic">🧭</span><h3>Serena</h3>
+        <p>Семантический поиск символов через LSP — фундамент Search Before Create и индекса для инъекций.</p>
+        <p style="margin-top:10px;color:var(--faint);font-size:12.5px">Java надёжен (JDT LS), Kotlin-LSP слабее — проверить на своём коде.<br><b style="color:var(--green)">fallback:</b> <code>rg</code> по паттернам</p>
+      </div>
+      <div class="card" style="animation-delay:.13s">
+        <span class="ic">📚</span><h3>Context7</h3>
+        <p>Свежие доки библиотек при написании нового кода: Spring Kafka, корутины, Reactor, JUnit 5 — против галлюцинаций API.</p>
+        <p style="margin-top:10px;color:var(--faint);font-size:12.5px"><b style="color:var(--green)">fallback:</b> знания модели + ручная проверка</p>
+      </div>
+      <div class="card" style="animation-delay:.21s">
+        <span class="ic">🕸️</span><h3>Graphify</h3>
+        <p>Граф знаний репо → карта модулей <code>module-map.md</code>, инжектится на старте. Главное — карта потоков событий через топики.</p>
+        <p style="margin-top:10px;color:var(--faint);font-size:12.5px"><b style="color:var(--green)">fallback:</b> ручная карта в journal.md</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 STOP GATE -->
+  <section class="slide">
+    <div class="head">
+      <div class="eyebrow">Ключевой контроль</div>
+      <h2>Нельзя завершить ход без оформления</h2>
+      <p class="lead">При попытке завершить ход срабатывает событие <code>Stop</code>. Гейты смотрят на <b style="color:var(--ink)">реальное рабочее дерево</b> (<code>git status</code>), а не на текст сообщения — обойти, не упомянув пути, нельзя.</p>
+    </div>
+    <div class="split" style="flex:1;align-items:center">
+      <ul class="checks">
+        <li style="animation-delay:.05s"><span class="ck">1</span><span><b class="t">Спека есть и валидна</b>менялся production-код → существует активный OpenSpec-change, проходящий <code>--strict</code></span></li>
+        <li style="animation-delay:.13s"><span class="ck">2</span><span><b class="t">Артефакты полные и доказанные</b><code>journal</code> / <code>verification</code> / <code>pr-summary</code> без <code>TODO</code>/<code>TBD</code>/<code>FIXME</code> и с доказательствами проверок</span></li>
+        <li style="animation-delay:.21s"><span class="ck">3</span><span><b class="t">Сборка зелёная</b>если <code>build</code> настроена в <code>quality-gates.json</code> и менялся код</span></li>
+      </ul>
+      <div class="card" style="animation-delay:.25s;border-color:rgba(255,107,107,.3)">
+        <span class="ic">🔒</span>
+        <h3>Блок — постоянный</h3>
+        <p>Повторные попытки завершить тоже блокируются, пока причина не устранена. <b style="color:var(--ink)">Никакой автодеградации</b> «после N попыток пропустим».</p>
+        <p style="margin-top:12px">Все причины чинятся самим агентом: дописать спеку, дополнить артефакт, убрать <code>TODO</code>, поправить сборку. Застрявший гейт — человеком через escape hatch <code>disableAllHooks</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 GUARANTEES -->
+  <section class="slide">
+    <div class="head">
+      <div class="eyebrow">Итог</div>
+      <h2>Что слой контроля <span class="grad">гарантирует</span></h2>
+    </div>
+    <ul class="checks" style="flex:1;justify-content:center;gap:20px;max-width:90ch">
+      <li style="animation-delay:.05s"><span class="ck">✓</span><span style="font-size:16px"><b style="color:var(--ink)">Нельзя зашипить production-код</b> без оформленной и валидной спеки и без полных, доказанных артефактов.</span></li>
+      <li style="animation-delay:.13s"><span class="ck">✓</span><span style="font-size:16px"><b style="color:var(--ink)">Нельзя выполнить деструктивную git-операцию</b> или писать на защищённой ветке без явного человеческого решения.</span></li>
+      <li style="animation-delay:.21s"><span class="ck">✓</span><span style="font-size:16px"><b style="color:var(--ink)">Нельзя отредактировать или удалить сам enforcement-слой</b> (<code>.gigacode/**</code>) или репозиторий (<code>.git</code>) — в т.ч. через обёртки и подстановки.</span></li>
+      <li style="animation-delay:.29s"><span class="ck">✓</span><span style="font-size:16px"><b style="color:var(--ink)">Эвристики подсказывают, но не стопорят</b> — дубликаты, размеры, анти-паттерны тестов остаются предупреждениями.</span></li>
+    </ul>
+    <div class="stat">
+      <div class="s" style="animation-delay:.3s"><div class="v grad">200 мс</div><div class="l">latency-бюджет на pre-проверку</div></div>
+      <div class="s" style="animation-delay:.37s"><div class="v grad">1</div><div class="l">роутер на все события</div></div>
+      <div class="s" style="animation-delay:.44s"><div class="v grad">100%</div><div class="l">решений в decisions.jsonl</div></div>
+      <div class="s" style="animation-delay:.51s"><div class="v grad">0</div><div class="l">обязательных MCP для работы</div></div>
+    </div>
+    <div class="foot"><b>GigaCode Developer Flow</b> · блокируем детерминированное, эвристики подсказывают</div>
+  </section>
+
+</div>
+
+<!-- nav -->
+<div class="nav">
+  <button id="prev" aria-label="Назад">‹</button>
+  <span class="counter"><b id="cur">1</b> / <span id="total">11</span></span>
+  <button id="next" aria-label="Вперёд">›</button>
+</div>
+<div class="hint">Навигация: <kbd>←</kbd> <kbd>→</kbd> · <kbd>Space</kbd> · <kbd>F</kbd> полный экран</div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  let i=0;const total=slides.length;
+  document.getElementById('total').textContent=total;
+  const prog=document.getElementById('prog'),cur=document.getElementById('cur');
+  const prev=document.getElementById('prev'),next=document.getElementById('next');
+  function show(n){
+    i=Math.max(0,Math.min(total-1,n));
+    slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+    prog.style.width=((i+1)/total*100)+'%';
+    cur.textContent=i+1;
+    prev.disabled=i===0;next.disabled=i===total-1;
+    // restart entry animations of children
+    const a=slides[i];a.querySelectorAll('[style*="animation-delay"]').forEach(el=>{el.style.animation='none';void el.offsetWidth;el.style.animation='';});
+  }
+  next.onclick=()=>show(i+1);prev.onclick=()=>show(i-1);
+  document.addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();show(i+1);}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();show(i-1);}
+    else if(e.key==='Home')show(0);else if(e.key==='End')show(total-1);
+    else if(e.key.toLowerCase()==='f'){if(!document.fullscreenElement)document.documentElement.requestFullscreen();else document.exitFullscreen();}
+  });
+  // swipe
+  let x0=null;
+  addEventListener('touchstart',e=>x0=e.touches[0].clientX);
+  addEventListener('touchend',e=>{if(x0===null)return;const dx=e.changedTouches[0].clientX-x0;if(Math.abs(dx)>50)show(i+(dx<0?1:-1));x0=null;});
+  show(0);
+</script>
+</body>
+</html>
