@@ -113,12 +113,24 @@ def enrich(snapshot, decisions, now):
     return out
 
 
+def _empty_snapshot(slug):
+    return {"_contract": CONTRACT, "session": None, "slug": slug, "slug_candidates": [],
+            "stage": {"current": None, "stages": []},
+            "budget": {"used": None, "limit": None}, "scope": None, "decisions": [],
+            "intake": None, "verdict": None, "blocker": None,
+            "vitals": {"total": 0, "block": 0, "ask": 0, "allow": 0, "per_min": 0,
+                       "idle_sec": None, "session_sec": 0, "tools": {}}}
+
+
 def build_snapshot(slug=None, tail_n=12, now=None):
     if now is None:
         now = datetime.now().astimezone()
-    snapshot = projection.collect(slug, tail_n)
-    decisions = projection.read_decisions(0)   # full journal for vitals/blocker
-    return enrich(snapshot, decisions, now)
+    try:
+        snapshot = projection.collect(slug, tail_n)
+        decisions = projection.read_decisions(0)   # full journal for vitals/blocker
+        return enrich(snapshot, decisions, now)
+    except Exception:
+        return _empty_snapshot(slug)
 
 
 def format_sse(event, data):
@@ -166,7 +178,8 @@ def broadcaster(observer, stop_event, interval=2.0):
         records, offset = projection.read_from_offset(path, offset)
         for rec in records:
             observer.broadcast(format_sse("decision", rec))
-        observer.broadcast(format_sse("snapshot", build_snapshot(observer.slug)))
+        if observer._clients:
+            observer.broadcast(format_sse("snapshot", build_snapshot(observer.slug)))
         stop_event.wait(interval)
 
 
@@ -238,7 +251,8 @@ def _make_handler(observer):
 
 def make_server(port=8787, slug=None):
     """Build a ThreadingHTTPServer bound to 127.0.0.1 with a started broadcaster.
-    The broadcaster thread is a daemon attached as httpd._broadcaster_stop."""
+    The broadcaster runs as a daemon thread; its stop event is attached as
+    httpd._broadcaster_stop."""
     observer = Observer(slug=slug)
     httpd = ThreadingHTTPServer(("127.0.0.1", port), _make_handler(observer))
     stop_event = threading.Event()

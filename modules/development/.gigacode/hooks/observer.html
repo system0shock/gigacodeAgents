@@ -201,7 +201,7 @@
   function renderVerdict(v){
     if(!v){ byId("verdict").innerHTML='<span style="color:var(--t3);font-style:italic;">ещё нет — verify не достигнута.</span>'; return; }
     var col = v.result==="pass"?"var(--ok)":"var(--bad)";
-    var risk = Object.keys(v.risk||{}).map(function(k){ return esc(k)+": "+v.risk[k]; }).join(", ");
+    var risk = Object.keys(v.risk||{}).map(function(k){ return esc(k)+": "+esc(v.risk[k]); }).join(", ");
     byId("verdict").innerHTML = '<div style="color:'+col+';font-weight:600;text-transform:uppercase;">'+esc(v.result)+'</div><div style="color:var(--t2);margin-top:4px;font-size:11px;">'+esc(risk)+'</div>';
   }
 
