@@ -86,8 +86,12 @@ def _artifact_path(rel, slug):
     return os.path.join(_lib.root(), *rel.split("/"))
 
 
-def predicate_holds(pred, slug, intake_required):
-    """Return (ok, label). Unknown type raises -> caller fails closed."""
+def predicate_holds(pred, slug, cfg):
+    """Return (ok, label). Unknown type raises -> caller fails closed.
+
+    cfg carries the declarative required-field maps from stages.json
+    (intake_required per task_type, contract_required flat list)."""
+    intake_required = cfg.get("intake_required", {})
     ptype = pred.get("type")
     if ptype == "approval":
         stage = pred.get("stage", "")
@@ -124,6 +128,22 @@ def predicate_holds(pred, slug, intake_required):
         if missing:
             return False, "заполни required-поля intake.json: " + ", ".join(missing)
         return True, "intake_complete"
+    if ptype == "contract_complete":
+        # WI-7/ADR-2: the scope freeze must be substantive before plan. Absent/
+        # unreadable contract or an empty required field (scope_globs/modules)
+        # blocks plan and names what to fill. The human then confirms the scope
+        # (approval:contract) — the second checkpoint, after understanding.
+        target = _artifact_path("docs/development/<slug>/contract.json", slug)
+        try:
+            with open(target, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except (OSError, json.JSONDecodeError):
+            return False, "contract.json отсутствует или не читается — заморозь scope"
+        contract_required = cfg.get("contract_required", [])
+        missing = [field for field in contract_required if _intake_empty(data.get(field))]
+        if missing:
+            return False, "заполни поля contract.json: " + ", ".join(missing)
+        return True, "contract_complete"
     raise ValueError("unknown predicate type: " + repr(ptype))
 
 
@@ -151,7 +171,8 @@ def run(event):
             "процессе роутера из реальных тестов). Агент его не пишет: result "
             "нельзя проставить вручную. %s" % (path, ESCAPE))}
     stages = doc["stages"]
-    intake_required = doc.get("intake_required", {})
+    cfg = {"intake_required": doc.get("intake_required", {}),
+           "contract_required": doc.get("contract_required", [])}
     st = target_stage(path, stages)
     if not st:
         return {"decision": "allow"}  # not a governed artifact (journal, notes, src)
@@ -163,7 +184,7 @@ def run(event):
     unmet = []
     try:
         for pred in st.get("entry_requires", []):
-            ok, label = predicate_holds(pred, slug, intake_required)
+            ok, label = predicate_holds(pred, slug, cfg)
             if not ok:
                 unmet.append(label)
     except ValueError as exc:

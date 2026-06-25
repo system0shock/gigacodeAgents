@@ -151,6 +151,69 @@ def _intake_file(slug, obj):
     return {"docs/development/%s/intake.json" % slug: json.dumps(obj)}
 
 
+# WI-7/ADR-2: contract_complete predicate + plan<-contract re-enable.
+CONTRACT_STAGES = {
+    "version": 1,
+    "contract_required": ["scope_globs", "modules"],
+    "stages": [
+        {"id": "contract", "order": 0,
+         "writes": ["docs/development/*/contract.json"], "entry_requires": []},
+        {"id": "plan", "order": 1,
+         "writes": ["openspec/changes/*/proposal.md"],
+         "entry_requires": [{"type": "contract_complete"},
+                            {"type": "approval", "stage": "contract"}]},
+    ],
+}
+FULL_CONTRACT = {"feature": "card", "status": "active",
+                 "scope_globs": ["src/cards/**"], "modules": ["cards"],
+                 "tests": [], "overshoots": []}
+
+
+def _contract_file(slug, obj):
+    return {"docs/development/%s/contract.json" % slug: json.dumps(obj)}
+
+
+def test_contract_complete():
+    g = load_gate("gate_stage_order")
+    proposal = "openspec/changes/card/proposal.md"
+
+    # complete contract + approval:contract -> plan allowed
+    check("contract_complete_plan_allow",
+          decide(g, proposal, stages_obj=CONTRACT_STAGES,
+                 files=_contract_file("card", FULL_CONTRACT),
+                 approvals=[("contract", "card")]) == "allow")
+
+    # contract.json absent -> block
+    check("contract_absent_plan_block",
+          decide(g, proposal, stages_obj=CONTRACT_STAGES,
+                 approvals=[("contract", "card")]) == "block")
+
+    # missing a required contract field (scope_globs) -> block, named
+    no_scope = {k: v for k, v in FULL_CONTRACT.items() if k != "scope_globs"}
+    res = decide_full(g, proposal, stages_obj=CONTRACT_STAGES,
+                      files=_contract_file("card", no_scope),
+                      approvals=[("contract", "card")])
+    check("contract_missing_scope_block", res["decision"] == "block", res)
+    check("contract_missing_scope_named", "scope_globs" in res.get("reason", ""), res)
+
+    # empty modules list counts as missing -> block
+    empty_mods = dict(FULL_CONTRACT, modules=[])
+    check("contract_empty_modules_block",
+          decide(g, proposal, stages_obj=CONTRACT_STAGES,
+                 files=_contract_file("card", empty_mods),
+                 approvals=[("contract", "card")]) == "block")
+
+    # complete contract but NO approval:contract -> block (the human scope-freeze)
+    check("contract_complete_no_approval_block",
+          decide(g, proposal, stages_obj=CONTRACT_STAGES,
+                 files=_contract_file("card", FULL_CONTRACT)) == "block")
+
+    # writing the contract artifact itself (contract stage) is unblocked
+    check("contract_write_itself_allow",
+          decide(g, "docs/development/card/contract.json",
+                 stages_obj=CONTRACT_STAGES) == "allow")
+
+
 def test_intake_complete():
     g = load_gate("gate_stage_order")
     contract = "docs/development/card/contract.json"
@@ -336,8 +399,16 @@ def test_live_stages_deferral():
     with open(os.path.join(ROOT, ".gigacode", "stages.json"), encoding="utf-8") as h:
         data = json.load(h)
     by_id = {s["id"]: s for s in data["stages"]}
-    check("live_plan_deferred", by_id["plan"]["entry_requires"] == [],
-          by_id["plan"]["entry_requires"])
+    # WI-7: plan->contract is no longer deferred — the openspec proposal requires a
+    # substantive, human-approved contract (scope freeze).
+    plan_reqs = by_id["plan"]["entry_requires"]
+    check("live_plan_requires_contract_complete",
+          any(p.get("type") == "contract_complete" for p in plan_reqs), plan_reqs)
+    check("live_plan_requires_contract_approval",
+          {"type": "approval", "stage": "contract"} in plan_reqs, plan_reqs)
+    check("live_contract_required_fields",
+          isinstance(data.get("contract_required"), list) and data["contract_required"],
+          data.get("contract_required"))
     check("live_contract_requires_intake_approval",
           {"type": "approval", "stage": "intake"} in by_id["contract"]["entry_requires"])
     check("live_delivery_requires_verdict_pass",
@@ -415,6 +486,7 @@ def test_confirm_records_marker():
 def main():
     test_matrix()
     test_intake_complete()
+    test_contract_complete()
     test_machine_owned()
     test_live_stages_deferral()
     test_confirm_is_agent_blocked()

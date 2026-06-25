@@ -1,0 +1,8 @@
+{
+  "feature": "<task-slug>",
+  "status": "active",
+  "scope_globs": [],
+  "modules": [],
+  "tests": [],
+  "overshoots": []
+}
