@@ -171,13 +171,42 @@ def test_stop_budget():
         sb.gate("fixture_block", BLOCK_GATE)
         ev = {"hook_event_name": "Stop", "session_id": "s1"}
         check("rt_stop_first_blocks", sb.run(ev)["decision"] == "block")
-        degraded = sb.run(ev)
-        check("rt_stop_degrades", degraded["decision"] == "allow"
-              and "systemMessage" in degraded, repr(degraded))
+        # Stop blocks are PERSISTENT (WI-3, ported from development): the old
+        # auto-degrade-to-allow was a soft bypass — an agent could outwait the
+        # budget. Repeated consecutive blocks keep blocking and never emit a
+        # degraded allow / systemMessage.
+        second = sb.run(ev)
+        check("rt_stop_persists", second["decision"] == "block"
+              and "systemMessage" not in second, repr(second))
+        check("rt_stop_persists_again", sb.run(ev)["decision"] == "block")
         sb.gate("fixture_block", ALLOW_GATE)
         check("rt_stop_allow_resets", sb.run(ev)["decision"] == "allow")
         sb.gate("fixture_block", BLOCK_GATE)
         check("rt_stop_counts_again", sb.run(ev)["decision"] == "block")
+
+
+def test_stop_budget_seedproof():
+    # The state file is agent-writable, so a pre-seeded counter must NOT
+    # pre-exhaust the budget: load_state drops out-of-window ints and
+    # apply_stop_budget clamps the prior into [0, budget-1]. The first genuine
+    # block therefore always blocks regardless of the seed (WI-3, ported).
+    with Sandbox() as sb:
+        sb.config({"version": 1, "stop_block_budget": 1, "routes": [
+            {"event": "Stop", "gates": ["fixture_block"]}]})
+        sb.gate("fixture_block", BLOCK_GATE)
+        logs = os.path.join(sb.tmp, "logs")
+        os.makedirs(logs, exist_ok=True)
+        state = os.path.join(logs, "router-state.json")
+        # huge seed (out of the 0..10 window) -> dropped by load_state
+        with open(state, "w", encoding="utf-8") as handle:
+            json.dump({"stop:s1": 99}, handle)
+        check("rt_stop_seed99_still_blocks",
+              sb.run({"hook_event_name": "Stop", "session_id": "s1"})["decision"] == "block")
+        # in-window seed above the budget -> clamped to budget-1, not honored
+        with open(state, "w", encoding="utf-8") as handle:
+            json.dump({"stop:s2": 5}, handle)
+        check("rt_stop_seed5_still_blocks",
+              sb.run({"hook_event_name": "Stop", "session_id": "s2"})["decision"] == "block")
 
 
 def test_real_config():
@@ -209,6 +238,7 @@ def main():
     test_routing()
     test_gate_failures()
     test_stop_budget()
+    test_stop_budget_seedproof()
     test_real_config()
     print(f"All {PASSED} router checks passed")
 

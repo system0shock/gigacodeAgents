@@ -4,8 +4,9 @@
 Registered once per event in .gigacode/settings.json. Matches routes in
 router.config.json, runs gate modules from gates/ in-process, aggregates
 decisions (block > ask > allow), journals every decision to
-.gigacode/logs/decisions.jsonl, and degrades repeated Stop blocks to a
-warning after the configured budget.
+.gigacode/logs/decisions.jsonl. Stop blocks are agent-fixable and PERSIST until
+fixed (no auto-degrade); a genuinely stuck gate is cleared by the human
+disableAllHooks escape hatch, not by outwaiting a budget.
 """
 import importlib.util
 import json
