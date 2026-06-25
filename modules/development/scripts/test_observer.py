@@ -174,6 +174,55 @@ def test_build_snapshot():
         check("build_has_" + key, key in snap, key)
 
 
+def _free_server(obs, tmp):
+    """Start the observer on an ephemeral 127.0.0.1 port against fixture `tmp`.
+    Returns (httpd, thread, port). Caller must httpd.shutdown()."""
+    import threading
+    os.environ["GIGACODE_ROOT"] = tmp
+    httpd = obs.make_server(0, slug="card")          # port 0 -> OS picks a free port
+    port = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    return httpd, t, port
+
+
+def test_server_routes():
+    import urllib.request
+    obs = load_mod("observer")
+    tmp = make_root(intake={"task_type": "feature", "scope_intent": "x", "acceptance": [],
+                            "constraints": [], "understanding": "u"})
+    orig = os.environ.get("GIGACODE_ROOT")
+    httpd = None
+    try:
+        httpd, _t, port = _free_server(obs, tmp)
+        base = "http://127.0.0.1:%d" % port
+        check("server_binds_loopback", httpd.server_address[0] == "127.0.0.1",
+              httpd.server_address)
+        # /api/snapshot -> JSON
+        with urllib.request.urlopen(base + "/api/snapshot?slug=card", timeout=5) as r:
+            body = json.loads(r.read().decode("utf-8"))
+        check("route_snapshot_json", body["_contract"] == "wi15/1", body.get("_contract"))
+        check("route_snapshot_enriched", "vitals" in body and "blocker" in body, list(body))
+        # / -> HTML page
+        with urllib.request.urlopen(base + "/", timeout=5) as r:
+            html = r.read().decode("utf-8")
+        check("route_index_html", "<!DOCTYPE html" in html and "EventSource" in html, html[:80])
+        # unknown -> 404
+        try:
+            urllib.request.urlopen(base + "/nope", timeout=5)
+            check("route_404", False, "expected 404")
+        except urllib.error.HTTPError as e:
+            check("route_404", e.code == 404, e.code)
+    finally:
+        if httpd is not None:
+            httpd.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+        if orig is None:
+            os.environ.pop("GIGACODE_ROOT", None)
+        else:
+            os.environ["GIGACODE_ROOT"] = orig
+
+
 if __name__ == "__main__":
     test_readers()
     test_vitals()
@@ -182,4 +231,5 @@ if __name__ == "__main__":
     test_parse_ts()
     test_format_sse()
     test_build_snapshot()
+    test_server_routes()
     print(f"\n{PASSED} checks passed")

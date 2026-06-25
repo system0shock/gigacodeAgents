@@ -11,10 +11,14 @@ over projection.py's pure functions. Wall-clock (datetime.now) is read, not a wr
 Usage:
     python .gigacode/hooks/observer.py [--port 8787] [--slug card]
 """
+import argparse
 import json
 import os
+import queue
 import sys
+import threading
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "gates"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -119,3 +123,151 @@ def build_snapshot(slug=None, tail_n=12, now=None):
 
 def format_sse(event, data):
     return "event: %s\ndata: %s\n\n" % (event, json.dumps(data, ensure_ascii=False))
+
+
+HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "observer.html")
+
+
+class Observer:
+    def __init__(self, slug=None):
+        self.slug = slug
+        self._clients = set()
+        self._lock = threading.Lock()
+
+    def register(self):
+        q = queue.Queue(maxsize=1000)
+        with self._lock:
+            self._clients.add(q)
+        return q
+
+    def unregister(self, q):
+        with self._lock:
+            self._clients.discard(q)
+
+    def broadcast(self, msg):
+        with self._lock:
+            clients = list(self._clients)
+        for q in clients:
+            try:
+                q.put_nowait(msg)
+            except queue.Full:
+                pass  # slow client: drop, never block the broadcaster
+
+
+def broadcaster(observer, stop_event, interval=2.0):
+    """Tail decisions.jsonl: push `decision` events for new records, and a fresh
+    `snapshot` every `interval` seconds so derived panels stay live. Read-only."""
+    path = projection.log_path()
+    try:
+        offset = os.path.getsize(path)
+    except OSError:
+        offset = 0
+    while not stop_event.is_set():
+        records, offset = projection.read_from_offset(path, offset)
+        for rec in records:
+            observer.broadcast(format_sse("decision", rec))
+        observer.broadcast(format_sse("snapshot", build_snapshot(observer.slug)))
+        stop_event.wait(interval)
+
+
+def _make_handler(observer):
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, *a):
+            pass  # quiet
+
+        def _slug(self):
+            from urllib.parse import urlparse, parse_qs
+            q = parse_qs(urlparse(self.path).query)
+            return (q.get("slug") or [observer.slug])[0]
+
+        def _send_json(self, obj):
+            body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            route = self.path.split("?", 1)[0]
+            if route == "/":
+                try:
+                    with open(HTML_PATH, "rb") as h:
+                        body = h.read()
+                except OSError:
+                    self.send_error(404)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif route == "/api/snapshot":
+                self._send_json(build_snapshot(self._slug()))
+            elif route == "/stream":
+                self._serve_stream(self._slug())
+            else:
+                self.send_error(404)
+
+        def _serve_stream(self, slug):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+            q = observer.register()
+            try:
+                self.wfile.write(format_sse("snapshot", build_snapshot(slug)).encode("utf-8"))
+                self.wfile.flush()
+                while True:
+                    try:
+                        msg = q.get(timeout=15)
+                    except queue.Empty:
+                        msg = ": ping\n\n"  # heartbeat
+                    self.wfile.write(msg.encode("utf-8"))
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass  # client disconnected
+            finally:
+                observer.unregister(q)
+
+    return Handler
+
+
+def make_server(port=8787, slug=None):
+    """Build a ThreadingHTTPServer bound to 127.0.0.1 with a started broadcaster.
+    The broadcaster thread is a daemon attached as httpd._broadcaster_stop."""
+    observer = Observer(slug=slug)
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), _make_handler(observer))
+    stop_event = threading.Event()
+    httpd._broadcaster_stop = stop_event
+    threading.Thread(target=broadcaster, args=(observer, stop_event), daemon=True).start()
+    return httpd
+
+
+def serve(port=8787, slug=None):
+    httpd = make_server(port, slug)
+    host, real = httpd.server_address
+    sys.stderr.write("observer on http://%s:%d  (Ctrl-C to stop)\n" % (host, real))
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        httpd._broadcaster_stop.set()
+        httpd.shutdown()
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Read-only GigaCode flow web observer.")
+    parser.add_argument("--port", type=int, default=8787)
+    parser.add_argument("--slug", default=None)
+    args = parser.parse_args(argv)
+    serve(args.port, args.slug)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
