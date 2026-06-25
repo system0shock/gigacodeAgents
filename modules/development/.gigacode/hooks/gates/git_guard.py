@@ -274,7 +274,19 @@ def _normalize_ws(s):
         if ch in ZERO_WIDTH:
             continue
         out.append(" " if unicodedata.category(ch) == "Zs" else ch)
-    return "".join(out)
+    s = "".join(out)
+    # Windows path separator: a backslash before a path-ish char is a directory
+    # separator on cmd/PowerShell-backed runtimes, not a bash escape. Fold it to
+    # "/" so the posix tokenizer (_tokenize -> shlex.split posix=True) does not
+    # CONSUME it and erase the separators in `.gigacode\hooks\x` ->
+    # `.gigacodehooksx`, which dodged the self-protect catch-all (and the
+    # cp/mv/rm path scans, classify_path, write_targets — every consumer reads
+    # the already-mangled tokens). The lookahead restricts the fold to a
+    # backslash followed by an identifier/dot char, so bash escape semantics are
+    # untouched: `\"` (escaped quote), `\ ` (escaped space), `\$`, `\&`, and the
+    # `\<newline>` line-continuation (already removed above) are all left intact.
+    s = re.sub(r"\\(?=[A-Za-z0-9_.])", "/", s)
+    return s
 
 
 def _tokenize(s):

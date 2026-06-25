@@ -495,6 +495,39 @@ def main():
         result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
         check(f"r2_allow::{cmd[:32]}", result["decision"] == "allow", (cmd, result))
 
+    # 22b. Backslash path-separator self-protect (WI-3 fix). On cmd/PowerShell a
+    # backslash is a directory separator, but the posix tokenizer CONSUMED it,
+    # collapsing `.gigacode\hooks\x` -> `.gigacodehooksx` and dodging the
+    # self-protect catch-all (and cp/mv/rm path scans). _normalize_ws now folds a
+    # path-separator backslash to "/" so the backslash spelling matches the
+    # slash spelling. These MUST block:
+    BS_BLOCK = [
+        # the WI-22 self-approval vector: agent running confirm.py via backslashes
+        "python .gigacode\\hooks\\confirm.py intake card",
+        "cp evil .gigacode\\settings.json",
+        "rm .gigacode\\hooks\\git_guard.py",
+        "Set-Content .gigacode\\hooks\\router.py x",
+        "mv a .git\\hooks\\pre-commit",
+        "echo x > .git\\config",            # .git\config -> .git/config (GIT_DIR_LOOSE)
+        "cp evil .gigacode\\hooks/x",       # mixed separators
+    ]
+    for cmd in BS_BLOCK:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"bs_block::{cmd[:32]}", result["decision"] == "block", (cmd, result))
+
+    # legitimate Windows backslash paths and look-alikes MUST still allow (the
+    # fold must not over-block, and the LOOSE lookahead must reject .gigacoder /
+    # .gitignore which are NOT enforcement paths):
+    BS_ALLOW = [
+        "cp src\\main.py build\\out.py",
+        "git -C some\\dir status",
+        "cat .gigacoder\\notes.txt",        # .gigacoder != .gigacode
+        "type docs\\.gitignore.sample",     # .gitignore* != .git
+    ]
+    for cmd in BS_ALLOW:
+        result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
+        check(f"bs_allow::{cmd[:32]}", result["decision"] == "allow", (cmd, result))
+
     # 23. PR review round 3 (T6 follow-up): newly closed git_guard bypasses.
     R3_BLOCK = [
         # escaped quote must NOT swallow the && segment (\" is a literal quote)

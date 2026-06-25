@@ -52,17 +52,31 @@ def load_quality_gates():
         return {}
 
 
+def _norm_path(value):
+    """Normalize a file path: forward slashes, collapse // and /./, resolve ..,
+    strip a leading ./  so regex guards cannot be bypassed by case, redundant
+    separators, or dot-dot traversal."""
+    p = value.replace("\\", "/")
+    p = os.path.normpath(p).replace("\\", "/")
+    return p[2:] if p.startswith("./") else p
+
+
+# notebook_path: NotebookEdit names its target there, not under path/file_path —
+# without it a NotebookEdit slips past the write gates with no recognized path.
+_PATH_KEYS = ("path", "file_path", "filename", "notebook_path")
+
+
 def path_from_event(event):
-    for key in ("path", "file_path", "filename", "notebook_path"):
+    for key in _PATH_KEYS:
         value = event.get(key)
         if isinstance(value, str):
-            return value.replace("\\", "/")
+            return _norm_path(value)
     tool_input = event.get("tool_input")
     if isinstance(tool_input, dict):
-        for key in ("path", "file_path", "filename", "notebook_path"):
+        for key in _PATH_KEYS:
             value = tool_input.get(key)
             if isinstance(value, str):
-                return value.replace("\\", "/")
+                return _norm_path(value)
     return ""
 
 
@@ -114,13 +128,27 @@ def run_command(command, timeout, extra_args=None):
               and token[0] in "\"'" else token for token in tokens]
     if not tokens:
         return -1, "empty command"
-    exe = shutil.which(tokens[0]) or shutil.which(tokens[0], path=root())
+    name = tokens[0]
+    # Detect whether the token is an explicit path (starts with . / \ or contains a
+    # path separator, or is absolute).  Only explicit paths are resolved relative to
+    # root() — bare names like "gradlew" or "mvnw" are resolved ONLY against the
+    # trusted system PATH (shutil.which) so a planted file at the repo root cannot
+    # be elevated to an executable inside the gate process.
+    is_explicit = (
+        name.startswith((".", "/", "\\"))
+        or os.path.isabs(name)
+        or ("/" in name)
+        or ("\\" in name)
+    )
+    if is_explicit:
+        # explicit path: resolve relative to root(), fall back to PATH
+        candidate = name if os.path.isabs(name) else os.path.join(root(), name)
+        exe = candidate if os.path.exists(candidate) else shutil.which(name)
+    else:
+        # bare name: ONLY the trusted system PATH — never the repo root
+        exe = shutil.which(name)
     if not exe:
-        candidate = os.path.join(root(), tokens[0])
-        if os.path.exists(candidate):
-            exe = candidate
-        else:
-            return -1, f"command not found: {tokens[0]}"
+        return -1, f"command not found: {name}"
     try:
         proc = subprocess.run(
             [exe] + tokens[1:] + list(extra_args or []),
@@ -135,6 +163,65 @@ def run_command(command, timeout, extra_args=None):
     return proc.returncode, tail
 
 
+def git_changed_paths():
+    """Tracked+untracked changed paths (forward-slash, repo-relative), or [].
+
+    Stop gates derive their trigger from the real working tree here instead of
+    the agent's final message, which is attacker-controlled and was the root of
+    the red-team "flow theater" bypass: omitting a path from the message used to
+    silently unlock every Stop guarantee.
+
+    core.quotepath=false keeps non-ASCII bytes (e.g. Cyrillic filenames) literal
+    instead of octal-escaping them inside quotes, so the returned paths are
+    real, usable paths rather than `\\320\\242...`-style mojibake."""
+    try:
+        proc = subprocess.run(
+            ["git", "-c", "core.quotepath=false", "status", "--porcelain",
+             "--untracked-files=all"],
+            cwd=root(), text=True, encoding="utf-8", errors="replace",
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        journal_skip("git_changed_paths", f"git status could not run: {exc}")
+        return []
+    if proc.returncode != 0:
+        # not a git repository (or a git error): the working-tree Stop guarantees
+        # cannot fire — make "no repo => no enforcement" visible, not silent.
+        journal_skip("git_changed_paths", "git status returned non-zero (no git repo?)")
+        return []
+    paths = []
+    for line in proc.stdout.splitlines():
+        # porcelain v1: 2 status chars + 1 space, then the path
+        entry = line[3:].strip().strip('"')
+        if " -> " in entry:  # rename: keep the destination
+            entry = entry.split(" -> ", 1)[1].strip().strip('"')
+        if entry:
+            paths.append(entry.replace("\\", "/"))
+    return paths
+
+
+# Production-code suffixes whose change should engage the development flow.
+# Broad on purpose (red-team #13: a narrow list let whole languages ship with
+# every Stop gate green). Markup/data/config (.md/.json/.yaml/.xml) is excluded
+# so routine config edits do not force the full flow; enforcement/spec/doc trees
+# are excluded by prefix in changed_code_files.
+CODE_SUFFIXES = (
+    ".kt", ".kts", ".java", ".scala", ".groovy", ".gradle",
+    ".py", ".rb", ".php",
+    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte",
+    ".go", ".rs", ".cs",
+    ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".m", ".mm", ".swift",
+    ".sh", ".bash", ".ps1", ".sql", ".tf",
+)
+
+
+def changed_code_files():
+    """Changed production-code files: code suffix, outside openspec/ docs/
+    .gigacode/ (those are spec/doc/enforcement edits, not shipped product code)."""
+    return [p for p in git_changed_paths()
+            if p.endswith(CODE_SUFFIXES)
+            and not p.startswith(("openspec/", "docs/", ".gigacode/"))]
+
+
 def stdin_event():
     """CLI entry helper: parse the hook event from stdin (BOM-safe)."""
     try:
@@ -142,3 +229,19 @@ def stdin_event():
     except json.JSONDecodeError:
         return None
     return event if isinstance(event, dict) else None
+
+
+def emit(result):
+    """CLI exit helper: print a decision dict as one UTF-8 JSON line.
+
+    Reconfigures stdout to UTF-8 so Russian reason strings (and chars like U+2717
+    in openspec output) survive a non-UTF-8 Windows console codepage when a gate
+    is run standalone (`echo ... | python gate.py`, the smoke-check pipes, any
+    direct consumer). The router reconfigures its own stdout; this covers the
+    gate CLIs the router never reaches."""
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except (ValueError, OSError):
+            pass
+    print(json.dumps(result, ensure_ascii=False))
