@@ -13,6 +13,7 @@ required=(
   ".gigacode/hooks/router.config.json"
   ".gigacode/hooks/hook_probe.py"
   "docs/templates/development-journal.md"
+  "docs/templates/intake.json"
   "rules/development-flow.md"
   "rules/language-policy.md"
   "rules/git-safety.md"
@@ -28,9 +29,13 @@ required=(
   ".gigacode/hooks/gates/gate_build.py"
   ".gigacode/hooks/gates/gate_clean_code.py"
   ".gigacode/hooks/gates/gate_existing_code.py"
+  ".gigacode/hooks/gates/gate_stage_order.py"
+  ".gigacode/hooks/confirm.py"
+  ".gigacode/stages.json"
   ".gigacode/quality-gates.json"
   "scripts/build_module_map.py"
   "scripts/test_module_map.py"
+  "scripts/test_stage_order.py"
 )
 
 for path in "${required[@]}"; do
@@ -95,10 +100,22 @@ rm -rf "$vdo_root"
 printf '%s' "$missing" | grep -q '"decision": "block"'
 
 "$python_cmd" -m json.tool .gigacode/hooks/router.config.json >/dev/null
+"$python_cmd" -m json.tool .gigacode/stages.json >/dev/null
 "$python_cmd" scripts/test_router.py
 "$python_cmd" -m json.tool .gigacode/quality-gates.json >/dev/null
 "$python_cmd" scripts/test_gates.py
+"$python_cmd" scripts/test_stage_order.py
 "$python_cmd" scripts/test_module_map.py
+
+# gate_stage_order: a contract-stage write without the intake approval is a hard
+# stop (direct gate call, mirrors the git_guard block cases above).
+stage_block="$(printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"docs/development/smoke-nope/contract.json"}}' | "$python_cmd" .gigacode/hooks/gates/gate_stage_order.py)"
+printf '%s' "$stage_block" | grep -q '"decision": "block"'
+
+# and the same write denied through the live router route (proves it is wired).
+stage_route="$(printf '%s' '{"tool_name":"Edit","tool_input":{"file_path":"docs/development/smoke-nope/contract.json"}}' | node .gigacode/hooks/run-hook.cjs --event PreToolUse)"
+printf '%s' "$stage_route" | grep -q '"permissionDecision": "deny"'
+echo "gate_stage_order round-trip: block + route deny OK"
 
 if command -v openspec >/dev/null 2>&1; then
   # Use 'list --specs' not 'validate --strict': validate requires --type change

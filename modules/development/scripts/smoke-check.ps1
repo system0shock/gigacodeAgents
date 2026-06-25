@@ -12,6 +12,7 @@ $required = @(
   ".gigacode/hooks/router.config.json",
   ".gigacode/hooks/hook_probe.py",
   "docs/templates/development-journal.md",
+  "docs/templates/intake.json",
   "rules/development-flow.md",
   "rules/language-policy.md",
   "rules/git-safety.md",
@@ -27,9 +28,13 @@ $required = @(
   ".gigacode/hooks/gates/gate_build.py",
   ".gigacode/hooks/gates/gate_clean_code.py",
   ".gigacode/hooks/gates/gate_existing_code.py",
+  ".gigacode/hooks/gates/gate_stage_order.py",
+  ".gigacode/hooks/confirm.py",
+  ".gigacode/stages.json",
   ".gigacode/quality-gates.json",
   "scripts/build_module_map.py",
-  "scripts/test_module_map.py"
+  "scripts/test_module_map.py",
+  "scripts/test_stage_order.py"
 )
 
 foreach ($path in $required) {
@@ -120,6 +125,11 @@ if ($LASTEXITCODE -ne 0) {
   throw "invalid JSON: .gigacode/hooks/router.config.json"
 }
 
+python -m json.tool .gigacode/stages.json | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw "invalid JSON: .gigacode/stages.json"
+}
+
 python scripts/test_router.py
 if ($LASTEXITCODE -ne 0) {
   throw "router tests failed"
@@ -135,10 +145,29 @@ if ($LASTEXITCODE -ne 0) {
   throw "gate tests failed"
 }
 
+python scripts/test_stage_order.py
+if ($LASTEXITCODE -ne 0) {
+  throw "stage-order tests failed"
+}
+
 python scripts/test_module_map.py
 if ($LASTEXITCODE -ne 0) {
   throw "module-map tests failed"
 }
+
+# gate_stage_order: a contract-stage write without the intake approval is a hard
+# stop (direct gate call, mirrors the git_guard block cases above).
+$stageBlock = '{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"docs/development/smoke-nope/contract.json"}}' | python .gigacode/hooks/gates/gate_stage_order.py
+if ($stageBlock -notmatch '"decision":\s*"block"') {
+  throw "gate_stage_order did not block a contract write without intake approval"
+}
+
+# and the same write denied through the live router route (proves it is wired).
+$stageRoute = '{"tool_name":"Edit","tool_input":{"file_path":"docs/development/smoke-nope/contract.json"}}' | node .gigacode/hooks/run-hook.cjs --event PreToolUse
+if ($stageRoute -notmatch '"permissionDecision":\s*"deny"') {
+  throw "router did not deny a contract write without intake approval"
+}
+Write-Host "gate_stage_order round-trip: block + route deny OK"
 
 if (Get-Command openspec -ErrorAction SilentlyContinue) {
   # Use 'list --specs' not 'validate --strict': validate requires --type change

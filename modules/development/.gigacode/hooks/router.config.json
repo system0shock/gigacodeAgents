@@ -30,6 +30,12 @@
     {
       "event": "PreToolUse",
       "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
+      "gates": ["gate_stage_order"],
+      "safety_critical": true
+    },
+    {
+      "event": "PreToolUse",
+      "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
       "gates": ["gate_spec_structure"]
     },
     {
