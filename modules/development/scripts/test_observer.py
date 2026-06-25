@@ -9,7 +9,7 @@ import json
 import os
 import shutil
 import tempfile
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HOOKS_DIR = os.path.join(ROOT, ".gigacode", "hooks")
@@ -102,7 +102,11 @@ def test_vitals():
     check("vitals_idle", v["idle_sec"] == 10, v)         # NOW - last(15:00:20) = 10s
     check("vitals_session", v["session_sec"] == 20, v)   # 15:00:20 - 15:00:00
     check("vitals_tools", v["tools"]["Edit"] == 2 and v["tools"]["Bash"] == 1, v)
-    check("vitals_empty", obs.vitals([], NOW)["total"] == 0)
+    empty = obs.vitals([], NOW)
+    check("vitals_empty_total", empty["total"] == 0, empty)
+    check("vitals_empty_idle", empty["idle_sec"] is None, empty)
+    check("vitals_empty_session", empty["session_sec"] == 0, empty)
+    check("vitals_empty_tools", empty["tools"] == {}, empty)
 
 
 def test_blocker():
@@ -138,9 +142,19 @@ def test_enrich():
     check("enrich_verdict_none", out["verdict"] is None)
 
 
+def test_parse_ts():
+    obs = load_mod("observer")
+    check("parse_ts_valid", obs.parse_ts("2026-06-25T15:00:00+0300") is not None)
+    check("parse_ts_none", obs.parse_ts(None) is None)
+    check("parse_ts_int", obs.parse_ts(12345) is None)
+    check("parse_ts_garbage", obs.parse_ts("not-a-timestamp") is None)
+    check("parse_ts_empty", obs.parse_ts("") is None)
+
+
 if __name__ == "__main__":
     test_readers()
     test_vitals()
     test_blocker()
     test_enrich()
+    test_parse_ts()
     print(f"\n{PASSED} checks passed")
