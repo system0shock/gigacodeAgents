@@ -1,5 +1,13 @@
 # GigaCode
 
+> ⚠️ **UNSTABLE / pre-release.** Ветка `unstable` — предрелизная. Все
+> найденные аудитом **breaking-баги enforcement закрыты** (launcher fail-closed,
+> tool-name bypass, self-protection forge-каналы), но остаются известные
+> IMPORTANT/MINOR ограничения — см.
+> [`docs/enforcement-limitations.md`](docs/enforcement-limitations.md). Не для
+> прод-использования без ревью. Перед деплоем включите backstop'ы (integrity
+> baseline) и правьте `quality-gates.json` под свой стек.
+
 Монорепозиторий проектных флоу GigaCode для агентной разработки. Каждый флоу
 самодостаточен и открывается как корень проекта для `gigacode`. Хуки превращают
 обычную сессию в управляемый процесс: детерминированные гейты (git-safety,
