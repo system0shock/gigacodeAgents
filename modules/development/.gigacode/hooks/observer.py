@@ -12,9 +12,11 @@ Usage:
     python .gigacode/hooks/observer.py [--port 8787] [--slug card]
 """
 import argparse
+import glob
 import json
 import os
 import queue
+import re
 import sys
 import threading
 from datetime import datetime
@@ -23,6 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "gates"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import projection  # WI-13: collect / read_decisions / read_from_offset / _read_json
+import _lib
 
 CONTRACT = "wi15/1"
 
@@ -102,6 +105,147 @@ def blocker(snapshot, decisions):
             "command": command, "reason": last_block.get("reason") if last_block else None}
 
 
+# Gates that fire on a source-code edit. There is no "implement" STAGE in
+# stages.json (the agent codes between plan-approval and the verdict), so
+# implement activity is inferred from these gates' decisions in the journal.
+CODE_GATES = ("gate_lint", "gate_scope_guard", "gate_clean_code",
+              "gate_existing_code", "gate_build")
+
+
+GATE_ORDER = ("git_guard", "gate_scope_guard", "gate_lint", "gate_clean_code",
+              "gate_existing_code", "gate_stage_order", "gate_spec_structure",
+              "gate_build", "gate_verdict", "validate_development_output")
+
+
+_FILE_RE = re.compile(r"[\w./-]+\.[A-Za-z0-9]+")
+
+
+def gates(decisions):
+    latest = {}
+    for d in decisions:
+        g = d.get("gate")
+        if g:
+            latest[g] = d            # journal is in order → last write wins
+    out = [{"gate": g, "decision": latest[g].get("decision") if g in latest else None,
+            "ts": latest[g].get("ts") if g in latest else None} for g in GATE_ORDER]
+    for g, d in latest.items():
+        if g not in GATE_ORDER:
+            out.append({"gate": g, "decision": d.get("decision"), "ts": d.get("ts")})
+    return out
+
+
+def _step_file(reason):
+    if not isinstance(reason, str):
+        return ""
+    matches = _FILE_RE.findall(reason)
+    return matches[-1] if matches else ""
+
+
+def implement_status(snapshot, decisions, now):
+    """Live 'implement is happening' signal, or None. Active when there are
+    code-edit gate decisions, the plan stage has been reached, and no passing
+    verdict exists yet. Returns {active, edits, last_sec, steps}."""
+    edits = [d for d in decisions if d.get("gate") in CODE_GATES]
+    if not edits:
+        return None
+    if (snapshot.get("verdict") or {}).get("result") == "pass":
+        return None  # past implement — verdict already green
+    stages = (snapshot.get("stage") or {}).get("stages", [])
+    plan = next((s for s in stages if s.get("id") == "plan"), None)
+    # require the plan stage to exist AND be reached; if there is no plan stage we
+    # cannot confirm "implement", so stay conservative and report nothing.
+    if plan is None or not plan.get("enterable", False):
+        return None
+    last_ts = None
+    for d in edits:
+        ts = parse_ts(d.get("ts"))
+        if ts and (last_ts is None or ts > last_ts):
+            last_ts = ts
+    last_sec = int((now - last_ts).total_seconds()) if last_ts else None
+    steps = [{"gate": d.get("gate"), "decision": d.get("decision"),
+              "file": _step_file(d.get("reason")), "ts": d.get("ts")} for d in edits[-8:]]
+    return {"active": True, "edits": len(edits), "last_sec": last_sec, "steps": steps}
+
+
+ALLOWED_DOC_PREFIXES = ("docs/development/", "openspec/changes/")
+
+
+def _root():
+    return _lib.root()
+
+
+def _isfile(rel):
+    return os.path.isfile(os.path.join(_root(), *rel.split("/")))
+
+
+def _approved(slug, stage):
+    return os.path.isfile(os.path.join(_root(), ".gigacode", "approvals", slug, stage + ".ok"))
+
+
+def tasks_progress(slug):
+    target = os.path.join(_root(), "openspec", "changes", slug, "tasks.md")
+    try:
+        with open(target, "r", encoding="utf-8") as handle:
+            text = handle.read()
+    except OSError:
+        return None
+    done = len(re.findall(r"(?m)^\s*[-*]\s*\[[xX]\]", text))
+    total = len(re.findall(r"(?m)^\s*[-*]\s*\[[ xX]\]", text))
+    return "%d/%d" % (done, total) if total else None
+
+
+def documents(slug):
+    """Both doc families with computed state. Always lists the core expected
+    docs (pending/optional when absent) so the index shows what is yet to come."""
+    if not slug:
+        return []
+    docs = []
+
+    def add(family, phase, rel, state, progress=None):
+        docs.append({"family": family, "phase": phase, "path": rel,
+                     "label": rel.rsplit("/", 1)[-1], "state": state, "progress": progress})
+
+    # flow artifacts
+    intake_rel = "docs/development/%s/intake.json" % slug
+    add("flow", "intake", intake_rel,
+        "approved" if _approved(slug, "intake") else ("present" if _isfile(intake_rel) else "pending"))
+    contract_rel = "docs/development/%s/contract.json" % slug
+    add("flow", "contract", contract_rel,
+        "frozen" if _approved(slug, "contract") else ("present" if _isfile(contract_rel) else "pending"))
+    # openspec
+    base = "openspec/changes/%s" % slug
+    add("openspec", "plan", base + "/proposal.md", "present" if _isfile(base + "/proposal.md") else "pending")
+    for spec in sorted(glob.glob(os.path.join(_root(), "openspec", "changes", slug, "specs", "*", "spec.md"))):
+        rel = os.path.relpath(spec, _root()).replace("\\", "/")
+        add("openspec", "plan", rel, "present")
+    add("openspec", "plan", base + "/tasks.md",
+        "present" if _isfile(base + "/tasks.md") else "pending", tasks_progress(slug))
+    add("openspec", "plan", base + "/design.md", "present" if _isfile(base + "/design.md") else "optional")
+    # delivery flow artifacts
+    verdict_rel = "docs/development/%s/verdict.json" % slug
+    add("flow", "delivery", verdict_rel, "present" if _isfile(verdict_rel) else "pending")
+    pr_rel = "docs/development/%s/pr-summary.md" % slug
+    add("flow", "delivery", pr_rel, "present" if _isfile(pr_rel) else "pending")
+    return docs
+
+
+def safe_doc_path(rel):
+    """Absolute path for a /doc request, or None if it escapes the allowlist.
+    Rejects absolutes, '..', non-flow-doc prefixes, and symlink escapes out of root."""
+    if not rel or rel.startswith("/") or rel.startswith("\\") or "\x00" in rel:
+        return None
+    norm = os.path.normpath(rel).replace("\\", "/")
+    if os.path.isabs(norm) or norm == ".." or norm.startswith("../") or "/../" in norm:
+        return None
+    if not norm.startswith(ALLOWED_DOC_PREFIXES):
+        return None
+    root = os.path.realpath(_root())
+    full = os.path.realpath(os.path.join(root, *norm.split("/")))
+    if os.path.commonpath([root, full]) != root:
+        return None
+    return full
+
+
 def enrich(snapshot, decisions, now):
     slug = snapshot.get("slug")
     out = dict(snapshot)
@@ -110,6 +254,9 @@ def enrich(snapshot, decisions, now):
     out["verdict"] = read_verdict(slug)
     out["blocker"] = blocker(snapshot, decisions)
     out["vitals"] = vitals(decisions, now)
+    out["implement"] = implement_status(out, decisions, now)
+    out["documents"] = documents(slug)
+    out["gates"] = gates(decisions)
     return out
 
 
@@ -117,7 +264,8 @@ def _empty_snapshot(slug):
     return {"_contract": CONTRACT, "session": None, "slug": slug, "slug_candidates": [],
             "stage": {"current": None, "stages": []},
             "budget": {"used": None, "limit": None}, "scope": None, "decisions": [],
-            "intake": None, "verdict": None, "blocker": None,
+            "intake": None, "verdict": None, "blocker": None, "implement": None,
+            "documents": [], "gates": [],
             "vitals": {"total": 0, "block": 0, "ask": 0, "allow": 0, "per_min": 0,
                        "idle_sec": None, "session_sec": 0, "tools": {}}}
 
@@ -221,6 +369,24 @@ def _make_handler(observer):
                 self._send_json(build_snapshot(self._slug()))
             elif route == "/stream":
                 self._serve_stream(self._slug())
+            elif route == "/doc":
+                from urllib.parse import urlparse, parse_qs
+                rel = (parse_qs(urlparse(self.path).query).get("path") or [""])[0]
+                target = safe_doc_path(rel)
+                if target is None:
+                    self.send_error(400)
+                    return
+                try:
+                    with open(target, "rb") as h:
+                        body = h.read(512 * 1024)
+                except OSError:
+                    self.send_error(404)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
             else:
                 self.send_error(404)
 

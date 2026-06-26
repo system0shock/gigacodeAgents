@@ -57,12 +57,23 @@ def _write(tmp, rel, obj):
         h.write(obj if isinstance(obj, str) else json.dumps(obj))
 
 
-def make_root(intake=None, verdict=None):
+def make_root(intake=None, verdict=None, contract=None, openspec=None,
+              approvals=None, tasks_md=None):
+    """Temp root. openspec: dict of relpath-under-openspec/changes/<slug> -> text.
+    approvals: list of stage names (writes .gigacode/approvals/<slug>/<stage>.ok)."""
     tmp = tempfile.mkdtemp(prefix="observer-test-")
     if intake is not None:
         _write(tmp, "docs/development/card/intake.json", intake)
     if verdict is not None:
         _write(tmp, "docs/development/card/verdict.json", verdict)
+    if contract is not None:
+        _write(tmp, "docs/development/card/contract.json", contract)
+    for rel, text in (openspec or {}).items():
+        _write(tmp, "openspec/changes/card/" + rel, text)
+    if tasks_md is not None:
+        _write(tmp, "openspec/changes/card/tasks.md", tasks_md)
+    for stage in (approvals or []):
+        _write(tmp, ".gigacode/approvals/card/" + stage + ".ok", "{}")
     return tmp
 
 
@@ -140,6 +151,31 @@ def test_enrich():
     check("enrich_vitals", out["vitals"]["total"] == 1)
     check("enrich_blocker", out["blocker"]["active"] is True)
     check("enrich_verdict_none", out["verdict"] is None)
+    check("enrich_implement_key", "implement" in out, out)
+
+
+def test_implement_status():
+    obs = load_mod("observer")
+    plan_ready = {"current": "plan", "stages": [
+        {"id": "plan", "order": 2, "enterable": True, "met": [], "unmet": []}]}
+    edits = [rec("2026-06-25T15:00:00+0300", "allow", "Edit", gate="gate_lint"),
+             rec("2026-06-25T15:00:20+0300", "ask", "Edit", gate="gate_scope_guard")]
+    im = obs.implement_status({"stage": plan_ready, "verdict": None}, edits, NOW)
+    check("impl_active", im["active"] is True and im["edits"] == 2, im)
+    check("impl_last_sec", im["last_sec"] == 10, im)  # NOW(15:00:30) - 15:00:20
+    # no code-edit gates -> None
+    check("impl_none_no_edits",
+          obs.implement_status({"stage": plan_ready, "verdict": None},
+                               [rec(TS, "allow", gate="git_guard")], NOW) is None)
+    # passing verdict -> past implement -> None
+    check("impl_none_verdict_pass",
+          obs.implement_status({"stage": plan_ready, "verdict": {"result": "pass"}},
+                               edits, NOW) is None)
+    # plan not reached -> None
+    plan_locked = {"current": "contract", "stages": [
+        {"id": "plan", "order": 2, "enterable": False, "met": [], "unmet": ["approval:contract"]}]}
+    check("impl_none_plan_locked",
+          obs.implement_status({"stage": plan_locked, "verdict": None}, edits, NOW) is None)
 
 
 def test_parse_ts():
@@ -247,12 +283,27 @@ def _hash_tree(root):
     return digest.hexdigest()
 
 
+def test_html_flow_zones():
+    with open(os.path.join(HOOKS_DIR, "observer.html"), "r", encoding="utf-8") as h:
+        html = h.read()
+    for needle in ("http://", "https://", "//cdn", "src=\"//", "href=\"//"):
+        check("flow_no_external_" + needle.strip(":/\"="), needle not in html, needle)
+    for marker in ("renderPhases", "renderGates", "renderDocs", "openDoc", "/doc?path="):
+        check("flow_has_" + marker.strip("/?=").replace("renderD", "rD"), marker in html, marker + " missing")
+    # Doc links carry the path in an esc()-safe data-attribute, never in an inline
+    # onclick string (encodeURIComponent does NOT escape "'", so onclick was injectable).
+    check("flow_doclink_data_attr", "data-path=" in html, "doc links must use data-path")
+    check("flow_doclink_no_onclick_inject", "onclick=\"openDoc(" not in html,
+          "doc path must not be built into an inline onclick handler")
+
+
 def test_read_only_and_loopback():
     import urllib.request
     obs = load_mod("observer")
     # No git repo, no logs dir: the trap a journaling reader would trip.
     tmp = make_root(intake={"task_type": "feature", "scope_intent": "x", "acceptance": [],
-                            "constraints": [], "understanding": "u"})
+                            "constraints": [], "understanding": "u"},
+                    openspec={"proposal.md": "body"})
     orig = os.environ.get("GIGACODE_ROOT")
     httpd = None
     try:
@@ -265,6 +316,8 @@ def test_read_only_and_loopback():
         port = httpd.server_address[1]
         with urllib.request.urlopen("http://127.0.0.1:%d/api/snapshot?slug=card" % port, timeout=5) as r:
             r.read()
+        with urllib.request.urlopen("http://127.0.0.1:%d/doc?path=openspec/changes/card/proposal.md" % port, timeout=5) as r2:
+            r2.read()
         # let the broadcaster tick at least once (interval 2s)
         import time as _t; _t.sleep(2.5)
         after = _hash_tree(tmp)
@@ -278,15 +331,156 @@ def test_read_only_and_loopback():
         else: os.environ["GIGACODE_ROOT"] = orig
 
 
+def test_tasks_progress():
+    obs = load_mod("observer")
+    md = "- [x] a\n- [x] b\n- [ ] c\n- [ ] d\n- [ ] e\n"
+    with root_at(make_root(tasks_md=md)):
+        check("tasks_progress", obs.tasks_progress("card") == "2/5", obs.tasks_progress("card"))
+    with root_at(make_root()):
+        check("tasks_progress_none", obs.tasks_progress("card") is None)
+
+
+def _docmap(docs):
+    return {d["path"].rsplit("/", 1)[-1]: d for d in docs}
+
+
+def test_documents():
+    obs = load_mod("observer")
+    with root_at(make_root(intake={"x": 1}, contract={"y": 1},
+                           approvals=["intake", "contract"],
+                           openspec={"proposal.md": "p", "specs/cards/spec.md": "s"},
+                           tasks_md="- [x] a\n- [ ] b\n")):
+        docs = obs.documents("card")
+        m = _docmap(docs)
+        check("doc_intake_approved", m["intake.json"]["state"] == "approved", m.get("intake.json"))
+        check("doc_contract_frozen", m["contract.json"]["state"] == "frozen", m.get("contract.json"))
+        check("doc_proposal_present", m["proposal.md"]["state"] == "present", m.get("proposal.md"))
+        check("doc_spec_present", any(d["label"] == "spec.md" and d["family"] == "openspec" for d in docs), docs)
+        check("doc_tasks_progress", m["tasks.md"]["progress"] == "1/2", m.get("tasks.md"))
+        check("doc_design_optional", m["design.md"]["state"] == "optional", m.get("design.md"))
+        check("doc_verdict_pending", m["verdict.json"]["state"] == "pending", m.get("verdict.json"))
+        check("doc_pr_pending", m["pr-summary.md"]["state"] == "pending", m.get("pr-summary.md"))
+        check("doc_family_split",
+              m["proposal.md"]["family"] == "openspec" and m["intake.json"]["family"] == "flow", m)
+    check("documents_no_slug", obs.documents(None) == [])
+
+
+def test_gates():
+    obs = load_mod("observer")
+    decs = [rec("2026-06-25T15:00:00+0300", "allow", gate="git_guard"),
+            rec("2026-06-25T15:00:05+0300", "ask", gate="gate_scope_guard"),
+            rec("2026-06-25T15:00:09+0300", "allow", gate="git_guard")]  # git_guard fired twice
+    g = obs.gates(decs)
+    by = {x["gate"]: x for x in g}
+    check("gate_latest_wins", by["git_guard"]["decision"] == "allow", by.get("git_guard"))
+    check("gate_scope_ask", by["gate_scope_guard"]["decision"] == "ask", by.get("gate_scope_guard"))
+    check("gate_never_fired", by["gate_verdict"]["decision"] is None, by.get("gate_verdict"))
+    check("gate_order_first", g[0]["gate"] == obs.GATE_ORDER[0], g[0])
+
+
+def test_implement_steps():
+    obs = load_mod("observer")
+    plan_ready = {"current": "plan", "stages": [
+        {"id": "plan", "order": 2, "enterable": True, "met": [], "unmet": []}]}
+    edits = [dict(rec("2026-06-25T15:00:00+0300", "allow", gate="gate_lint"),
+                  reason="edited src/cards/CardService.kt"),
+             dict(rec("2026-06-25T15:00:20+0300", "ask", gate="gate_scope_guard"),
+                  reason="overshoot: src/billing/Fee.kt")]
+    im = obs.implement_status({"stage": plan_ready, "verdict": None}, edits, NOW)
+    check("steps_present", len(im["steps"]) == 2, im)
+    check("steps_file_parsed", im["steps"][0]["file"].endswith("CardService.kt"), im["steps"][0])
+    check("steps_gate", im["steps"][1]["gate"] == "gate_scope_guard", im["steps"][1])
+
+
+def test_safe_doc_path():
+    obs = load_mod("observer")
+    with root_at(make_root(openspec={"proposal.md": "hi"})):
+        ok = obs.safe_doc_path("openspec/changes/card/proposal.md")
+        check("doc_ok", ok is not None and ok.endswith("proposal.md"), ok)
+        check("doc_flow_ok", obs.safe_doc_path("docs/development/card/intake.json") is not None)
+        check("doc_reject_abs", obs.safe_doc_path("/etc/passwd") is None)
+        check("doc_reject_dotdot", obs.safe_doc_path("openspec/changes/card/../../../secret") is None)
+        check("doc_reject_outside_prefix", obs.safe_doc_path("src/cards/CardService.kt") is None)
+        check("doc_reject_gigacode", obs.safe_doc_path("docs/development/card/../../../.gigacode/settings.json") is None)
+        check("doc_reject_empty", obs.safe_doc_path("") is None)
+
+
+def test_safe_doc_path_hardening():
+    obs = load_mod("observer")
+    with root_at(make_root()) as tmp:
+        # None input
+        check("doc_reject_none", obs.safe_doc_path(None) is None)
+        # Windows-absolute and UNC paths
+        check("doc_reject_win_abs", obs.safe_doc_path("C:/Windows/System32/x") is None)
+        check("doc_reject_unc", obs.safe_doc_path("\\\\server\\share\\x") is None)
+        # Embedded null byte: reject early (else realpath raises ValueError -> 500)
+        check("doc_reject_nullbyte", obs.safe_doc_path("docs/development/card/\x00intake.json") is None)
+        # Real symlink escape: symlink inside an allowed prefix → resolves outside root
+        card_dir = os.path.join(tmp, "docs", "development", "card")
+        os.makedirs(card_dir, exist_ok=True)
+        link_path = os.path.join(card_dir, "escape_link")
+        try:
+            os.symlink(tempfile.gettempdir(), link_path)
+            check("doc_reject_symlink_escape",
+                  obs.safe_doc_path("docs/development/card/escape_link") is None)
+        except OSError:
+            # Symlink creation requires elevated privilege on some Windows configs.
+            check("doc_reject_symlink_escape", True)  # counted as pass
+            print("  (doc_reject_symlink_escape: skipped — symlink privilege not available on this platform)")
+
+
+def test_doc_route():
+    import urllib.request
+    obs = load_mod("observer")
+    tmp = make_root(openspec={"proposal.md": "PROPOSAL BODY"})
+    orig = os.environ.get("GIGACODE_ROOT")
+    httpd = None
+    try:
+        os.environ["GIGACODE_ROOT"] = tmp
+        httpd = obs.make_server(0, slug="card")
+        import threading
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        port = httpd.server_address[1]
+        base = "http://127.0.0.1:%d" % port
+        with urllib.request.urlopen(base + "/doc?path=openspec/changes/card/proposal.md", timeout=5) as r:
+            body = r.read().decode("utf-8")
+        check("doc_route_serves", "PROPOSAL BODY" in body, body)
+        try:
+            urllib.request.urlopen(base + "/doc?path=src/x.kt", timeout=5); bad = 0
+        except urllib.error.HTTPError as e:
+            bad = e.code
+        check("doc_route_rejects_400", bad == 400, bad)
+        try:
+            urllib.request.urlopen(base + "/doc?path=docs/development/card/nope.json", timeout=5); nf = 0
+        except urllib.error.HTTPError as e:
+            nf = e.code
+        check("doc_route_404", nf == 404, nf)
+    finally:
+        if httpd is not None:
+            httpd._broadcaster_stop.set(); httpd.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+        if orig is None: os.environ.pop("GIGACODE_ROOT", None)
+        else: os.environ["GIGACODE_ROOT"] = orig
+
+
 if __name__ == "__main__":
     test_readers()
     test_vitals()
     test_blocker()
     test_enrich()
+    test_implement_status()
     test_parse_ts()
     test_format_sse()
     test_build_snapshot()
     test_server_routes()
     test_html_zero_external_assets()
+    test_html_flow_zones()
     test_read_only_and_loopback()
+    test_tasks_progress()
+    test_documents()
+    test_gates()
+    test_implement_steps()
+    test_safe_doc_path()
+    test_safe_doc_path_hardening()
+    test_doc_route()
     print(f"\n{PASSED} checks passed")

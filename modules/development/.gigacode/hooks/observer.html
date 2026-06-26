@@ -16,9 +16,9 @@
   .seg .pill.on{ background:var(--infobg); color:var(--info); border:0.5px solid var(--info); }
   .help{ position:absolute; top:9px; right:11px; width:16px; height:16px; border-radius:50%; border:0.5px solid var(--bd); color:var(--t3); font-size:11px; line-height:15px; text-align:center; cursor:help; }
   .help:hover, .help:focus{ color:var(--info); border-color:var(--info); outline:none; }
-  .help:hover::after, .help:focus::after{ content:attr(data-tip); position:absolute; top:135%; right:0; background:var(--tipbg); color:var(--t1); border:0.5px solid var(--info); padding:7px 10px; border-radius:7px; font:12px/1.35 system-ui,sans-serif; width:max-content; max-width:290px; white-space:normal; z-index:60; box-shadow:0 8px 24px -8px #000; }
+  .help:hover::after, .help:focus::after{ content:attr(data-tip); position:absolute; top:135%; right:0; background:var(--tipbg); color:var(--t1); border:0.5px solid var(--info); padding:7px 10px; border-radius:7px; font:12px/1.35 system-ui,sans-serif; width:max-content; max-width:300px; white-space:normal; z-index:60; box-shadow:0 8px 24px -8px #000; }
   .nd{ position:relative; flex:1; min-width:110px; border-radius:7px; padding:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-  .nd:hover::after, .nd:focus::after{ content:attr(data-tip); position:absolute; top:112%; left:50%; transform:translateX(-50%); background:var(--tipbg); color:var(--t1); border:0.5px solid var(--info); padding:7px 10px; border-radius:7px; font:11.5px/1.35 system-ui,sans-serif; width:max-content; max-width:240px; white-space:normal; z-index:55; box-shadow:0 8px 24px -8px #000; text-align:left; }
+  .nd:hover::after, .nd:focus::after{ content:attr(data-tip); position:absolute; top:112%; left:50%; transform:translateX(-50%); background:var(--tipbg); color:var(--t1); border:0.5px solid var(--info); padding:7px 10px; border-radius:7px; font:11.5px/1.35 system-ui,sans-serif; width:max-content; max-width:280px; white-space:normal; z-index:55; box-shadow:0 8px 24px -8px #000; text-align:left; }
   .grid5{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
   .grid3{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:10px; }
   .row{ display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
@@ -34,58 +34,80 @@
   <div class="row" style="justify-content:space-between;padding-bottom:12px;border-bottom:0.5px solid var(--bd);margin-bottom:12px;">
     <div class="row">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><path d="M4 12a8 8 0 0 1 8-8M4 12a8 8 0 0 0 8 8"/><circle cx="12" cy="12" r="2" fill="var(--info)" stroke="none"/></svg>
-      <div><div style="font-weight:500;">GigaCode flow · observer</div><div class="mono" style="font-size:12px;color:var(--t2);" id="sess">session — · /stream</div></div>
+      <div><div style="font-weight:500;">GigaCode flow · observer</div><div class="mono" style="font-size:12px;color:var(--t2);" id="sess">сессия — · /stream</div></div>
     </div>
     <div class="row">
       <div class="seg"><span class="pill on" data-theme="mint" tabindex="0">mint</span><span class="pill" data-theme="pink" tabindex="0">ultra-pink ♥</span></div>
-      <span id="live" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ok);background:var(--okbg);padding:4px 10px;border-radius:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok)"></span><span id="livetxt">live</span></span>
+      <span id="live" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ok);background:var(--okbg);padding:4px 10px;border-radius:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok)"></span><span id="livetxt">онлайн</span></span>
     </div>
   </div>
 
   <div class="panel hidden" id="taskPanel">
-    <span class="help" tabindex="0" data-tip="Задача из intake.json (WI-20): тип, slug, scope_intent, acceptance, understanding (рестейт агента, ADR-7).">?</span>
+    <span class="help" tabindex="0" data-tip="Задача из intake.json: тип, цель (scope_intent), критерии приёмки и understanding — пересказ задачи агентом своими словами.">?</span>
     <div class="row" style="margin-bottom:8px;" id="taskHead"></div>
     <div class="row" style="margin-bottom:8px;" id="taskAcc"></div>
     <div id="taskUnd" style="font-size:12px;color:var(--t2);border-left:2px solid var(--bd);padding-left:8px;"></div>
   </div>
 
   <div class="panel hidden" id="blockPanel" style="background:var(--badbg);border-color:var(--bad);">
-    <span class="help" tabindex="0" data-tip="Текущий блокер: непройденный предикат стадии. Команда снимает блок — подтверждение человеком out-of-band (агент не может, .gigacode защищён, P6).">?</span>
+    <span class="help" tabindex="0" data-tip="Текущий блокер: невыполненное условие входа в стадию. Команда снимает блок — подтверждение человеком вне сессии агента (сам агент не может: .gigacode защищён гейтом).">?</span>
     <div class="row"><span style="font-size:20px;">⛔</span><div style="flex:1;min-width:200px;"><div style="font-weight:500;color:var(--bad);" id="blockMsg"></div></div><code id="blockCmd"></code></div>
   </div>
 
   <div class="panel">
-    <span class="help" tabindex="0" data-tip="Агрегаты сессии из decisions.jsonl: счётчики block/ask/allow, темп (решений/мин), idle (сек с последней записи), длительность, инструменты.">?</span>
-    <div class="lbl">vital signs</div>
+    <span class="help" tabindex="0" data-tip="Сводка по сессии из журнала решений: счётчики block/ask/allow, темп (решений в минуту), простой (сек с последнего решения), длительность сессии, инструменты.">?</span>
+    <div class="lbl">пульс сессии</div>
     <div class="grid5" id="vitals"></div>
   </div>
 
   <div class="panel">
-    <span class="help" tabindex="0" data-tip="Граф стадий. Цвет = stage_status (done/current/locked) из артефактов и approval-маркеров (_stage). Наведи на узел — entry-предикаты. Строка внизу — переход.">?</span>
-    <div class="lbl">stage graph</div>
-    <div class="row" style="align-items:stretch;gap:4px;" id="graph"></div>
-    <div id="trans" style="border-top:0.5px solid var(--bd);margin-top:12px;padding-top:8px;font-size:12px;"></div>
+    <span class="help" tabindex="0" data-tip="Фазы флоу: intake → contract → plan → implement → delivery. implement — производная фаза (нет в stages.json), выводится из правок кода; verify — внутри delivery. Карточки фаз раскрывают шаги и документы.">?</span>
+    <div class="lbl">граф флоу</div>
+    <div id="nowstrip" style="margin-bottom:12px;"></div>
+    <div class="row" style="align-items:stretch;gap:4px;" id="phases"></div>
+    <div id="cards" style="margin-top:12px;"></div>
+    <div style="margin-top:12px;border-top:0.5px solid var(--bd);padding-top:9px;">
+      <div class="row" style="justify-content:space-between;">
+        <div class="lbl" style="margin:0;">прохождение гейтов</div>
+        <div style="font-size:10px;color:var(--t3);"><span style="color:var(--ok)">●</span> ок · <span style="color:var(--warn)">●</span> ask · <span style="color:var(--bad)">●</span> block · <span style="color:var(--t3)">●</span> —</div>
+      </div>
+      <div id="gates" style="display:flex;gap:5px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;margin-top:7px;"></div>
+    </div>
+    <div style="margin-top:12px;border-top:0.5px solid var(--bd);padding-top:9px;">
+      <div id="docshdr" style="font-size:11px;color:var(--info);cursor:pointer;" tabindex="0">▾ документы флоу</div>
+      <div id="docs" style="margin-top:8px;"></div>
+    </div>
   </div>
 
   <div class="grid3">
     <div class="panel" style="margin-bottom:0;">
-      <span class="help" tabindex="0" data-tip="stop-блоки сессии (router-state.json) против stop_block_budget (router.config.json). Лимит живой.">?</span>
-      <div class="lbl">stop budget</div><div id="budget"></div></div>
+      <span class="help" tabindex="0" data-tip="Сколько раз агента останавливали на Stop в этой сессии против лимита stop_block_budget (router.config.json). Лимит читается живьём.">?</span>
+      <div class="lbl">бюджет остановок</div><div id="budget"></div></div>
     <div class="panel" style="margin-bottom:0;">
-      <span class="help" tabindex="0" data-tip="contract.scope_globs / modules. Пофайловая адгезия — задел (см. спеку).">?</span>
-      <div class="lbl">scope vs contract</div><div class="mono" style="font-size:12px;" id="scope"></div></div>
+      <span class="help" tabindex="0" data-tip="Границы изменений из контракта: scope_globs и modules. Пофайловая адгезия (зелёный/красный по каждому файлу) — в планах.">?</span>
+      <div class="lbl">scope против контракта</div><div class="mono" style="font-size:12px;" id="scope"></div></div>
     <div class="panel" style="margin-bottom:0;">
-      <span class="help" tabindex="0" data-tip="verdict.json (WI-11): pass/fail + risk-поля. Появляется после verify.">?</span>
-      <div class="lbl">verdict</div><div style="font-size:12px;" id="verdict"></div></div>
+      <span class="help" tabindex="0" data-tip="verdict.json: pass/fail + механические risk-поля. Пишет gate_verdict из реальных тестов на Stop (это верификация, не отдельная стадия).">?</span>
+      <div class="lbl">вердикт</div><div style="font-size:12px;" id="verdict"></div></div>
   </div>
 
   <div class="panel">
-    <span class="help" tabindex="0" data-tip="Лента решений из decisions.jsonl по дорожкам session/feature/agent (WI-2). block/ask подсвечены. Чипы — фильтр.">?</span>
+    <span class="help" tabindex="0" data-tip="Лента решений из журнала, сгруппирована по дорожкам сессия / фича / агент. block и ask подсвечены. Чипы — фильтр по типу решения.">?</span>
     <div class="row" style="justify-content:space-between;margin-bottom:10px;">
-      <div class="lbl" style="margin:0;">decision swimlanes</div>
+      <div class="lbl" style="margin:0;">решения по дорожкам</div>
       <div class="row" style="gap:6px;" id="filters"></div>
     </div>
     <div id="lanes"></div>
+  </div>
+
+  <div id="docmodal" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center;padding:24px;">
+    <div style="background:var(--panel);border:0.5px solid var(--info);border-radius:9px;max-width:860px;width:100%;max-height:82vh;display:flex;flex-direction:column;">
+      <div class="row" style="justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--bd);">
+        <span id="docmodaltitle" class="mono" style="color:var(--info);"></span>
+        <span id="docmodalclose" tabindex="0" style="cursor:pointer;color:var(--t2);">✕ закрыть</span>
+      </div>
+      <pre id="docmodalbody" class="mono" style="margin:0;padding:12px 14px;overflow:auto;font-size:12px;color:var(--t1);white-space:pre-wrap;"></pre>
+    </div>
   </div>
 
 </div>
@@ -97,6 +119,33 @@
   var esc = function(s){ var d=document.createElement("div"); d.textContent = (s==null?"":String(s)); return d.innerHTML.replace(/"/g, "&quot;"); };
   var filter = "all";
   var lastSnap = null;
+
+  // Plain-language description of what happens in each flow stage (keyed by stage id
+  // from stages.json). Delivery is the opaque one: it folds verification + validation
+  // + delivery, and implement has no node — both are spelled out here.
+  var STAGE_INFO = {
+    intake:   "Сбор задачи. Агент заполняет intake.json (тип, цель, критерии приёмки, understanding — пересказ задачи своими словами). Человек подтверждает понимание: confirm.py intake.",
+    contract: "Заморозка scope. Агент драфтит contract.json (scope_globs, modules) — границы изменений. Человек подтверждает (confirm.py contract); после этого контракт заморожен.",
+    plan:     "План (OpenSpec). Агент пишет proposal / design / tasks.md. Вход — только при заполненном и подтверждённом контракте.",
+    delivery: "Финал и сдача. Вход требует verdict.json result=pass — его пишет gate_verdict из РЕАЛЬНЫХ тестов на Stop (это верификация). Там же на Stop результат валидируется: diff ⊆ scope, тесты прогнаны, manifest ⇿ диск (validate_development_output). Стадия пишет pr-summary.md."
+  };
+  var SUB = { current:"текущая", done:"пройдена", ready:"готова", locked:"заблокирована" };
+
+  // Turn a machine predicate label into plain Russian for humans.
+  function humanize(label){
+    var H = {
+      "intake_complete":   "intake.json заполнен (обязательные поля)",
+      "contract_complete": "contract.json заполнен (scope_globs, modules)",
+      "approval:intake":   "человек подтвердил понимание задачи (confirm.py intake)",
+      "approval:contract": "человек подтвердил контракт / scope (confirm.py contract)",
+      "verdict:pass":      "вердикт тестов = pass (verdict.json)",
+      "verdict_pass":      "вердикт тестов = pass (verdict.json)"
+    };
+    if(H[label]) return H[label];
+    if(label && label.indexOf("approval:")===0) return "подтверждение человеком: "+label.slice(9);
+    if(label && label.indexOf("file_exists:")===0) return "есть файл "+label.slice(12);
+    return label;
+  }
 
   // --- theme ---
   var saved = null;
@@ -129,14 +178,14 @@
     byId("taskAcc").innerHTML = (ik.acceptance||[]).map(function(a){
       return '<span style="font-size:11px;color:var(--t2);background:var(--chip);padding:2px 8px;border-radius:5px;">✓ '+esc(a)+'</span>'; }).join("");
     byId("taskUnd").innerHTML = ik.understanding ?
-      '<span style="color:var(--t3)">understanding:</span> '+esc(ik.understanding) : "";
+      '<span style="color:var(--t3)">понимание задачи:</span> '+esc(ik.understanding) : "";
   }
 
   function renderBlocker(b){
     var p = byId("blockPanel");
     if(!b || !b.active){ p.classList.add("hidden"); return; }
     p.classList.remove("hidden");
-    byId("blockMsg").innerHTML = "Заблокировано: стадия <b>"+esc(b.stage)+"</b> ждёт <b>"+esc(b.unmet)+"</b>";
+    byId("blockMsg").innerHTML = "Заблокировано: стадия <b>"+esc(b.stage)+"</b> ждёт: <b style=\"color:var(--warn)\">"+esc(humanize(b.unmet))+"</b>";
     var c = byId("blockCmd");
     if(b.command){ c.style.display=""; c.textContent = b.command; } else { c.style.display="none"; }
   }
@@ -150,39 +199,129 @@
     var tools = Object.keys(v.tools||{}).map(function(k){ return esc(k)+" "+v.tools[k]; }).join(" · ") || "—";
     byId("vitals").innerHTML =
       tile("решения", v.total, '<span style="color:var(--bad)">'+v.block+'b</span> · <span style="color:var(--warn)">'+v.ask+'a</span> · <span style="color:var(--ok)">'+v.allow+'✓</span>') +
-      tile("темп", v.per_min+'<span style="font-size:11px;color:var(--t2)">/м</span>') +
-      tile("последнее", (v.idle_sec==null?"—":v.idle_sec+"с")) +
+      tile("темп", v.per_min+'<span style="font-size:11px;color:var(--t2)">/мин</span>') +
+      tile("простой", (v.idle_sec==null?"—":v.idle_sec+"с")) +
       tile("сессия", Math.round((v.session_sec||0)/60)+"м") +
-      tile("tools", '<span style="font-size:12px;">'+tools+'</span>');
+      tile("инструменты", '<span style="font-size:12px;">'+tools+'</span>');
   }
 
-  function renderGraph(stage){
-    var g = byId("graph"); g.innerHTML = "";
-    var stages = (stage && stage.stages) || [];
-    var current = stage && stage.current;
-    stages.slice().sort(function(a,b){ return a.order-b.order; }).forEach(function(st, i){
-      if(i>0) g.insertAdjacentHTML("beforeend", '<div style="display:flex;align-items:center;color:var(--t3);font-size:16px;">→</div>');
-      var isCur = st.id === current;
-      var done = !isCur && st.enterable && current && st.order < stagesOrder(stages,current);
-      var bg = isCur?"var(--infobg)":(st.enterable?"var(--okbg)":"var(--lock)");
-      var col = isCur?"var(--info)":(st.enterable?"var(--ok)":"var(--t3)");
-      var br = isCur?"2px solid var(--info)":"0.5px solid "+(st.enterable?"var(--ok)":"var(--bd)");
-      var mark = isCur?"●":(st.enterable?"✓":"🔒");
-      var sub = isCur?"current":(done?"done":(st.enterable?"ready":"locked"));
-      var tip = st.id+" — "+sub+". met: "+(st.met||[]).join(", ")+" | unmet: "+(st.unmet||[]).join(", ");
-      g.insertAdjacentHTML("beforeend",
-        '<div class="nd" tabindex="0" data-tip="'+esc(tip)+'" style="background:'+bg+';border:'+br+';">'+
-        '<div style="color:'+col+';font-weight:500;">'+mark+' '+esc(st.id)+'</div>'+
-        '<div style="font-size:11px;color:'+col+';opacity:.85">'+sub+'</div></div>');
+  var DOC_STATE = { present:["✓","var(--ok)"], approved:["✓ approved","var(--ok)"],
+    frozen:["✓ заморожен","var(--ok)"], pending:["☐ ещё нет","var(--t3)"],
+    optional:["☐ опц.","var(--t3)"] };
+  var PHASE_ORDER = ["intake","contract","plan","implement","delivery"];
+
+  // Build the 5-phase view: real stages from snapshot + synthetic implement.
+  function phaseModel(snap){
+    var byId2 = {}; ((snap.stage&&snap.stage.stages)||[]).forEach(function(s){ byId2[s.id]=s; });
+    var current = snap.stage && snap.stage.current;
+    var im = snap.implement;
+    return PHASE_ORDER.map(function(id){
+      if(id==="implement"){
+        var active = im && im.active;
+        return {id:id, state: active?"current":(byId2.delivery&&byId2.delivery.enterable?"done":"locked")};
+      }
+      var st = byId2[id];
+      if(!st) return {id:id, state:"locked"};
+      var isCur = st.id===current && !(im&&im.active);
+      var done = st.enterable && current && st.order < ((byId2[current]||{}).order||99);
+      return {id:id, state: isCur?"current":(done?"done":(st.enterable?"ready":"locked"))};
     });
-    var next = stages.filter(function(s){ return !s.enterable; }).sort(function(a,b){ return a.order-b.order; })[0];
-    byId("trans").innerHTML = next ?
-      '<span style="color:var(--t3)">для перехода к '+esc(next.id)+':</span> ' +
-      (next.met||[]).map(function(m){ return '<span style="color:var(--ok)">✓ '+esc(m)+'</span>'; }).join(" ") + " " +
-      (next.unmet||[]).map(function(u){ return '<span style="color:var(--warn)">☐ '+esc(u)+'</span>'; }).join(" ")
-      : '<span style="color:var(--t3)">все стадии разблокированы</span>';
   }
-  function stagesOrder(stages, id){ var f=stages.filter(function(s){return s.id===id;})[0]; return f?f.order:99; }
+  function pcolors(state){
+    if(state==="current") return ["var(--infobg)","var(--info)","2px solid var(--info)","●"];
+    if(state==="done"||state==="ready") return ["var(--okbg)","var(--ok)","0.5px solid var(--ok)","✓"];
+    return ["var(--lock)","var(--t3)","0.5px solid var(--bd)","🔒"];
+  }
+  function renderPhases(snap){
+    var g = byId("phases"); g.innerHTML = "";
+    phaseModel(snap).forEach(function(p, i){
+      if(i>0) g.insertAdjacentHTML("beforeend", '<div style="display:flex;align-items:center;color:var(--t3);">→</div>');
+      var c = pcolors(p.state);
+      g.insertAdjacentHTML("beforeend",
+        '<div class="nd" tabindex="0" data-tip="'+esc(STAGE_INFO[p.id]||p.id)+'" style="background:'+c[0]+';border:'+c[2]+';">'+
+        '<div style="color:'+c[1]+';font-weight:500;">'+c[3]+' '+esc(p.id)+'</div>'+
+        '<div style="font-size:11px;color:'+c[1]+';opacity:.85">'+esc(SUB[p.state]||p.state)+'</div></div>');
+    });
+  }
+  function docChip(d){
+    var st = DOC_STATE[d.state] || ["?","var(--t3)"];
+    var prog = d.progress ? " "+esc(d.progress) : "";
+    var clickable = (d.state==="present"||d.state==="approved"||d.state==="frozen");
+    var name = clickable
+      ? '<a class="doclink" tabindex="0" data-path="'+esc(d.path)+'" style="cursor:pointer;font-family:var(--mono);font-size:10px;color:var(--info);border-bottom:1px dotted var(--info)">'+esc(d.label)+'</a>'
+      : '<span style="font-family:var(--mono);font-size:10px;color:var(--t3)">'+esc(d.label)+'</span>';
+    return '<span style="background:var(--lock);border:0.5px solid var(--bd);border-radius:6px;padding:5px 8px;color:'+st[1]+'">'+name+' '+esc(st[0])+prog+'</span>';
+  }
+  function renderCards(snap){
+    var docs = snap.documents || [];
+    function ofPhase(p){ return docs.filter(function(d){ return d.phase===p; }); }
+    var im = snap.implement;
+    var html = "";
+    // plan card (OpenSpec)
+    var plan = docs.filter(function(d){ return d.family==="openspec"; });
+    if(plan.length) html += '<div style="border:0.5px solid var(--bd);border-left:2px solid var(--ok);border-radius:7px;padding:9px 11px;background:#13161f;margin-bottom:8px;">'+
+      '<div style="font-size:11px;color:var(--t2);margin-bottom:7px;"><b style="color:var(--ok)">plan</b> · OpenSpec</div>'+
+      '<div class="row" style="gap:5px;">'+plan.map(docChip).join("")+'</div></div>';
+    // implement card
+    if(im && im.steps && im.steps.length) html += '<div style="border:0.5px solid var(--bd);border-left:2px solid var(--info);border-radius:7px;padding:9px 11px;background:#13161f;margin-bottom:8px;">'+
+      '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t2);margin-bottom:7px;"><span><b style="color:var(--info)">implement</b> · код</span><span>'+esc(String(im.edits))+' правок · последняя '+(im.last_sec==null?"—":esc(String(im.last_sec))+"с")+'</span></div>'+
+      '<div class="row" style="gap:5px;">'+im.steps.map(function(s){
+        var col = s.decision==="block"?"var(--bad)":(s.decision==="ask"?"var(--warn)":"var(--ok)");
+        return '<span style="background:var(--lock);border:0.5px solid var(--bd);border-radius:6px;padding:5px 8px;color:'+col+'">'+esc(s.decision)+' <span class="mono" style="font-size:10px;color:var(--t2)">'+esc(s.file||s.gate)+'</span></span>';
+      }).join("")+'</div></div>';
+    // delivery card
+    var deliv = ofPhase("delivery");
+    html += '<div style="border:0.5px solid var(--bd);border-left:2px solid var(--t3);border-radius:7px;padding:9px 11px;background:#13161f;">'+
+      '<div style="font-size:11px;color:var(--t2);margin-bottom:7px;"><b>delivery</b> · verify + validate + сдача</div>'+
+      '<div class="row" style="gap:5px;">'+deliv.map(docChip).join("")+
+      '<span style="background:var(--lock);border:0.5px dashed var(--bd);border-radius:6px;padding:5px 8px;color:var(--t3)">☐ validate: diff⊆scope · тесты · manifest</span></div></div>';
+    byId("cards").innerHTML = html;
+  }
+  function renderGates(snap){
+    byId("gates").innerHTML = (snap.gates||[]).map(function(g){
+      var m = {allow:["var(--okbg)","var(--ok)"], ask:["var(--warnbg)","var(--warn)"], block:["var(--badbg)","var(--bad)"]}[g.decision] || ["var(--lock)","var(--t3)"];
+      return '<span style="border-radius:5px;padding:3px 8px;background:'+m[0]+';color:'+m[1]+';border:0.5px solid '+m[1]+'">'+esc(g.gate)+'</span>';
+    }).join("");
+  }
+  function renderDocs(snap){
+    var docs = snap.documents || [];
+    function fam(f){ return docs.filter(function(d){ return d.family===f; }); }
+    function line(d){
+      var st = DOC_STATE[d.state] || ["?","var(--t3)"]; var prog = d.progress?" "+esc(d.progress):"";
+      var clickable = (d.state==="present"||d.state==="approved"||d.state==="frozen");
+      var nm = clickable ? '<a class="doclink" tabindex="0" data-path="'+esc(d.path)+'" style="cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--info);border-bottom:1px dotted var(--info)">'+esc(d.label)+'</a>'
+                         : '<span style="font-family:var(--mono);font-size:11px;color:var(--t3)">'+esc(d.label)+'</span>';
+      return '<div>'+nm+' <span style="color:'+st[1]+'">'+esc(st[0])+prog+'</span></div>';
+    }
+    byId("docs").innerHTML =
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 18px;font-size:12px;">'+
+      '<div style="color:var(--t3);font-size:10px;text-transform:uppercase;">OpenSpec</div>'+
+      '<div style="color:var(--t3);font-size:10px;text-transform:uppercase;">артефакты флоу</div>'+
+      '<div>'+fam("openspec").map(line).join("")+'</div><div>'+fam("flow").map(line).join("")+'</div></div>';
+  }
+  function renderNow(snap){
+    var im = snap.implement, d = (snap.decisions||[])[ (snap.decisions||[]).length-1 ];
+    var cur = (snap.stage&&snap.stage.current)||"—";
+    var act = (im&&im.active) ? "implement — правка "+esc((im.steps&&im.steps.length?im.steps[im.steps.length-1].file:"")||"кода") : "фаза "+esc(cur);
+    var last = d ? esc(d.gate||d.kind||"")+" "+esc(d.decision||"") : "—";
+    var b = snap.budget||{};
+    byId("nowstrip").innerHTML = '<div style="display:flex;align-items:center;gap:10px;background:var(--infobg);border:0.5px solid var(--info);border-radius:8px;padding:9px 12px;">'+
+      '<span style="width:8px;height:8px;border-radius:50%;background:var(--info)"></span>'+
+      '<div style="flex:1;min-width:0;"><div style="color:var(--info);font-weight:500;">Сейчас: '+act+'</div>'+
+      '<div style="font-size:11px;color:var(--t2);margin-top:2px;">последнее: '+last+' · бюджет '+(b.used==null?"?":esc(String(b.used)))+'/'+(b.limit==null?"?":esc(String(b.limit)))+'</div></div></div>';
+  }
+
+  function openDoc(path){
+    byId("docmodaltitle").textContent = path;
+    byId("docmodalbody").textContent = "загрузка…";
+    byId("docmodal").style.display = "flex";
+    fetch("/doc?path="+encodeURIComponent(path)).then(function(r){
+      if(!r.ok) throw new Error(r.status); return r.text();
+    }).then(function(t){ byId("docmodalbody").textContent = t; })
+      .catch(function(){ byId("docmodalbody").textContent = "не удалось открыть документ."; });
+  }
+  window.openDoc = openDoc;
+  function closeDoc(){ byId("docmodal").style.display = "none"; }
 
   function renderBudget(b){
     if(!b){ byId("budget").innerHTML="нет данных"; return; }
@@ -195,11 +334,11 @@
   function renderScope(s){
     if(!s){ byId("scope").innerHTML='<span style="color:var(--t3);font-style:italic;">нет contract.json</span>'; return; }
     byId("scope").innerHTML = (s.scope_globs||[]).map(function(g){ return '<div style="color:var(--ok)">✓ '+esc(g)+'</div>'; }).join("") +
-      '<div style="color:var(--t2);margin-top:4px;">modules: '+esc((s.modules||[]).join(", "))+'</div>';
+      '<div style="color:var(--t2);margin-top:4px;">модули: '+esc((s.modules||[]).join(", "))+'</div>';
   }
 
   function renderVerdict(v){
-    if(!v){ byId("verdict").innerHTML='<span style="color:var(--t3);font-style:italic;">ещё нет — verify не достигнута.</span>'; return; }
+    if(!v){ byId("verdict").innerHTML='<span style="color:var(--t3);font-style:italic;">ещё нет — появится после прогона тестов на Stop (gate_verdict).</span>'; return; }
     var col = v.result==="pass"?"var(--ok)":"var(--bad)";
     var risk = Object.keys(v.risk||{}).map(function(k){ return esc(k)+": "+esc(v.risk[k]); }).join(", ");
     byId("verdict").innerHTML = '<div style="color:'+col+';font-weight:600;text-transform:uppercase;">'+esc(v.result)+'</div><div style="color:var(--t2);margin-top:4px;font-size:11px;">'+esc(risk)+'</div>';
@@ -242,11 +381,15 @@
 
   function render(snap){
     lastSnap = snap;
-    byId("sess").textContent = "session "+(snap.session||"—")+" · /stream";
+    byId("sess").textContent = "сессия "+(snap.session||"—")+" · /stream";
     renderTask(snap.intake);
     renderBlocker(snap.blocker);
     renderVitals(snap.vitals);
-    renderGraph(snap.stage);
+    renderNow(snap);
+    renderPhases(snap);
+    renderCards(snap);
+    renderGates(snap);
+    renderDocs(snap);
     renderBudget(snap.budget);
     renderScope(snap.scope);
     renderVerdict(snap.verdict);
@@ -255,10 +398,27 @@
 
   renderFilters();
 
+  byId("docmodalclose").addEventListener("click", closeDoc);
+  byId("docmodal").addEventListener("click", function(e){ if(e.target===byId("docmodal")) closeDoc(); });
+  document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeDoc(); });
+  // delegated doc-link open: path travels in a data-attribute (esc-safe), never in an inline handler string
+  function docLinkFromEvent(e){ var a=e.target.closest&&e.target.closest("a.doclink"); return a&&a.getAttribute("data-path"); }
+  document.addEventListener("click", function(e){ var p=docLinkFromEvent(e); if(p){ e.preventDefault(); openDoc(p); } });
+  document.addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key===" "){ var p=docLinkFromEvent(e); if(p){ e.preventDefault(); openDoc(p); } } });
+  (function(){
+    var hdr = byId("docshdr"), box = byId("docs");
+    var open = true; try { open = localStorage.getItem("observer-docs")!=="0"; } catch(e){}
+    function apply(){ box.style.display = open?"":"none"; hdr.textContent = (open?"▾":"▸")+" документы флоу"; }
+    function tog(){ open=!open; try{ localStorage.setItem("observer-docs", open?"1":"0"); }catch(e){} apply(); }
+    hdr.addEventListener("click", tog);
+    hdr.addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); tog(); } });
+    apply();
+  })();
+
   // --- SSE ---
   function setLive(on){
     var el=byId("live"), t=byId("livetxt");
-    t.textContent = on?"live":"reconnecting…";
+    t.textContent = on?"онлайн":"переподключение…";
     el.style.color = on?"var(--ok)":"var(--t3)";
     el.style.background = on?"var(--okbg)":"var(--chip)";
   }
