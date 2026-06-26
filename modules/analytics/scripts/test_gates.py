@@ -515,8 +515,25 @@ def test_validate_run_output():
         check("vr_produced_not_list", gate.run({"hook_event_name": "Stop"})["decision"] == "allow")
 
 
+def test_path_relativization():
+    """Some runtimes (Qwen on Windows) report ABSOLUTE tool paths; gates compare
+    against repo-relative globs/prefixes. path_from_event must relativize an
+    absolute in-repo path so content gates don't silently skip it."""
+    spec = importlib.util.spec_from_file_location(
+        "alib", os.path.join(GATES_DIR, "_lib.py"))
+    lib = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lib)
+    with fixture_root() as tmp:
+        rel = lib.path_from_event(file_event("docs/features/card/x.adoc"))
+        check("rel_path_unchanged", rel == "docs/features/card/x.adoc", rel)
+        absp = os.path.join(tmp, "docs", "features", "card", "x.adoc")
+        got = lib.path_from_event(file_event(absp))
+        check("abs_path_relativized", got == "docs/features/card/x.adoc", got)
+
+
 def main():
     test_git_guard()
+    test_path_relativization()
     test_context_inject()
     test_preflight()
     test_spec_bootstrap()
