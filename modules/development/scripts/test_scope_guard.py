@@ -129,6 +129,15 @@ def test_scope():
     check("no_contract_allow",
           decide(g, "src/anything/X.kt") == "allow")
 
+    # Some runtimes (Qwen on Windows) report ABSOLUTE tool paths. An absolute
+    # write to an in-scope file must still match the repo-relative scope_globs
+    # and be allowed (regression: abs-vs-rel mismatch -> false overshoot ask).
+    with root_at(make_root(contracts={"card": CARD}, approved=["card"])) as tr:
+        abs_in = os.path.join(tr, "src", "cards", "CardService.kt")
+        check("abs_in_scope_allow", g.run(ev(abs_in))["decision"] == "allow")
+        abs_out = os.path.join(tr, "src", "payments", "PaymentService.kt")
+        check("abs_out_of_scope_ask", g.run(ev(abs_out))["decision"] == "ask")
+
 
 def main():
     test_scope()
