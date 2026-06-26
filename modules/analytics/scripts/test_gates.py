@@ -111,6 +111,17 @@ def test_git_guard():
     check("gg_notebook_gigacode",
           gate.run({"tool_input": {"notebook_path": ".gigacode/hooks/router.py"}})["decision"] == "block")
 
+    # [1] case-insensitive self-protect: on Windows/macOS .GIGACODE/.GIT resolve to
+    # the same dir, so altered casing must NOT dodge the file-tool block.
+    check("gg_file_gigacode_uppercase",
+          gate.run({"tool_input": {"file_path": ".Gigacode/hooks/router.py"}})["decision"] == "block")
+    check("gg_file_dotgit_uppercase",
+          gate.run({"tool_input": {"file_path": ".GIT/config"}})["decision"] == "block")
+    # [2] absolute path under a /**-suffixed PROTECTED_PATHS dir without a hand-
+    # written **/ twin (deploy/**) must still ASK — agents pass absolute paths.
+    check("gg_abs_protected_deploy_ask",
+          gate.run({"tool_input": {"file_path": "F:/Coding/proj/deploy/prod.yml"}})["decision"] == "ask")
+
     # --- Phase 4: engine hardening (ported from dev-flow) ---
     # CRITICAL regression: file-tool write to openspec/specs stays ALLOWED
     # (create-once split — governed by gate_spec_bootstrap, not git_guard).

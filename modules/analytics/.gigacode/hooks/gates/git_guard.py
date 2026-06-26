@@ -43,8 +43,8 @@ PROTECTED_PATHS = [
 # (fail-closed). Matched as a path COMPONENT anywhere in the (possibly absolute)
 # path — a start-anchored fnmatch let an absolute path like F:/proj/.gigacode/...
 # slip past, and Claude Code passes absolute file_path by default.
-SELF_PROTECT_RE = re.compile(r"(^|/)\.gigacode(/|$)")
-GIT_DIR_RE = re.compile(r"(^|/)\.git(/|$)")
+SELF_PROTECT_RE = re.compile(r"(^|/)\.gigacode(/|$)", re.IGNORECASE)
+GIT_DIR_RE = re.compile(r"(^|/)\.git(/|$)", re.IGNORECASE)
 # Loose variants for the defense-in-depth catch-all: match `.gigacode`/`.git`
 # wherever they appear as a name (not followed by a word char, so `.gigacoderc`
 # / `.gitignore` don't false-match), even through prefixes the component-anchored
@@ -211,10 +211,20 @@ def path_from_event(event):
     return ""
 
 
+def _matches_protected(p):
+    """True if p matches any PROTECTED_PATHS pattern, repo-relative OR nested
+    under an absolute prefix. Each pattern is tested as-is AND with a leading
+    `**/`, so a relative `deploy/x.yml` (caught by `deploy/**`) and an absolute
+    `F:/proj/deploy/x.yml` (caught by `**/deploy/**`) both register without a
+    hand-written `**/` twin per pattern — agents commonly pass absolute paths."""
+    return any(fnmatch.fnmatch(p, pat) or fnmatch.fnmatch(p, "**/" + pat)
+               for pat in PROTECTED_PATHS)
+
+
 def protected_path(path):
     if not path:
         return False
-    return any(fnmatch.fnmatch(_norm(path), pat) for pat in PROTECTED_PATHS)
+    return _matches_protected(_norm(path))
 
 
 def _sq(tok):
@@ -584,7 +594,7 @@ def classify_path(path, shell=False):
         return "block"
     if shell and OPENSPEC_SPECS_RE.search(p):
         return "block"
-    if any(fnmatch.fnmatch(p, pat) for pat in PROTECTED_PATHS):
+    if _matches_protected(p):
         return "ask"
     return ""
 
