@@ -68,17 +68,37 @@ def _norm_path(value):
 _PATH_KEYS = ("path", "file_path", "filename", "notebook_path", "relative_path")
 
 
+def _rel_to_root(path):
+    """Make an absolute in-repo path repo-relative so gates can match it against
+    repo-relative globs/prefixes (contract scope_globs, quality-gate globs,
+    stage write-globs). Some runtimes (e.g. Qwen on Windows) report tool paths
+    as absolute; comparing those against relative patterns silently never
+    matches. Paths already relative, or outside the repo, are returned
+    unchanged."""
+    if not path:
+        return path
+    base = root().replace("\\", "/").rstrip("/")
+    if not base:
+        return path
+    prefix = base + "/"
+    if path.startswith(prefix):
+        return path[len(prefix):]
+    if os.name == "nt" and path.lower().startswith(prefix.lower()):
+        return path[len(prefix):]
+    return path
+
+
 def path_from_event(event):
     for key in _PATH_KEYS:
         value = event.get(key)
         if isinstance(value, str):
-            return _norm_path(value)
+            return _rel_to_root(_norm_path(value))
     tool_input = event.get("tool_input")
     if isinstance(tool_input, dict):
         for key in _PATH_KEYS:
             value = tool_input.get(key)
             if isinstance(value, str):
-                return _norm_path(value)
+                return _rel_to_root(_norm_path(value))
     return ""
 
 
