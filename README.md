@@ -14,7 +14,12 @@
 
 - **Разработка (dev-flow)** — в [`modules/development/`](modules/development/)
   (`.gigacode/`, `rules/`, `scripts/`, `openspec/`). Команды `/develop-feature`
-  и `/fix-bug`; git-safety, quality gates, OpenSpec, артефакты задачи.
+  и `/fix-bug`; git-safety, quality gates, OpenSpec, артефакты задачи. В режиме
+  `implement` — фиксированные стадии **intake → contract → plan → implement →
+  delivery** с человеческими чекпойнтами (`confirm.py`, агенту самоодобрение
+  закрыто) и **машинным вердиктом**: доставка открывается только реальным
+  `pass`. За живым ходом флоу можно следить в **обсервере** (веб-панель,
+  `python .gigacode/hooks/observer.py` → http://127.0.0.1:8787).
   📖 [modules/development/README.md](modules/development/README.md) ·
   руководство: [modules/development/docs/USER-GUIDE.md](modules/development/docs/USER-GUIDE.md) ·
   обзор флоу: [modules/development/docs/flow-overview.md](modules/development/docs/flow-overview.md).

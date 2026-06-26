@@ -111,6 +111,35 @@ def test_git_guard():
     check("gg_notebook_gigacode",
           gate.run({"tool_input": {"notebook_path": ".gigacode/hooks/router.py"}})["decision"] == "block")
 
+    # [1] case-insensitive self-protect: on Windows/macOS .GIGACODE/.GIT resolve to
+    # the same dir, so altered casing must NOT dodge the file-tool block.
+    check("gg_file_gigacode_uppercase",
+          gate.run({"tool_input": {"file_path": ".Gigacode/hooks/router.py"}})["decision"] == "block")
+    check("gg_file_dotgit_uppercase",
+          gate.run({"tool_input": {"file_path": ".GIT/config"}})["decision"] == "block")
+    # [2] absolute path under a /**-suffixed PROTECTED_PATHS dir without a hand-
+    # written **/ twin (deploy/**) must still ASK — agents pass absolute paths.
+    check("gg_abs_protected_deploy_ask",
+          gate.run({"tool_input": {"file_path": "F:/Coding/proj/deploy/prod.yml"}})["decision"] == "ask")
+    # [6] find's file-WRITE actions (-fprintf/-fprint/-fprint0/-fls) write a named
+    # file — must count as active so a write into .gigacode is blocked (dev had
+    # FIND_ACTION_FLAGS; analytics counted only -delete/-exec).
+    check("gg_find_fprintf_gigacode_block",
+          gate.run({"tool_input": {"command": "find . -maxdepth 0 -fprintf .gigacode/hooks/router.py xxx"}})["decision"] == "block")
+    check("gg_find_fls_gigacode_block",
+          gate.run({"tool_input": {"command": "find . -fls .gigacode/hooks/router.py"}})["decision"] == "block")
+    # [13] cd into the enforcement tree then write/delete via a now-relative path.
+    check("gg_cd_forge_block",
+          gate.run({"tool_input": {"command": "cd .gigacode && echo x > hooks/router.py"}})["decision"] == "block")
+    check("gg_cd_then_rm_block",
+          gate.run({"tool_input": {"command": "cd .gigacode && rm -rf hooks"}})["decision"] == "block")
+    # ...but a pure read after cd stays allowed (no over-block).
+    check("gg_cd_then_read_allow",
+          gate.run({"tool_input": {"command": "cd .gigacode && ls"}})["decision"] == "allow")
+    # [4] sort -o writes a file though sort is allow-listed read-only.
+    check("gg_sort_output_block",
+          gate.run({"tool_input": {"command": "sort -o .gigacode/hooks/router.py /dev/null"}})["decision"] == "block")
+
     # --- Phase 4: engine hardening (ported from dev-flow) ---
     # CRITICAL regression: file-tool write to openspec/specs stays ALLOWED
     # (create-once split — governed by gate_spec_bootstrap, not git_guard).

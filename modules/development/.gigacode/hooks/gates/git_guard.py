@@ -62,6 +62,12 @@ PROTECTED_PATHS = [
 # same protected directory, so the match must not be dodged by altered casing.
 SELF_PROTECT_RE = re.compile(r"(^|/)\.gigacode(/|$)", re.IGNORECASE)
 GIT_DIR_RE = re.compile(r"(^|/)\.git(/|$)", re.IGNORECASE)
+# Machine-owned proof artifacts: only the gate (gate_verdict, in-process file IO)
+# writes verdict.json; an agent write — file-tool OR shell — is a forgery that
+# would unlock delivery. gate_stage_order blocks the file-tool channel; this
+# blocks the shell channel (docs/development is not under .gigacode), so the
+# machine-ownership holds on every channel.
+MACHINE_OWNED_RE = re.compile(r"(^|/)docs/development/[^/]+/verdict\.json$", re.IGNORECASE)
 # Looser variants for the defense-in-depth catch-all: match the protected
 # component anywhere in an argument token (e.g. inside a quoted interpreter
 # one-liner `python -c "open('.gigacode/x','w')"`), not only as a clean path
@@ -536,6 +542,18 @@ def git_destructive(sub, rest):
     """Return a block reason for a destructive git subcommand, else ''."""
     if sub == "reset" and "--hard" in rest:
         return "Blocked `git reset --hard`."
+    if sub in ("rm", "mv"):
+        # git rm <pathspec> removes, git mv <src>... <dst> moves — both mutate
+        # the named worktree files. git is exempt from the self-protect catch-all,
+        # so classify the path operands here, else `git rm -rf .gigacode` deletes
+        # the whole engine through a path the guard never inspects.
+        for t in rest:
+            if t.startswith("-"):
+                continue
+            ts = t.replace("\\", "/")
+            if (SELF_PROTECT_LOOSE.search(ts) or GIT_DIR_LOOSE.search(ts)
+                    or classify_path(ts) == "block"):
+                return f"Blocked `git {sub}` of an enforcement/.git path."
     if sub == "clean":
         # --[no-]dry-run is last-one-wins, so compute the effective dry-run state
         # in argument order: a later `--no-dry-run` re-arms deletion even after an
@@ -708,7 +726,7 @@ def classify_path(path):
     write it with a human confirm while a direct fabrication still surfaces;
     .gigacode and .git stay block (the agent must never edit/destroy those)."""
     p = _norm(path)
-    if SELF_PROTECT_RE.search(p) or GIT_DIR_RE.search(p):
+    if SELF_PROTECT_RE.search(p) or GIT_DIR_RE.search(p) or MACHINE_OWNED_RE.search(p):
         return "block"
     if OPENSPEC_TRUTH_RE.search(p) or _matches_protected(p):
         return "ask"
@@ -812,6 +830,17 @@ def write_targets(tokens):
             targets.append(nonflag[-1])          # the file edited in place
     elif prog in ("truncate", "ed") and nonflag:
         targets.append(nonflag[-1])
+    elif prog == "sort":
+        # `sort -o FILE` / `--output=FILE` writes a file though sort is otherwise
+        # read-only — a genuine write capability the catch-all's read-only skip
+        # would miss.
+        for i, a in enumerate(rest):
+            if a in ("-o", "--output") and i + 1 < len(rest):
+                targets.append(rest[i + 1])
+            elif a.startswith("-o") and len(a) > 2:
+                targets.append(a[2:])
+            elif a.startswith("--output="):
+                targets.append(a.split("=", 1)[1])
     return [_norm(_sq(p)) for p in targets if p]
 
 
@@ -880,10 +909,22 @@ def inspect_command(command):
                     if lf and _prog(lf[0]) == "git":
                         return "block", ("Blocked git configured via GIT_CONFIG_* "
                             "environment variables (cannot be inspected). Use a plain git command.")
+    cwd_prefix = ""  # set once a segment cd's INTO the enforcement/.git tree;
+    # subsequent relative writes/deletes are resolved against it so a
+    # `cd .gigacode/approvals && echo {} > x.ok` forge is caught while a pure read
+    # after cd (`cd .gigacode && ls`) stays allowed.
     for leaf in to_leaves(command):
         if not leaf:
             continue
         prog = _prog(leaf[0])
+        if prog in ("cd", "pushd", "chdir", "set-location", "sl"):
+            for t in leaf[1:]:
+                if t.startswith("-"):
+                    continue
+                ts = _sq(t).replace("\\", "/")
+                if SELF_PROTECT_RE.search(ts) or GIT_DIR_RE.search(ts):
+                    cwd_prefix = ts.rstrip("/") + "/"
+                break  # only the first path operand is the cd target
         if prog == "git":
             # Aliases/config loaded from env or an include file can't be expanded
             # here — block the (illegitimate) pattern outright.
@@ -918,14 +959,22 @@ def inspect_command(command):
                         return "block", reason
         elif prog in DESTRUCTIVE_VERBS:
             d = _destructive_target(prog, leaf)
-            if d == "block":
+            # Inside a cd'd enforcement/.git cwd, any delete targets that tree.
+            if d == "block" or cwd_prefix:
                 return "block", "Blocked deletion of an enforcement/.git/openspec path."
             if d == "ask":
                 pending_ask = "Deletion of a protected path requires explicit confirmation."
         for tgt in write_targets(leaf):
-            c = classify_path(tgt)
+            cand = tgt
+            tn = tgt.replace("\\", "/")
+            # Resolve a relative write target against a cd'd protected cwd so the
+            # forge `cd .gigacode/approvals && echo {} > x.ok` is classified as a
+            # write INTO the enforcement tree.
+            if cwd_prefix and not (tn.startswith("/") or re.match(r"^[A-Za-z]:", tn)):
+                cand = cwd_prefix + tn
+            c = classify_path(cand)
             if c == "block":
-                return "block", f"Blocked shell write to enforcement/.git path '{tgt}'."
+                return "block", f"Blocked shell write to enforcement/.git path '{cand}'."
             if c == "ask":
                 pending_ask = "Shell write to a protected/openspec-truth path requires explicit confirmation."
         reason = _self_protect_catch_all(prog, leaf)
