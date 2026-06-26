@@ -232,7 +232,7 @@ def documents(slug):
 def safe_doc_path(rel):
     """Absolute path for a /doc request, or None if it escapes the allowlist.
     Rejects absolutes, '..', non-flow-doc prefixes, and symlink escapes out of root."""
-    if not rel or rel.startswith("/") or rel.startswith("\\"):
+    if not rel or rel.startswith("/") or rel.startswith("\\") or "\x00" in rel:
         return None
     norm = os.path.normpath(rel).replace("\\", "/")
     if os.path.isabs(norm) or norm == ".." or norm.startswith("../") or "/../" in norm:

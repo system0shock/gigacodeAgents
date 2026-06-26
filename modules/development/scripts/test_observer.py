@@ -290,6 +290,11 @@ def test_html_flow_zones():
         check("flow_no_external_" + needle.strip(":/\"="), needle not in html, needle)
     for marker in ("renderPhases", "renderGates", "renderDocs", "openDoc", "/doc?path="):
         check("flow_has_" + marker.strip("/?=").replace("renderD", "rD"), marker in html, marker + " missing")
+    # Doc links carry the path in an esc()-safe data-attribute, never in an inline
+    # onclick string (encodeURIComponent does NOT escape "'", so onclick was injectable).
+    check("flow_doclink_data_attr", "data-path=" in html, "doc links must use data-path")
+    check("flow_doclink_no_onclick_inject", "onclick=\"openDoc(" not in html,
+          "doc path must not be built into an inline onclick handler")
 
 
 def test_read_only_and_loopback():
@@ -408,6 +413,8 @@ def test_safe_doc_path_hardening():
         # Windows-absolute and UNC paths
         check("doc_reject_win_abs", obs.safe_doc_path("C:/Windows/System32/x") is None)
         check("doc_reject_unc", obs.safe_doc_path("\\\\server\\share\\x") is None)
+        # Embedded null byte: reject early (else realpath raises ValueError -> 500)
+        check("doc_reject_nullbyte", obs.safe_doc_path("docs/development/card/\x00intake.json") is None)
         # Real symlink escape: symlink inside an allowed prefix → resolves outside root
         card_dir = os.path.join(tmp, "docs", "development", "card")
         os.makedirs(card_dir, exist_ok=True)

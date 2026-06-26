@@ -248,7 +248,7 @@
     var prog = d.progress ? " "+esc(d.progress) : "";
     var clickable = (d.state==="present"||d.state==="approved"||d.state==="frozen");
     var name = clickable
-      ? '<a tabindex="0" onclick="openDoc(\''+encodeURIComponent(d.path)+'\')" style="cursor:pointer;font-family:var(--mono);font-size:10px;color:var(--info);border-bottom:1px dotted var(--info)">'+esc(d.label)+'</a>'
+      ? '<a class="doclink" tabindex="0" data-path="'+esc(d.path)+'" style="cursor:pointer;font-family:var(--mono);font-size:10px;color:var(--info);border-bottom:1px dotted var(--info)">'+esc(d.label)+'</a>'
       : '<span style="font-family:var(--mono);font-size:10px;color:var(--t3)">'+esc(d.label)+'</span>';
     return '<span style="background:var(--lock);border:0.5px solid var(--bd);border-radius:6px;padding:5px 8px;color:'+st[1]+'">'+name+' '+esc(st[0])+prog+'</span>';
   }
@@ -289,7 +289,7 @@
     function line(d){
       var st = DOC_STATE[d.state] || ["?","var(--t3)"]; var prog = d.progress?" "+esc(d.progress):"";
       var clickable = (d.state==="present"||d.state==="approved"||d.state==="frozen");
-      var nm = clickable ? '<a tabindex="0" onclick="openDoc(\''+encodeURIComponent(d.path)+'\')" style="cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--info);border-bottom:1px dotted var(--info)">'+esc(d.label)+'</a>'
+      var nm = clickable ? '<a class="doclink" tabindex="0" data-path="'+esc(d.path)+'" style="cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--info);border-bottom:1px dotted var(--info)">'+esc(d.label)+'</a>'
                          : '<span style="font-family:var(--mono);font-size:11px;color:var(--t3)">'+esc(d.label)+'</span>';
       return '<div>'+nm+' <span style="color:'+st[1]+'">'+esc(st[0])+prog+'</span></div>';
     }
@@ -311,8 +311,7 @@
       '<div style="font-size:11px;color:var(--t2);margin-top:2px;">последнее: '+last+' · бюджет '+(b.used==null?"?":esc(String(b.used)))+'/'+(b.limit==null?"?":esc(String(b.limit)))+'</div></div></div>';
   }
 
-  function openDoc(enc){
-    var path = decodeURIComponent(enc);
+  function openDoc(path){
     byId("docmodaltitle").textContent = path;
     byId("docmodalbody").textContent = "загрузка…";
     byId("docmodal").style.display = "flex";
@@ -402,6 +401,10 @@
   byId("docmodalclose").addEventListener("click", closeDoc);
   byId("docmodal").addEventListener("click", function(e){ if(e.target===byId("docmodal")) closeDoc(); });
   document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeDoc(); });
+  // delegated doc-link open: path travels in a data-attribute (esc-safe), never in an inline handler string
+  function docLinkFromEvent(e){ var a=e.target.closest&&e.target.closest("a.doclink"); return a&&a.getAttribute("data-path"); }
+  document.addEventListener("click", function(e){ var p=docLinkFromEvent(e); if(p){ e.preventDefault(); openDoc(p); } });
+  document.addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key===" "){ var p=docLinkFromEvent(e); if(p){ e.preventDefault(); openDoc(p); } } });
   (function(){
     var hdr = byId("docshdr"), box = byId("docs");
     var open = true; try { open = localStorage.getItem("observer-docs")!=="0"; } catch(e){}
