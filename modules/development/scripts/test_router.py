@@ -388,6 +388,15 @@ def main():
         "git rm -rf .gigacode",
         "git rm -f .gigacode/hooks/router.py",
         "git mv .gigacode/hooks/router.py /tmp/x",
+        # [13] cd into the enforcement tree then write via a now-relative path
+        # (cd was allow-listed, so the catch-all never saw the .gigacode target).
+        "cd .gigacode/approvals && echo {} > demo/intake.ok",
+        "cd .gigacode && echo x > hooks/router.py",
+        "pushd .gigacode/approvals && echo {} > demo/contract.ok",
+        # [17] forge the machine-owned verdict via the shell channel (docs/
+        # development is not under .gigacode, so it was unprotected on shell).
+        "echo {\"result\":\"pass\"} > docs/development/demo/verdict.json",
+        "printf x > docs/development/demo/verdict.json",
     ]
     for cmd in GUARD_BLOCK:
         result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})
