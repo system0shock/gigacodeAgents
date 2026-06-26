@@ -128,6 +128,17 @@ def test_git_guard():
           gate.run({"tool_input": {"command": "find . -maxdepth 0 -fprintf .gigacode/hooks/router.py xxx"}})["decision"] == "block")
     check("gg_find_fls_gigacode_block",
           gate.run({"tool_input": {"command": "find . -fls .gigacode/hooks/router.py"}})["decision"] == "block")
+    # [13] cd into the enforcement tree then write/delete via a now-relative path.
+    check("gg_cd_forge_block",
+          gate.run({"tool_input": {"command": "cd .gigacode && echo x > hooks/router.py"}})["decision"] == "block")
+    check("gg_cd_then_rm_block",
+          gate.run({"tool_input": {"command": "cd .gigacode && rm -rf hooks"}})["decision"] == "block")
+    # ...but a pure read after cd stays allowed (no over-block).
+    check("gg_cd_then_read_allow",
+          gate.run({"tool_input": {"command": "cd .gigacode && ls"}})["decision"] == "allow")
+    # [4] sort -o writes a file though sort is allow-listed read-only.
+    check("gg_sort_output_block",
+          gate.run({"tool_input": {"command": "sort -o .gigacode/hooks/router.py /dev/null"}})["decision"] == "block")
 
     # --- Phase 4: engine hardening (ported from dev-flow) ---
     # CRITICAL regression: file-tool write to openspec/specs stays ALLOWED

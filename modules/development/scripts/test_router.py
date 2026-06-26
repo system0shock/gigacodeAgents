@@ -397,6 +397,9 @@ def main():
         # development is not under .gigacode, so it was unprotected on shell).
         "echo {\"result\":\"pass\"} > docs/development/demo/verdict.json",
         "printf x > docs/development/demo/verdict.json",
+        # [4] sort's -o/--output writes a file though sort is allow-listed read-only.
+        "sort -o .gigacode/hooks/router.py /dev/null",
+        "sort --output=.gigacode/hooks/router.py /dev/null",
     ]
     for cmd in GUARD_BLOCK:
         result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})

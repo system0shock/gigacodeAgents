@@ -724,6 +724,16 @@ def write_targets(tokens):
             targets.append(nonflag[-1])          # the file edited in place
     elif prog in ("truncate", "ed") and nonflag:
         targets.append(nonflag[-1])
+    elif prog == "sort":
+        # `sort -o FILE` / `--output=FILE` writes a file though sort is otherwise
+        # read-only — a genuine write the catch-all's read-only skip would miss.
+        for i, a in enumerate(rest):
+            if a in ("-o", "--output") and i + 1 < len(rest):
+                targets.append(rest[i + 1])
+            elif a.startswith("-o") and len(a) > 2:
+                targets.append(a[2:])
+            elif a.startswith("--output="):
+                targets.append(a.split("=", 1)[1])
     return [_norm(_sq(p)) for p in targets if p]
 
 
@@ -790,9 +800,20 @@ def _self_protect_catch_all(prog, leaf):
     return worst
 
 
+def _resolve_cwd(tgt, cwd_prefix):
+    """Resolve a relative write/delete target against a cd'd protected cwd, so a
+    `cd .gigacode/approvals && echo {} > x.ok` forge is seen as a write INTO the
+    enforcement tree. Absolute targets are returned unchanged."""
+    tn = str(tgt).replace("\\", "/")
+    if cwd_prefix and not (tn.startswith("/") or re.match(r"^[A-Za-z]:", tn)):
+        return cwd_prefix + tn
+    return tgt
+
+
 def inspect_command(command):
     """Return (decision, reason) for a shell command: 'block'/'ask'/''."""
     pending_ask = ""
+    cwd_prefix = ""  # set once a segment cd's INTO the enforcement/.git tree
     # GIT_CONFIG_* env-config can define an alias whose body runs a destructive
     # command (GIT_CONFIG_COUNT/KEY_n/VALUE_n) without ever appearing as a git
     # flag. peel drops env assignments, so detect the construct on the raw text.
@@ -807,7 +828,7 @@ def inspect_command(command):
         # leading redirect token (`>/tmp/out git reset --hard` runs git, not `out`).
         leaf, redir_targets = _split_redirects(raw_leaf)
         for tgt in redir_targets:
-            t = _norm(_sq(tgt))
+            t = _norm(_sq(_resolve_cwd(tgt, cwd_prefix)))
             c = classify_path(t, shell=True)
             if c == "block":
                 return "block", f"Blocked shell write to enforcement/.git path '{t}'."
@@ -816,6 +837,14 @@ def inspect_command(command):
         if not leaf:
             continue
         prog = _prog(leaf[0])
+        if prog in ("cd", "pushd", "chdir", "set-location", "sl"):
+            for t in leaf[1:]:
+                if t.startswith("-"):
+                    continue
+                ts = _sq(t).replace("\\", "/")
+                if SELF_PROTECT_RE.search(ts) or GIT_DIR_RE.search(ts):
+                    cwd_prefix = ts.rstrip("/") + "/"
+                break  # only the first path operand is the cd target
         if prog == "git":
             # A one-shot `-c alias.X=...` can hide the destructive subcommand
             # behind a benign alias name; expand and inspect it recursively.
@@ -838,12 +867,13 @@ def inspect_command(command):
                     return "block", reason
         elif prog in DESTRUCTIVE_VERBS:
             d = _destructive_target(prog, leaf)
-            if d == "block":
+            # Inside a cd'd enforcement/.git cwd, any delete targets that tree.
+            if d == "block" or cwd_prefix:
                 return "block", "Blocked deletion of an enforcement/.git/openspec path."
             if d == "ask":
                 pending_ask = "Deletion of a protected path requires explicit confirmation."
         for tgt in write_targets(leaf):              # verb dests (redirects stripped)
-            c = classify_path(tgt, shell=True)
+            c = classify_path(_resolve_cwd(tgt, cwd_prefix), shell=True)
             if c == "block":
                 return "block", f"Blocked shell write to enforcement/.git path '{tgt}'."
             if c == "ask":

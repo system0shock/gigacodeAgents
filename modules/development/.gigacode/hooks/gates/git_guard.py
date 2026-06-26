@@ -830,6 +830,17 @@ def write_targets(tokens):
             targets.append(nonflag[-1])          # the file edited in place
     elif prog in ("truncate", "ed") and nonflag:
         targets.append(nonflag[-1])
+    elif prog == "sort":
+        # `sort -o FILE` / `--output=FILE` writes a file though sort is otherwise
+        # read-only — a genuine write capability the catch-all's read-only skip
+        # would miss.
+        for i, a in enumerate(rest):
+            if a in ("-o", "--output") and i + 1 < len(rest):
+                targets.append(rest[i + 1])
+            elif a.startswith("-o") and len(a) > 2:
+                targets.append(a[2:])
+            elif a.startswith("--output="):
+                targets.append(a.split("=", 1)[1])
     return [_norm(_sq(p)) for p in targets if p]
 
 
