@@ -734,12 +734,14 @@ def _destructive_target(prog, leaf):
     args = leaf[1:]
     if prog == "find":
         low = [a.lower() for a in args]
-        # ACTIVE when find can mutate: -delete, OR any executor (-exec/-execdir/
-        # -ok/-okdir) — the executor may delete indirectly (`-exec sh -c 'rm …'`),
-        # so the exact'd program isn't necessarily a literal rm. Inactive find
-        # (-name/-type/...) is a read/list and stays allowed.
+        # ACTIVE when find can mutate: -delete, any executor (-exec/-execdir/
+        # -ok/-okdir) which may delete indirectly (`-exec sh -c 'rm …'`), OR a
+        # file-WRITE action (-fprintf/-fprint/-fprint0/-fls) that writes traversal
+        # output to a named file (can overwrite an enforcement file). Inactive
+        # find (-name/-type/...) is a read/list and stays allowed.
         active = ("-delete" in low
-                  or any(e in low for e in ("-exec", "-execdir", "-ok", "-okdir")))
+                  or any(e in low for e in ("-exec", "-execdir", "-ok", "-okdir",
+                                            "-fprintf", "-fprint", "-fprint0", "-fls")))
         if not active:
             return ""
     worst = ""

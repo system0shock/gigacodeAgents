@@ -383,6 +383,11 @@ def main():
         "Remove-Item -Recurse -Force .git",
         "rm -r .git",
         "cmd /c rmdir /s /q .git",
+        # [5] git rm/mv of an enforcement path (git was exempt from the catch-all
+        # and git_destructive lacked rm/mv — analytics handled it, dev did not).
+        "git rm -rf .gigacode",
+        "git rm -f .gigacode/hooks/router.py",
+        "git mv .gigacode/hooks/router.py /tmp/x",
     ]
     for cmd in GUARD_BLOCK:
         result = run_router("PreToolUse", {"tool_name": "Bash", "tool_input": {"command": cmd}})

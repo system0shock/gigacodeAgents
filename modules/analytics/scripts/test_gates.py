@@ -121,6 +121,13 @@ def test_git_guard():
     # written **/ twin (deploy/**) must still ASK — agents pass absolute paths.
     check("gg_abs_protected_deploy_ask",
           gate.run({"tool_input": {"file_path": "F:/Coding/proj/deploy/prod.yml"}})["decision"] == "ask")
+    # [6] find's file-WRITE actions (-fprintf/-fprint/-fprint0/-fls) write a named
+    # file — must count as active so a write into .gigacode is blocked (dev had
+    # FIND_ACTION_FLAGS; analytics counted only -delete/-exec).
+    check("gg_find_fprintf_gigacode_block",
+          gate.run({"tool_input": {"command": "find . -maxdepth 0 -fprintf .gigacode/hooks/router.py xxx"}})["decision"] == "block")
+    check("gg_find_fls_gigacode_block",
+          gate.run({"tool_input": {"command": "find . -fls .gigacode/hooks/router.py"}})["decision"] == "block")
 
     # --- Phase 4: engine hardening (ported from dev-flow) ---
     # CRITICAL regression: file-tool write to openspec/specs stays ALLOWED

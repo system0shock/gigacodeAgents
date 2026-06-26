@@ -536,6 +536,18 @@ def git_destructive(sub, rest):
     """Return a block reason for a destructive git subcommand, else ''."""
     if sub == "reset" and "--hard" in rest:
         return "Blocked `git reset --hard`."
+    if sub in ("rm", "mv"):
+        # git rm <pathspec> removes, git mv <src>... <dst> moves — both mutate
+        # the named worktree files. git is exempt from the self-protect catch-all,
+        # so classify the path operands here, else `git rm -rf .gigacode` deletes
+        # the whole engine through a path the guard never inspects.
+        for t in rest:
+            if t.startswith("-"):
+                continue
+            ts = t.replace("\\", "/")
+            if (SELF_PROTECT_LOOSE.search(ts) or GIT_DIR_LOOSE.search(ts)
+                    or classify_path(ts) == "block"):
+                return f"Blocked `git {sub}` of an enforcement/.git path."
     if sub == "clean":
         # --[no-]dry-run is last-one-wins, so compute the effective dry-run state
         # in argument order: a later `--no-dry-run` re-arms deletion even after an
