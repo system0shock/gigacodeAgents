@@ -140,6 +140,22 @@ def main():
                                        "tool_input": {"name_path": "Foo"}})
     check("serena_readonly_allow", result["decision"] == "allow", result)
 
+    # 3d. Serena's OWN shell tool must normalize to Bash and hit git_guard — else
+    # the safety-critical shell guard runs ZERO gates (full bypass).
+    result = run_router("PreToolUse", {"tool_name": "mcp__serena__execute_shell_command",
+                                       "tool_input": {"command": "git push origin master --force"}})
+    check("serena_shell_normalized_block", result["decision"] == "block", result)
+
+    # 3e. An unmapped file-mutating MCP tool (not in TOOL_NAME_MAP) must still hit
+    # the write gates via the mutator catch-all — no silent .gigacode/scope bypass.
+    result = run_router("PreToolUse", {"tool_name": "mcp__fs__delete_file",
+                                       "tool_input": {"file_path": ".gigacode/hooks/router.py"}})
+    check("unmapped_mutator_gigacode_block", result["decision"] == "block", result)
+    # ...but a read-only-named unmapped tool stays allow (no over-block).
+    result = run_router("PreToolUse", {"tool_name": "mcp__fs__read_file",
+                                       "tool_input": {"file_path": "README.md"}})
+    check("unmapped_readonly_allow", result["decision"] == "allow", result)
+
     # 4. Protected path write asks
     result = run_router("PreToolUse", {"tool_name": "WriteFile", "tool_input": {"file_path": ".github/workflows/deploy.yml"}})
     check("protected_path_ask", result["decision"] == "ask", result)

@@ -36,6 +36,13 @@ SEVERITY = {"allow": 0, "ask": 1, "block": 2}
 TOOL_NAME_MAP = {
     "run_shell_command": "Bash",
     "shell": "Bash",
+    # MCP servers expose their own shell tool ids (Serena: execute_shell_command).
+    # Map them to Bash so the safety_critical git_guard route fires — else a shell
+    # command via such a tool runs ZERO gates (force-push, .gigacode write, verdict
+    # forge all slip through).
+    "execute_shell_command": "Bash",
+    "run_command": "Bash",
+    "exec_command": "Bash",
     "write_file": "WriteFile",
     "replace": "Edit",
     "edit": "Edit",

@@ -38,6 +38,13 @@
       "safety_critical": true
     },
     {
+      "event": "PreToolUse",
+      "_comment": "Fail-closed catch-all: any tool id that LOOKS like a file mutator (incl. unmapped MCP/Serena editors not in TOOL_NAME_MAP) still hits the path-protecting git_guard, so a write to .gigacode cannot slip past via an unknown tool name. re.search + idempotent decisions make overlap with the canonical write route harmless; read-only tool names (read/find/get/list/search/overview) do not match.",
+      "tool_pattern": "(?i)(?:write|edit|insert|create|replace|delete|append|prepend|rename|truncate|patch|mkfile|new_file|put_file|move_file|save)",
+      "gates": ["git_guard"],
+      "safety_critical": true
+    },
+    {
       "event": "PostToolUse",
       "tool_pattern": "^(WriteFile|Edit)$",
       "gates": ["gate_techdocs", "gate_final_format"]

@@ -53,6 +53,13 @@
       "gates": ["gate_scope_guard"]
     },
     {
+      "event": "PreToolUse",
+      "_comment": "Fail-closed catch-all: any tool id that LOOKS like a file mutator (incl. unmapped MCP/Serena editors not in TOOL_NAME_MAP) still hits the path-protecting write gates, so a write to .gigacode / out-of-scope / machine-owned files cannot slip past via an unknown tool name. re.search + idempotent gate decisions make the overlap with the canonical write routes harmless; read-only tool names (read/find/get/list/search/overview) do not match.",
+      "tool_pattern": "(?i)(?:write|edit|insert|create|replace|delete|append|prepend|rename|truncate|patch|mkfile|new_file|put_file|move_file|save)",
+      "gates": ["git_guard", "gate_stage_order", "gate_scope_guard"],
+      "safety_critical": true
+    },
+    {
       "event": "PostToolUse",
       "tool_pattern": "^(Write|WriteFile|Edit|MultiEdit|NotebookEdit)$",
       "gates": ["gate_spec_structure", "gate_lint", "gate_clean_code"]
